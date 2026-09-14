@@ -6,7 +6,7 @@ import { renderKeyScreen } from './keyScreen.js';
 import { createPanels } from './panels.js';
 import { loadPrefs, savePrefs } from './prefs.js';
 import { parseRoute } from './router.js';
-import { renderApp } from './app.js';
+import { renderApp, renderLoadError } from './app.js';
 import { scrollLeftForToday } from './render/layout.js';
 import { todayISO } from '../shared/calendar.js';
 
@@ -46,7 +46,10 @@ function setPrefs(patch) {
 
 function draw() {
   const { state } = controller;
-  if (!state.snapshot || !state.planning) return;
+  if (!state.snapshot || !state.planning) {
+    if (state.error) renderLoadError(root, state.error);
+    return;
+  }
   const previousScroll = root.querySelector('.pr')?.scrollLeft ?? 0;
   const today = todayISO();
   const viewportWidth = root.querySelector('.pr')?.clientWidth || Math.max(300, Math.min(window.innerWidth, 1540) - 676);

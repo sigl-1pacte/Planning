@@ -1,7 +1,7 @@
 // tests/ui/app.test.js
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { renderApp } from '../../src/ui/app.js';
+import { renderApp, renderLoadError } from '../../src/ui/app.js';
 import { mapWorkspace } from '../../src/server/linear/mapper.js';
 import { rawWorkspace } from '../fixtures/workspace.js';
 
@@ -50,5 +50,15 @@ describe('renderApp', () => {
     expect(texts[1]).toBe('Linear injoignable');
     const missing = draw({ route: { view: 'team', teamKey: 'NOPE' } }).root;
     expect(missing.querySelector('.banner.err').textContent).toBe('Team « NOPE » introuvable dans le workspace.');
+  });
+});
+
+describe('renderLoadError', () => {
+  it('affiche l’erreur échappée et l’annonce de nouvelle tentative', () => {
+    const root = document.createElement('div');
+    renderLoadError(root, '<b>x</b>');
+    expect(root.querySelector('.banner.err').textContent).toBe('<b>x</b>');
+    expect(root.querySelector('b')).toBeNull();
+    expect(root.querySelector('.note').textContent).toBe('Nouvelle tentative automatique toutes les 30 secondes.');
   });
 });

@@ -13,6 +13,10 @@ import { esc, longDay } from './render/format.js';
 
 const zoomButton = (prefs, zoom, label) => `<button type="button" data-zoom="${zoom}" class="${prefs.zoom === zoom ? 'on' : ''}">${label}</button>`;
 
+export function renderLoadError(root, message) {
+  root.innerHTML = `<section class="sheet"><div class="banner err">${esc(message)}</div><p class="note">Nouvelle tentative automatique toutes les 30 secondes.</p></section>`;
+}
+
 export function renderApp(root, { state, route, prefs, selectedIssueId, today, viewportWidth }) {
   const { snapshot, planning } = state;
   const domain = snapshot.domain;

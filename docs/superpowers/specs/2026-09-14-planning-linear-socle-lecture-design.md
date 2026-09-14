@@ -50,17 +50,26 @@ l'implémentation.
 | Actualisation | Rafraîchissement périodique, sans webhook ni abonnement. |
 | Charge sur une page de team | Seules les heures de cette team, rapportées à la capacité totale de la personne. |
 | Front | Portage du moteur de rendu existant en modules ES, sans framework. |
+| Trafic Linear | Lecture comme écriture transitent par le backend. Le navigateur ne parle qu'au domaine de l'application. |
+| Hébergement | Plateforme Cassiopée : un conteneur applicatif sans état, PostgreSQL managé avec volume persistant. |
 
 ## 4. Architecture
 
-Un service Node unique sert le front compilé et l'API sous `/api`, avec PostgreSQL à
-côté. Deux conteneurs, plus un volume pour la base.
+Un conteneur unique, sans état, exécute un service Node qui sert le front compilé et l'API
+sous `/api`. La couche de planification vit dans une base PostgreSQL managée par
+Cassiopée, hors du conteneur.
 
 ```
-navigateur ──X-Linear-Key──> service Node ──> PostgreSQL (couche de planification)
+navigateur ──X-Linear-Key──> conteneur Node ──> PostgreSQL managé Cassiopée
                                   │
-                                  └────────> api.linear.app/graphql (lecture)
+                                  └──────────> api.linear.app/graphql
 ```
+
+Tout le trafic Linear passe par le backend, lecture comme écriture. Pour l'écriture, qui
+arrive au sous-projet 2, c'est indispensable : une écriture faite depuis le navigateur
+laisserait l'instantané du backend périmé, une cascade interrompue par la fermeture d'un
+onglet laisserait le planning à moitié décalé, et l'annulation suppose que le serveur ait
+conservé l'état antérieur.
 
 Choix techniques : Node 22, Fastify, `pg`, Vite pour le bundling du front, Vitest pour
 les tests. L'accès à Linear se fait par requêtes GraphQL écrites à la main plutôt que par
@@ -367,20 +376,32 @@ nécessaire.
 
 ## 14. Déploiement
 
-Deux conteneurs, orchestrés par un fichier de composition pour le développement local et
-déployés sur un hébergement de conteneurs en production.
+Cible : la plateforme Cassiopée de l'école.
 
-- **Application** : image Node, build du front à la construction de l'image, port unique.
-- **PostgreSQL** : image officielle, volume persistant.
+- **Application** : `planning-app`, un conteneur unique et sans état. Image Node multi-étapes,
+  le front étant compilé à la construction de l'image. Le service écoute sur le port 80,
+  imposé par l'ingress.
+- **Base** : PostgreSQL managé, provisionné par `POST /api/v1/databases`, avec un volume
+  Cinder persistant (`csi-cinder-sc-retain`). Une taille de 1 Gi suffit largement : la
+  couche de planification représente quelques centaines de lignes.
+- **Exposition** : ingress `planning-ingress` sur `https://planning.sigl.epita.fr/`, TLS
+  Let's Encrypt. WebSocket désactivé sur l'ingress, ce qui exclut tout push et confirme le
+  rafraîchissement périodique.
+- **Sauvegardes** : `pg_dump` via `/api/v1/deployments/{name}/database/backup`, vers un
+  volume dédié.
+- **Stockage objet S3** : non utilisé, l'application ne produisant aucun fichier à conserver.
 
-Configuration par variables d'environnement uniquement : `DATABASE_URL`, `PORT`,
-`LOG_LEVEL`. **Aucune variable ne contient de clé Linear** — l'application n'en détient
-jamais au repos.
+Configuration par variables d'environnement uniquement : `DATABASE_URL`, construite à
+partir des identifiants de la base Cassiopée, `PORT` à 80, `LOG_LEVEL`. **Aucune variable
+ne contient de clé Linear** — l'application n'en détient jamais au repos.
 
-L'application n'écrit rien sur le disque en dehors de PostgreSQL, ce qui la rend
-redémarrable et remplaçable à volonté. Au redémarrage, l'instantané est vide et se
-reconstruit à la première requête portant une clé valide. `GET /api/health` sert aux
-sondes de vivacité de l'hébergeur.
+Pour le développement local, un fichier de composition lance l'application et un conteneur
+PostgreSQL officiel. Ce second conteneur n'existe qu'en local et tient lieu de la base
+managée.
+
+L'application n'écrit rien sur le disque, ce qui la rend redémarrable et remplaçable à
+volonté. Au redémarrage, l'instantané est vide et se reconstruit à la première requête
+portant une clé valide. `GET /api/health` sert aux sondes de vivacité.
 
 ## 15. Sous-projet 2, hors périmètre ici
 

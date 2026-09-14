@@ -1,6 +1,6 @@
 import { gql } from './client.js';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 25;
 const PAGE_INFO = 'pageInfo { hasNextPage endCursor }';
 
 const TEAMS = `query Teams($after: String) {
@@ -32,7 +32,7 @@ const ISSUES = `query Issues($after: String, $filter: IssueFilter) {
       project { id }
       relations { nodes { type relatedIssue { id } } }
       inverseRelations { nodes { type issue { id } } }
-      comments(first: 50) { nodes { id body createdAt } }
+      comments(last: 50) { nodes { id body createdAt } }
     }
     ${PAGE_INFO}
   }
@@ -50,7 +50,7 @@ const DIAGNOSTIC_ISSUES = `query DiagnosticIssues($first: Int!) {
       project { id }
       relations { nodes { type relatedIssue { id } } }
       inverseRelations { nodes { type issue { id } } }
-      comments(first: 50) { nodes { id body createdAt } }
+      comments(last: 50) { nodes { id body createdAt } }
     }
   }
 }`;

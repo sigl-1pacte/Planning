@@ -15,7 +15,7 @@ const root = document.getElementById('app');
 const overlay = document.getElementById('key-overlay');
 let prefs = loadPrefs();
 let recenter = true;
-let printing = false;
+let printOverride = null;
 
 if (!location.hash && prefs.lastRoute !== '#/') location.hash = prefs.lastRoute;
 
@@ -50,10 +50,11 @@ function draw() {
   const previousScroll = root.querySelector('.pr')?.scrollLeft ?? 0;
   const today = todayISO();
   const viewportWidth = root.querySelector('.pr')?.clientWidth || Math.max(300, Math.min(window.innerWidth, 1540) - 676);
+  const effective = printOverride ? { ...prefs, ...printOverride } : prefs;
   const result = renderApp(root, {
     state,
     route: parseRoute(location.hash),
-    prefs: { ...prefs, collapsed: new Set(prefs.collapsed) },
+    prefs: { ...effective, collapsed: new Set(effective.collapsed) },
     selectedIssueId: panels.selectedIssueId(),
     today,
     viewportWidth,
@@ -85,14 +86,11 @@ root.addEventListener('click', (event) => {
   } else if (el('[data-action="settings"]')) {
     panels.openSettings();
   } else if (el('[data-action="print"]')) {
-    if (printing) return;
-    printing = true;
-    const saved = prefs;
-    prefs = { ...prefs, zoom: 'all', collapsed: [] };
+    if (printOverride) return;
+    printOverride = { zoom: 'all', collapsed: [] };
     draw();
     const restore = () => {
-      printing = false;
-      prefs = saved;
+      printOverride = null;
       recenter = true;
       draw();
     };

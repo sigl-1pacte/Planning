@@ -28,8 +28,18 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const db = createPool(DATABASE_URL);
-const applied = await migrate(db);
+const db = createPool(DATABASE_URL, {
+  onError: (err) => console.error('PostgreSQL : client inactif en erreur :', err.message),
+});
+
+let applied;
+try {
+  applied = await migrate(db);
+} catch (err) {
+  console.error('Migrations impossibles, arrêt du service :', err.message);
+  await db.end().catch(() => {});
+  process.exit(1);
+}
 
 const store = createSnapshotStore({
   fetchWorkspace: (key) => fetchWorkspace(key),

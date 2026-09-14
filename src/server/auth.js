@@ -10,8 +10,19 @@ export function createKeyValidator({ fetchViewer, ttlMs = 300_000, now = () => D
     const fp = fingerprint(key);
     const hit = cache.get(fp);
     if (hit && hit.expiresAt > now()) return hit.viewer;
-    const viewer = await fetchViewer(key);
-    cache.set(fp, { viewer, expiresAt: now() + ttlMs });
-    return viewer;
+    try {
+      const viewer = await fetchViewer(key);
+      cache.set(fp, { viewer, expiresAt: now() + ttlMs });
+      return viewer;
+    } catch (err) {
+      if (err instanceof LinearAuthError) {
+        cache.delete(fp);
+        throw err;
+      }
+      // Panne de Linear (indisponibilité, quota, réseau) : une clé déjà validée
+      // reste acceptée avec le dernier utilisateur connu, sans prolonger l'expiration.
+      if (hit) return hit.viewer;
+      throw err;
+    }
   };
 }

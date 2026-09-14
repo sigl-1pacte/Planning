@@ -18,7 +18,8 @@ function databaseStep(step) {
     try {
       await step(domain);
     } catch (err) {
-      throw Object.assign(new Error(`Base de données inaccessible : ${err.message}`), { statusCode: 503 });
+      console.error('Base de données inaccessible pendant la synchronisation :', err.message);
+      throw Object.assign(new Error('Base de données inaccessible'), { statusCode: 503 });
     }
   };
 }

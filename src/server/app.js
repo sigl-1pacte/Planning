@@ -23,7 +23,8 @@ function withDatabase(handler) {
       return await handler(req, reply);
     } catch (err) {
       if (err.statusCode) throw err;
-      throw Object.assign(new Error(`Base de données inaccessible : ${err.message}`), { statusCode: 503 });
+      req.log.error(err);
+      throw Object.assign(new Error('Base de données inaccessible'), { statusCode: 503 });
     }
   };
 }

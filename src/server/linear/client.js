@@ -36,7 +36,12 @@ export async function gql(key, query, variables = {}, { fetchImpl = fetch } = {}
   if (res.status === 429) throw new LinearRateLimitError();
   if (res.status >= 500) throw new LinearUnavailableError(`Linear a répondu ${res.status}`);
 
-  const body = await res.json();
+  let body;
+  try {
+    body = await res.json();
+  } catch {
+    throw new LinearUnavailableError(`Réponse illisible de Linear (statut ${res.status})`);
+  }
   if (body.errors?.length) {
     const codes = body.errors.map((e) => e.extensions?.code);
     if (codes.includes('AUTHENTICATION_ERROR')) throw new LinearAuthError();

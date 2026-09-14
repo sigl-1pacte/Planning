@@ -79,6 +79,7 @@ describe('santé', () => {
     const res = await other.inject({ method: 'GET', url: '/api/planning', headers: KEY });
     expect(res.statusCode).toBe(503);
     expect(res.json().error).toMatch(/^Base de données inaccessible/);
+    expect(res.body).not.toContain('ECONNREFUSED');
     await other.close();
   });
 });

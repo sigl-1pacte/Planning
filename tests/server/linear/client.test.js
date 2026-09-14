@@ -41,6 +41,13 @@ describe('gql', () => {
       .rejects.toBeInstanceOf(LinearUnavailableError);
   });
 
+  it('traduit une réponse illisible en indisponibilité', async () => {
+    const unreadable = { status: 200, json: async () => { throw new SyntaxError('Unexpected token <'); } };
+    const err = await gql('k', 'q', {}, { fetchImpl: fakeFetch([unreadable]) }).catch((e) => e);
+    expect(err).toBeInstanceOf(LinearUnavailableError);
+    expect(err.message).toBe('Réponse illisible de Linear (statut 200)');
+  });
+
   it('remonte les autres erreurs GraphQL avec leur message', async () => {
     const body = { errors: [{ message: 'Query too complex' }] };
     await expect(gql('k', 'q', {}, { fetchImpl: fakeFetch([jsonResponse(body, 400)]) }))

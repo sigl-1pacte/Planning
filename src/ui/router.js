@@ -2,7 +2,12 @@ const TEAM_RE = /^#\/team\/([^/]+)$/;
 
 export function parseRoute(hash) {
   const m = TEAM_RE.exec(hash ?? '');
-  return m ? { view: 'team', teamKey: decodeURIComponent(m[1]) } : { view: 'global', teamKey: null };
+  if (!m) return { view: 'global', teamKey: null };
+  try {
+    return { view: 'team', teamKey: decodeURIComponent(m[1]) };
+  } catch {
+    return { view: 'global', teamKey: null };
+  }
 }
 
 export function routeHash(route) {

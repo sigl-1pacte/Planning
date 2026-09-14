@@ -103,7 +103,9 @@ root.addEventListener('click', (event) => {
 });
 
 root.addEventListener('change', (event) => {
-  if (event.target.matches('[data-zoom-range]')) setPrefs({ zoom: 'custom', dayWidth: Number(event.target.value) });
+  if (!event.target.matches('[data-zoom-range]')) return;
+  recenter = true;
+  setPrefs({ zoom: 'custom', dayWidth: Number(event.target.value) });
 });
 
 window.addEventListener('hashchange', () => {

@@ -9,6 +9,10 @@ describe('router', () => {
     expect(parseRoute('#/nimporte')).toEqual({ view: 'global', teamKey: null });
   });
 
+  it('retombe sur la vue globale si la clé de team est mal encodée', () => {
+    expect(parseRoute('#/team/%E0')).toEqual({ view: 'global', teamKey: null });
+  });
+
   it('reconstruit le fragment', () => {
     expect(routeHash({ view: 'team', teamKey: 'IOT' })).toBe('#/team/IOT');
     expect(routeHash({ view: 'global', teamKey: null })).toBe('#/');

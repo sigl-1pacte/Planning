@@ -1,0 +1,136 @@
+// @vitest-environment jsdom
+import { describe, it, expect } from 'vitest';
+import {
+  createRowSink, renderAxis, renderGrid, renderMilestones, renderGroups, renderDependencies,
+} from '../../src/ui/render/board.js';
+import { createAxis } from '../../src/ui/render/layout.js';
+import { buildView } from '../../src/ui/view.js';
+import { computeLoad } from '../../src/shared/load.js';
+import { mapWorkspace } from '../../src/server/linear/mapper.js';
+import { rawWorkspace } from '../fixtures/workspace.js';
+
+const TODAY = '2026-09-17';
+
+function draw({ collapsed = new Set(), mutate } = {}) {
+  const raw = rawWorkspace();
+  mutate?.(raw);
+  const domain = mapWorkspace(raw);
+  const planning = {
+    settings: { hoursPerPoint: 5, loadCeilingPct: 80, defaultWeeklyHours: 28 },
+    holidays: [], people: [], weeklyCapacities: [], contributions: [],
+  };
+  const holidays = new Set();
+  const view = buildView(domain, { route: { view: 'global', teamKey: null }, showCanceled: false });
+  const axis = createAxis({ from: '2026-09-14', to: '2026-11-08' }, 10);
+  const load = computeLoad(domain, planning, { range: axis, teamId: null });
+  const leftRows = document.createElement('div');
+  const rightRows = document.createElement('div');
+  const sink = createRowSink(leftRows, rightRows);
+  renderMilestones(sink, rightRows, domain.projects, axis);
+  const { rowY, colorOf } = renderGroups(sink, {
+    view, axis, holidays, load, users: domain.users, collapsed, selectedIssueId: null,
+  });
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  renderDependencies(svg, { rowY, colorOf, issues: domain.issues, conflicts: view.conflicts, axis, height: sink.top });
+  const grid = document.createElement('div');
+  renderGrid(grid, axis, holidays, TODAY, sink.top);
+  const axisEl = document.createElement('div');
+  renderAxis(axisEl, axis, TODAY);
+  const row = (side, id) => side.querySelector(`.r.tk[data-t="${id}"]`);
+  return { leftRows, rightRows, svg, grid, axisEl, rowY, sink, row };
+}
+
+describe('board', () => {
+  it('dessine une ligne par issue planifiée, alignée à gauche et à droite', () => {
+    const d = draw();
+    expect(d.leftRows.querySelectorAll('.r.tk')).toHaveLength(3);
+    expect(d.rightRows.querySelectorAll('.r.tk')).toHaveLength(3);
+    expect(d.rowY).toEqual({ 'i-11': 98, 'i-12': 122, 'i-20': 204 });
+    expect(d.sink.top).toBe(216);
+    expect(d.leftRows.querySelector('.r.tb a').getAttribute('href')).toBe('#/team/IOT');
+    expect([...d.leftRows.querySelectorAll('.r.p .pn')].map((e) => e.textContent))
+      .toEqual(['Réalisation POC v1', 'Sans projet']);
+  });
+
+  it('coupe les barres aux week-ends et affiche durée et heures', () => {
+    const d = draw();
+    const r = d.row(d.rightRows, 'i-11');
+    const bars = r.querySelectorAll('.bar');
+    expect(bars).toHaveLength(2);
+    expect(r.querySelectorAll('.gp')).toHaveLength(1);
+    expect([bars[0].style.left, bars[0].style.width]).toEqual(['20px', '30px']);
+    expect([bars[1].style.left, bars[1].style.width]).toEqual(['70px', '50px']);
+    expect(bars[0].style.backgroundColor).toBe('rgb(13, 114, 120)');
+    expect(bars[0].className).toBe('bar doing');
+    expect(r.querySelector('.bl').textContent).toBe('8 j · 40 h');
+  });
+
+  it('résume statut, équipe et taux d’affectation', () => {
+    const d = draw();
+    const l = d.row(d.leftRows, 'i-11');
+    expect(l.querySelector('.pill').textContent).toBe('En cours');
+    expect(l.querySelector('.id').textContent).toBe('IOT-11');
+    expect(l.querySelector('.tm').textContent).toBe('S 45% · L 45%');
+    expect(l.querySelector('.pts').textContent).toBe('8');
+    expect([...l.querySelectorAll('.dt')].map((e) => e.textContent)).toEqual(['16/09', '25/09']);
+  });
+
+  it('signale les contributeurs à vérifier, l’estimation absente et les tâches terminées', () => {
+    const d = draw();
+    const l = d.row(d.leftRows, 'i-20');
+    expect(l.querySelector('.flag').textContent).toBe('!');
+    expect(l.querySelector('.pill').textContent).toBe('Terminé');
+    expect(l.querySelector('.pts').textContent).toBe('—');
+    expect(l.querySelector('.pts').classList.contains('none')).toBe(true);
+    expect(d.row(d.rightRows, 'i-20').querySelector('.bl').textContent.startsWith('✓ ')).toBe(true);
+    expect(d.row(d.leftRows, 'i-11').querySelector('.flag').textContent).toBe('');
+  });
+
+  it('place les jalons', () => {
+    const d = draw();
+    const diamonds = d.rightRows.querySelectorAll('.jd');
+    expect(diamonds).toHaveLength(1);
+    expect(diamonds[0].style.left).toBe('525px');
+    expect(d.rightRows.querySelector('.jt').textContent).toBe('Objet construit · 5/11');
+    expect(d.rightRows.querySelectorAll('.jl')).toHaveLength(1);
+  });
+
+  it('relie les dépendances et signale un conflit en rouge pointillé', () => {
+    const ok = draw().svg.querySelectorAll('polyline');
+    expect(ok).toHaveLength(1);
+    expect(ok[0].dataset.from).toBe('i-11');
+    expect(ok[0].dataset.to).toBe('i-12');
+    expect(ok[0].getAttribute('stroke-dasharray')).toBeNull();
+
+    const d = draw({ mutate: (raw) => { raw.issues[1].description = 'Starting date: 24/09/2026'; } });
+    const line = d.svg.querySelector('polyline');
+    expect(line.getAttribute('stroke-dasharray')).toBe('3 2');
+    expect(line.getAttribute('stroke')).toBe('#AE2C34');
+    expect(d.row(d.leftRows, 'i-12').querySelector('.pill').textContent).toBe('Bloqué');
+    expect(d.row(d.rightRows, 'i-12').querySelector('.bar').className).toBe('bar block');
+  });
+
+  it('replie un projet', () => {
+    const d = draw({ collapsed: new Set(['t-iot:p-poc1']) });
+    expect([...d.leftRows.querySelectorAll('.r.tk')].map((r) => r.dataset.t)).toEqual(['i-20']);
+    expect(d.leftRows.querySelector('[data-tog="t-iot:p-poc1"]').closest('.r').classList.contains('op')).toBe(false);
+    expect(d.svg.querySelectorAll('polyline')).toHaveLength(0);
+  });
+
+  it('dessine grille, jours non ouvrés, débuts de mois et ligne du jour', () => {
+    const d = draw();
+    expect(d.grid.style.height).toBe('216px');
+    expect(d.grid.querySelectorAll('.o')).toHaveLength(16);
+    expect(d.grid.querySelectorAll('.m')).toHaveLength(2);
+    expect(d.grid.querySelector('.td').style.left).toBe('35px');
+    expect(d.axisEl.querySelector('.today-tag').textContent).toBe('Aujourd\'hui');
+    expect(d.axisEl.querySelector('.mo').firstElementChild.textContent).toBe('septembre 2026');
+  });
+
+  it('échappe les textes venus de Linear', () => {
+    const d = draw({ mutate: (raw) => { raw.issues[0].title = '<img src=x onerror=alert(1)>'; } });
+    const l = d.row(d.leftRows, 'i-11');
+    expect(l.querySelector('.nmw').textContent).toBe('<img src=x onerror=alert(1)>');
+    expect(l.querySelector('img')).toBeNull();
+  });
+});

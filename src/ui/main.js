@@ -15,6 +15,7 @@ const root = document.getElementById('app');
 const overlay = document.getElementById('key-overlay');
 let prefs = loadPrefs();
 let recenter = true;
+let printing = false;
 
 if (!location.hash && prefs.lastRoute !== '#/') location.hash = prefs.lastRoute;
 
@@ -84,13 +85,19 @@ root.addEventListener('click', (event) => {
   } else if (el('[data-action="settings"]')) {
     panels.openSettings();
   } else if (el('[data-action="print"]')) {
+    if (printing) return;
+    printing = true;
     const saved = prefs;
     prefs = { ...prefs, zoom: 'all', collapsed: [] };
     draw();
+    const restore = () => {
+      printing = false;
+      prefs = saved;
+      recenter = true;
+      draw();
+    };
+    window.addEventListener('afterprint', restore, { once: true });
     window.print();
-    prefs = saved;
-    recenter = true;
-    draw();
   }
 });
 

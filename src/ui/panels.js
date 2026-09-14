@@ -34,7 +34,9 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
 
   function update(nextContext) {
     ctx = nextContext;
-    if (current && !body.contains(document.activeElement)) draw();
+    const active = document.activeElement;
+    const editing = body.contains(active) && active.matches('input, select, textarea');
+    if (current && !editing) draw();
   }
 
   function draw() {
@@ -132,6 +134,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       </form>
       <div class="sec">Capacité semaine par semaine</div>
       <p class="hint">Laissez vide pour reprendre la capacité par défaut (${fr1(fallback)} h). Saisissez 0 pour une absence.</p>
+      <p class="warn" data-capacity-error hidden></p>
       ${weeks.map((w) => {
         const override = planning.weeklyCapacities.find((c) => c.linearUserId === userId && c.weekStart === w.weekStart);
         return `<div class="cbo">
@@ -243,12 +246,22 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     const target = event.target;
     if (target.dataset.week) {
       const week = target.dataset.week;
+      const errorSlotEl = body.querySelector('[data-capacity-error]');
       if (target.value === '') {
+        if (errorSlotEl) errorSlotEl.hidden = true;
         onMutate((api) => api.clearCapacity(current.id, week));
         return;
       }
       const hours = Number(target.value);
-      if (input0(hours)) onMutate((api) => api.setCapacity(current.id, week, hours));
+      if (!input0(hours)) {
+        if (errorSlotEl) {
+          errorSlotEl.textContent = 'La capacité doit être un nombre positif.';
+          errorSlotEl.hidden = false;
+        }
+        return;
+      }
+      if (errorSlotEl) errorSlotEl.hidden = true;
+      onMutate((api) => api.setCapacity(current.id, week, hours));
       return;
     }
     if (target.dataset.pref) onPrefs({ [target.dataset.pref]: target.checked });

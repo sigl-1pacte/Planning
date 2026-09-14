@@ -152,6 +152,22 @@ describe('panneau de personne', () => {
     await flush();
     expect(t.api.clearCapacity).toHaveBeenCalledWith('u-louis', '2026-09-21');
   });
+
+  it('signale une capacité hebdomadaire invalide sans rien envoyer', async () => {
+    const t = setup();
+    t.panels.openPerson('u-louis');
+    const weeks = t.body.querySelectorAll('input[data-week]');
+    change(weeks[0], '-3');
+    await flush();
+    expect(t.onMutate).not.toHaveBeenCalled();
+    const error = t.body.querySelector('[data-capacity-error]');
+    expect(error.hidden).toBe(false);
+    expect(error.textContent).toBe('La capacité doit être un nombre positif.');
+    change(weeks[0], '5');
+    await flush();
+    expect(t.api.setCapacity).toHaveBeenCalledWith('u-louis', '2026-09-14', 5);
+    expect(error.hidden).toBe(true);
+  });
 });
 
 describe('panneau des réglages', () => {
@@ -215,6 +231,15 @@ describe('cycle de vie', () => {
     expect(t.body.querySelector('input')).toBe(input);
     expect(input.value).toBe('12');
     input.blur();
+    t.panels.update(context());
+    expect(t.body.querySelector('input')).not.toBe(input);
+  });
+
+  it('redessine après un clic sur un bouton du panneau', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    t.body.querySelector('button[type="submit"]').focus();
+    const input = t.body.querySelector('input');
     t.panels.update(context());
     expect(t.body.querySelector('input')).not.toBe(input);
   });

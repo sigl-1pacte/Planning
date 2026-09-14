@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: planning
+      POSTGRES_PASSWORD: planning
+      POSTGRES_DB: planning
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://planning:planning@db:5432/planning
+      PORT: "8080"
+    ports: ["8080:8080"]
+    depends_on: [db]
+volumes:
+  pgdata:

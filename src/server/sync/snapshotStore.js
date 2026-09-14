@@ -64,14 +64,15 @@ export function createSnapshotStore({
         domain = next;
         version += 1;
       }
-      await onSync(domain);
-      if (full) await onFullSync(domain);
     } catch (err) {
       if (err instanceof LinearAuthError) throw err;
       if (err instanceof LinearRateLimitError) backoffUntil = startedAt + backoffMs;
       lastError = err.message;
       if (domain === null) throw err;
+      return;
     }
+    await onSync(domain);
+    if (full) await onFullSync(domain);
   }
 
   function refresh(key) {

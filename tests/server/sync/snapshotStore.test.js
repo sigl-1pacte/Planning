@@ -154,6 +154,27 @@ describe('snapshotStore', () => {
     expect(deps.fetchIssuesSince).toHaveBeenCalledOnce();
   });
 
+  it('propage une erreur de onSync sans marquer l’instantané périmé', async () => {
+    const onSync = vi.fn(async () => { throw new Error('ECONNREFUSED'); });
+    const { store } = setup({ onSync });
+    await expect(store.get('k')).rejects.toThrow('ECONNREFUSED');
+    const s = store.current();
+    expect(s.version).toBe(1);
+    expect(s.stale).toBe(false);
+    expect(s.lastError).toBeNull();
+  });
+
+  it('propage une erreur de onFullSync sans marquer l’instantané périmé', async () => {
+    const onFullSync = vi.fn(async () => { throw new Error('ECONNREFUSED'); });
+    const { store, deps } = setup({ onFullSync });
+    await expect(store.get('k')).rejects.toThrow('ECONNREFUSED');
+    const s = store.current();
+    expect(s.version).toBe(1);
+    expect(s.stale).toBe(false);
+    expect(s.lastError).toBeNull();
+    expect(deps.onSync).toHaveBeenCalledOnce();
+  });
+
   it('efface l’état périmé au cycle réussi suivant', async () => {
     const fetchIssuesSince = vi.fn()
       .mockRejectedValueOnce(new LinearUnavailableError())

@@ -102,7 +102,10 @@ export function buildApp({ db, store, validateKey, staticDir = null, logger = fa
   });
 
   app.addHook('onRequest', async (req) => {
-    if (!req.url.startsWith('/api/') || req.url === '/api/health') return;
+    // Décide sur le motif de route résolu (chemin décodé) et non sur l'URL brute :
+    // « /%61pi/planning » atteint la route /api/planning et doit exiger la clé.
+    const route = req.routeOptions?.url;
+    if (!route || !route.startsWith('/api/') || route === '/api/health') return;
     req.linearKey = req.headers['x-linear-key'];
     req.viewer = await validateKey(req.linearKey);
   });

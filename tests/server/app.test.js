@@ -44,6 +44,18 @@ describe('authentification', () => {
     expect(res.json()).toEqual({ error: 'Clé Linear invalide ou révoquée' });
   });
 
+  it('refuse sans clé les chemins /api encodés en pourcentage', async () => {
+    expect((await call('GET', '/%61pi/planning', undefined, {})).statusCode).toBe(401);
+    expect((await call('GET', '/ap%69/snapshot', undefined, {})).statusCode).toBe(401);
+    const put = await call('PUT', '/%61pi/settings', { hoursPerPoint: 5, loadCeilingPct: 80, defaultWeeklyHours: 28 }, {});
+    expect(put.statusCode).toBe(401);
+    expect(store.get).not.toHaveBeenCalled();
+  });
+
+  it('laisse passer /api/health avec une query string sans clé', async () => {
+    expect((await call('GET', '/api/health?x=1', undefined, {})).statusCode).toBe(200);
+  });
+
   it('renvoie l’utilisateur Linear de la clé', async () => {
     expect((await call('POST', '/api/key/validate')).json()).toEqual({
       user: { id: 'u-sacha', name: 'Sacha', email: 'sacha@ex.fr' },

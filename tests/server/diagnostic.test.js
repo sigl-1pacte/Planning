@@ -3,6 +3,9 @@ import Fastify from 'fastify';
 import { buildDiagnostic, registerDiagnosticRoute } from '../../src/server/diagnostic.js';
 import { QUERIES } from '../../src/server/linear/queries.js';
 import { rawWorkspace } from '../fixtures/workspace.js';
+import { buildApp } from '../../src/server/app.js';
+import { createTestDb } from '../helpers/db.js';
+import { LinearAuthError } from '../../src/server/linear/client.js';
 
 describe('buildDiagnostic', () => {
   it('montre ce que l\'application a compris de chaque issue', () => {
@@ -41,6 +44,20 @@ describe('buildDiagnostic', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toHaveLength(4);
     expect(fetchDiagnosticSample).toHaveBeenCalledWith('k', 50);
+    await app.close();
+  });
+
+  it('protège la route de diagnostic par la clé dans l\'application réelle', async () => {
+    const fetchDiagnosticSample = vi.fn();
+    const app = buildApp({
+      db: await createTestDb(),
+      store: { get: vi.fn(), forceRefresh: vi.fn() },
+      validateKey: async (k) => { if (k !== 'good') throw new LinearAuthError(); return {}; },
+    });
+    registerDiagnosticRoute(app, { fetchDiagnosticSample });
+    expect((await app.inject({ method: 'GET', url: '/api/diagnostic' })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'GET', url: '/%61pi/diagnostic' })).statusCode).toBe(401);
+    expect(fetchDiagnosticSample).not.toHaveBeenCalled();
     await app.close();
   });
 

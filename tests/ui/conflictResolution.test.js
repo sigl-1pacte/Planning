@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { scopedConflicts, planConflictFix, resolveConflicts } from '../../src/ui/conflictResolution.js';
+import { scopedConflicts, planIssueFix, resolveConflicts } from '../../src/ui/conflictResolution.js';
 
 const issue = (over) => ({
   id: over.id, identifier: over.id, teamId: 't1', status: 'todo',
@@ -36,21 +36,44 @@ describe('scopedConflicts', () => {
   });
 });
 
-describe('planConflictFix', () => {
-  it('décale la dépendante juste après la fin de sa bloqueuse, en gardant sa durée', () => {
+describe('planIssueFix', () => {
+  it('décale l\'issue juste après la fin de sa bloqueuse, en gardant sa durée', () => {
     const domain = {
       issues: [
         issue({ id: 'a', start: '2026-09-14', end: '2026-09-18' }),
         issue({ id: 'b', start: '2026-09-15', end: '2026-09-20', blockedBy: ['a'] }),
       ],
     };
-    expect(planConflictFix(domain, { issueId: 'b', blockerId: 'a' }))
-      .toEqual({ issueId: 'b', start: '2026-09-19', end: '2026-09-24' });
+    expect(planIssueFix(domain, 'b')).toEqual({ issueId: 'b', start: '2026-09-19', end: '2026-09-24' });
   });
 
-  it('renvoie null si l\'issue ou la bloqueuse a disparu', () => {
+  it('avec plusieurs bloqueuses, se cale sur la plus tardive en un seul décalage', () => {
+    const domain = {
+      issues: [
+        issue({ id: 'a', start: '2026-09-14', end: '2026-09-18' }),
+        issue({ id: 'b', start: '2026-09-10', end: '2026-09-25' }), // finit plus tard que a
+        issue({ id: 'c', start: '2026-09-15', end: '2026-09-20', blockedBy: ['a', 'b'] }),
+      ],
+    };
+    // Se caler sur "a" seule (19/09) laisserait encore un conflit avec "b" (finit le 25/09) :
+    // un seul décalage doit satisfaire les deux bloqueuses à la fois, pas une par une.
+    expect(planIssueFix(domain, 'c')).toEqual({ issueId: 'c', start: '2026-09-26', end: '2026-10-01' });
+  });
+
+  it('ne bouge pas une issue déjà correctement placée par rapport à toutes ses bloqueuses', () => {
+    const domain = {
+      issues: [
+        issue({ id: 'a', start: '2026-09-14', end: '2026-09-18' }),
+        issue({ id: 'b', start: '2026-09-19', end: '2026-09-24', blockedBy: ['a'] }),
+      ],
+    };
+    expect(planIssueFix(domain, 'b')).toBeNull();
+  });
+
+  it('renvoie null si l\'issue a disparu ou n\'a pas de bloqueuse', () => {
     const domain = { issues: [issue({ id: 'a', start: '2026-09-14', end: '2026-09-18' })] };
-    expect(planConflictFix(domain, { issueId: 'b', blockerId: 'a' })).toBeNull();
+    expect(planIssueFix(domain, 'inconnue')).toBeNull();
+    expect(planIssueFix(domain, 'a')).toBeNull();
   });
 });
 
@@ -79,6 +102,25 @@ describe('resolveConflicts', () => {
       { issueId: 'b', start: '2026-09-15', end: '2026-09-20' },
       { issueId: 'c', start: '2026-09-16', end: '2026-09-17' },
     ]);
+  });
+
+  it('règle une issue à plusieurs bloqueuses en un seul décalage, pas un par bloqueuse', async () => {
+    const domain = {
+      issues: [
+        issue({ id: 'a', start: '2026-09-14', end: '2026-09-18' }),
+        issue({ id: 'b', start: '2026-09-10', end: '2026-09-25' }),
+        issue({ id: 'c', start: '2026-09-15', end: '2026-09-20', blockedBy: ['a', 'b'] }),
+      ],
+    };
+    const reschedule = vi.fn(async (issueId, dates) => {
+      const issues = domain.issues.map((i) => (i.id === issueId ? { ...i, ...dates } : i));
+      domain.issues = issues;
+      return { domain: { issues } };
+    });
+    const result = await resolveConflicts(domain, null, reschedule);
+    expect(reschedule).toHaveBeenCalledTimes(1);
+    expect(reschedule).toHaveBeenCalledWith('c', { start: '2026-09-26', end: '2026-10-01' });
+    expect(result.fixed).toBe(1);
   });
 
   it('ne touche rien sans conflit', async () => {

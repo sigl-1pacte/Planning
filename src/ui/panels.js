@@ -122,11 +122,15 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         <select id="f-deps" data-field="deps" multiple size="6">
           ${otherIssues.map((x) => `<option value="${esc(x.id)}"${issue.blockedBy.includes(x.id) ? ' selected' : ''}>${esc(x.identifier)} · ${esc(x.title)}</option>`).join('')}
         </select></div>
-      <div class="fg"><label for="f-contrib">Contributeurs</label>
-        <select id="f-contrib" data-field="contributors" multiple size="6">
-          ${domain.users.map((u) => `<option value="${esc(u.id)}"${issue.contributorIds.includes(u.id) ? ' selected' : ''}>${esc(u.name)}</option>`).join('')}
-        </select></div>
-      <p class="hint">${SOURCE_HINT[issue.contributorsSource]} Un commentaire signale les nouveaux venus dans Linear.</p>
+      <div class="fg"><label>Contributeurs</label>
+        <div class="chklist" data-field="contributors">
+          ${domain.users.map((u) => `<label class="chkrow">
+            <input type="checkbox" value="${esc(u.id)}"${issue.contributorIds.includes(u.id) ? ' checked' : ''}>
+            <span class="ini" style="background:${personColor(u.id, domain.users)}">${esc(initials(u))}</span>
+            <span>${esc(u.name)}</span>
+          </label>`).join('')}
+        </div></div>
+      <p class="hint">${SOURCE_HINT[issue.contributorsSource]} Cocher/décocher ajoute ou retire une personne ; un commentaire signale les nouveaux venus dans Linear.</p>
       <div class="sec">Parts des contributeurs</div>
       ${sharesForm}`;
 
@@ -159,7 +163,8 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       onWrite((api) => api.setDependencies(issue.id, blockedBy), `Dépendances de ${issue.identifier} modifiées`, (api) => api.setDependencies(issue.id, issue.blockedBy));
     });
     body.querySelector('[data-field="contributors"]').addEventListener('change', (e) => {
-      const contributorIds = [...e.target.selectedOptions].map((o) => o.value);
+      if (e.target.type !== 'checkbox') return;
+      const contributorIds = [...body.querySelectorAll('[data-field="contributors"] input:checked')].map((i) => i.value);
       onWrite(
         (api) => api.setContributors(issue.id, contributorIds),
         `Contributeurs de ${issue.identifier} modifiés`,

@@ -81,8 +81,8 @@ describe('panneau de tâche', () => {
     expect(t.body.querySelector('[data-field="end"]').value).toBe('2026-09-25');
     const depsSelected = [...t.body.querySelector('[data-field="deps"]').selectedOptions].map((o) => o.value);
     expect(depsSelected).toEqual([]);
-    const contribSelected = [...t.body.querySelector('[data-field="contributors"]').selectedOptions].map((o) => o.value);
-    expect(contribSelected).toEqual(['u-louis', 'u-sacha']);
+    const contribChecked = [...t.body.querySelectorAll('[data-field="contributors"] input:checked')].map((i) => i.value);
+    expect(contribChecked).toEqual(['u-louis', 'u-sacha']);
     expect(t.body.querySelector('.soon')).toBeNull();
     const shareInputs = [...t.body.querySelectorAll('form[data-form="shares"] input')];
     expect(shareInputs.map((i) => [i.name, i.value])).toEqual([['u-sacha', '50'], ['u-louis', '50']]);
@@ -166,9 +166,10 @@ describe('champs éditables', () => {
   it('modifie les contributeurs', async () => {
     const t = setup();
     t.panels.openIssue('i-11');
-    const select = t.body.querySelector('[data-field="contributors"]');
-    [...select.options].find((o) => o.value === 'u-louis').selected = false;
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    const container = t.body.querySelector('[data-field="contributors"]');
+    const louisBox = [...container.querySelectorAll('input')].find((i) => i.value === 'u-louis');
+    louisBox.checked = false;
+    louisBox.dispatchEvent(new Event('change', { bubbles: true }));
     await flush();
     expect(t.api.setContributors).toHaveBeenCalledWith('i-11', ['u-sacha']);
   });

@@ -197,6 +197,10 @@ th:first-child,td:first-child{padding-left:0}
   font-variant-numeric:tabular-nums;font-size:11px;background:#FBFCFD}
 .cbo .cx{width:84px;flex:0 0 84px;text-align:right;font-size:9.5px;color:var(--ink3);font-variant-numeric:tabular-nums}
 .cbo button{border:0;background:none;color:var(--ink3);cursor:pointer}
+.chklist{max-height:170px;overflow:auto;border:1px solid var(--line);border-radius:3px;padding:2px 7px;background:#FBFCFD}
+.chkrow{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px;cursor:pointer}
+.chkrow+.chkrow{border-top:1px solid var(--line2)}
+.chkrow input{width:auto;flex:0 0 auto}
 .actions{display:flex;gap:8px;margin-top:12px}
 .actions .btn{background:#fff;color:var(--ink);border-color:var(--line)}
 .actions .btn.pri{background:var(--ink);color:#fff;border-color:var(--ink)}

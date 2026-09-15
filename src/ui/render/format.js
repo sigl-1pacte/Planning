@@ -29,6 +29,14 @@ export function shortDay(iso) {
   return `${Number(d)}/${m}`;
 }
 
+// Affichée à côté d'un <input type="date"> natif : son propre texte suit la
+// locale du navigateur (souvent MM/DD/YYYY hors locale française), ce qu'on
+// ne peut pas forcer en CSS sans casser le widget. Ce texte-ci reste fiable.
+export function ddmmyyyy(iso) {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
 export function longDay(iso) {
   const [y, m, d] = iso.split('-').map(Number);
   return `${d} ${MONTHS[m - 1]} ${y}`;

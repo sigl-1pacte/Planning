@@ -1,4 +1,4 @@
-import { esc } from './format.js';
+import { esc, ddmmyyyy } from './format.js';
 
 export function renderUnplannedTab(section, { issues, teams, onPlan }) {
   const teamKey = (id) => teams.find((t) => t.id === id)?.key ?? '—';
@@ -16,11 +16,18 @@ export function renderUnplannedTab(section, { issues, teams, onPlan }) {
         <td>${esc(teamKey(i.teamId))}</td>
         <td class="r">${i.estimate ?? '—'}</td>
         <td class="why">${esc(i.unplannedReason)}</td>
-        <td><input type="date" data-start data-issue="${esc(i.id)}"></td>
-        <td><input type="date" data-end data-issue="${esc(i.id)}"></td>
+        <td><input type="date" data-start data-issue="${esc(i.id)}"><span class="dhint"></span></td>
+        <td><input type="date" data-end data-issue="${esc(i.id)}"><span class="dhint"></span></td>
         <td><button class="btn" type="button" data-action="plan" data-issue="${esc(i.id)}">Planifier</button></td>
       </tr>`).join('')}</tbody>
     </table></div>`;
+
+  section.addEventListener('input', (event) => {
+    const target = event.target;
+    if (target.type !== 'date') return;
+    const hint = target.nextElementSibling;
+    if (hint?.classList.contains('dhint')) hint.textContent = target.value ? ddmmyyyy(target.value) : '';
+  });
 
   section.querySelectorAll('[data-action="plan"]').forEach((button) => {
     button.addEventListener('click', () => {

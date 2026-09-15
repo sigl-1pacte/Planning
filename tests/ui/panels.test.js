@@ -79,6 +79,10 @@ describe('panneau de tâche', () => {
     expect(t.body.querySelector('[data-field="estimate"]').value).toBe('8');
     expect(t.body.querySelector('[data-field="start"]').value).toBe('2026-09-16');
     expect(t.body.querySelector('[data-field="end"]').value).toBe('2026-09-25');
+    // Texte fiable à côté du <input type="date"> natif, dont l'affichage
+    // suit la locale du navigateur (souvent pas DD/MM/YYYY en anglais).
+    expect(t.body.querySelector('[data-field="start"]').nextElementSibling.textContent).toBe('16/09/2026');
+    expect(t.body.querySelector('[data-field="end"]').nextElementSibling.textContent).toBe('25/09/2026');
     const depsSelected = [...t.body.querySelector('[data-field="deps"]').selectedOptions].map((o) => o.value);
     expect(depsSelected).toEqual([]);
     const contribChecked = [...t.body.querySelectorAll('[data-field="contributors"] input:checked')].map((i) => i.value);
@@ -123,6 +127,15 @@ describe('panneau de tâche', () => {
     t.body.querySelector('[data-action="equal-shares"]').click();
     await flush();
     expect(t.api.clearContributions).toHaveBeenCalledWith('i-11');
+  });
+
+  it('affiche la date DD/MM/AAAA en direct à côté du sélecteur natif', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const start = t.body.querySelector('[data-field="start"]');
+    start.value = '2026-10-05';
+    start.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(start.nextElementSibling.textContent).toBe('05/10/2026');
   });
 
   it('recalcule en direct la dernière part pour que le total fasse toujours 100', () => {

@@ -1,4 +1,4 @@
-import { STATUS, esc, initials, personColor, fr1, shortDay, longDay, issueStatus } from './render/format.js';
+import { STATUS, esc, initials, personColor, fr1, shortDay, longDay, ddmmyyyy, issueStatus } from './render/format.js';
 import { defaultWeeklyHours } from '../shared/load.js';
 
 // [Hypothèse] Le barème d'estimation Linear de cette équipe plafonne à 8
@@ -129,8 +129,10 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
           ${FIB.map((f) => `<option value="${f}"${f === issue.estimate ? ' selected' : ''}>${f}</option>`).join('')}
         </select></div>
       <div class="f2">
-        <div class="fg"><label for="f-start">Début</label><input id="f-start" type="date" data-field="start" value="${issue.start ?? ''}"></div>
-        <div class="fg"><label for="f-end">Échéance</label><input id="f-end" type="date" data-field="end" value="${issue.end ?? ''}"></div>
+        <div class="fg"><label for="f-start">Début</label><input id="f-start" type="date" data-field="start" value="${issue.start ?? ''}">
+          <span class="dhint">${issue.start ? ddmmyyyy(issue.start) : ''}</span></div>
+        <div class="fg"><label for="f-end">Échéance</label><input id="f-end" type="date" data-field="end" value="${issue.end ?? ''}">
+          <span class="dhint">${issue.end ? ddmmyyyy(issue.end) : ''}</span></div>
       </div>
       ${issue.unplannedReason ? `<p class="hint">${esc(issue.unplannedReason)}</p>` : ''}
       <div class="actions"><button class="btn pri" type="button" data-action="reschedule">Replanifier</button></div>
@@ -314,7 +316,8 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       </div>`).join('')}
       <form data-form="holiday">
         <div class="f2">
-          <div class="fg"><label for="h-day">Date</label><input id="h-day" name="day" type="date"></div>
+          <div class="fg"><label for="h-day">Date</label><input id="h-day" name="day" type="date">
+            <span class="dhint"></span></div>
           <div class="fg"><label for="h-label">Libellé</label><input id="h-label" name="label"></div>
         </div>
         ${errorSlot}
@@ -375,6 +378,13 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     event.preventDefault();
     const handlers = { shares: submitShares, person: submitPerson, settings: submitSettings, holiday: submitHoliday };
     handlers[form.dataset.form](form);
+  });
+
+  body.addEventListener('input', (event) => {
+    const target = event.target;
+    if (target.type !== 'date') return;
+    const hint = target.nextElementSibling;
+    if (hint?.classList.contains('dhint')) hint.textContent = target.value ? ddmmyyyy(target.value) : '';
   });
 
   body.addEventListener('click', (event) => {

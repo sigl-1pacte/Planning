@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { esc, initials, shortDay, longDay, fr1, issueStatus, personColor } from '../../src/ui/render/format.js';
+import { esc, initials, shortDay, longDay, ddmmyyyy, fr1, issueStatus, personColor } from '../../src/ui/render/format.js';
 
 describe('format', () => {
   it('échappe le HTML', () => {
@@ -17,6 +17,7 @@ describe('format', () => {
   it('formate dates et nombres à la française', () => {
     expect(shortDay('2026-09-05')).toBe('5/09');
     expect(longDay('2026-09-05')).toBe('5 septembre 2026');
+    expect(ddmmyyyy('2026-09-05')).toBe('05/09/2026');
     expect(fr1(7.5)).toBe('7,5');
   });
 

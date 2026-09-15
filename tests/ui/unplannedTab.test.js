@@ -28,6 +28,15 @@ describe('renderUnplannedTab', () => {
     expect(onPlan).toHaveBeenCalledWith('i1', { start: '2026-10-01', end: '2026-10-05' });
   });
 
+  it('affiche la date DD/MM/AAAA en direct à côté des sélecteurs natifs', () => {
+    const section = document.createElement('section');
+    renderUnplannedTab(section, { issues, teams, onPlan: vi.fn() });
+    const start = section.querySelector('[data-start]');
+    start.value = '2026-10-01';
+    start.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(start.nextElementSibling.textContent).toBe('01/10/2026');
+  });
+
   it('affiche un message quand tout est planifié', () => {
     const section = document.createElement('section');
     renderUnplannedTab(section, { issues: [], teams: [], onPlan: vi.fn() });

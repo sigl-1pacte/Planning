@@ -5,6 +5,7 @@ import { dayOfWeek, isValidDate } from '../shared/calendar.js';
 import * as repo from './db/repo.js';
 import { computeReschedule, RescheduleCycleError } from '../shared/reschedule.js';
 import { setStartingDate, setContributors } from './linear/parsing.js';
+import { mentionUrl } from './linear/mutations.js';
 
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -314,13 +315,15 @@ export function buildApp({ db, store, validateKey, linear, staticDir = null, log
     });
     // Un commentaire identifie les nouveaux contributeurs (ceux qui ne
     // portaient pas déjà la charge, contributeur explicite ou assigné par
-    // défaut) — [Hypothèse] la mention texte « @nom » suffit à abonner la
-    // personne au ticket côté Linear ; à vérifier en usage réel, sinon il
-    // faudra la syntaxe de mention exacte de Linear (identifiant embarqué).
+    // défaut). Un simple texte « @nom » posté via l'API n'est pas converti
+    // en mention par Linear (seul son éditeur le fait) : on utilise l'URL de
+    // profil en clair, que Linear convertit bien en mention identifiante à
+    // l'affichage — voir mentionUrl.
     const added = req.body.contributorIds.filter((id) => !issue.contributorIds.includes(id));
-    if (added.length) {
-      const names = added.map((id) => byId.get(id)).filter(Boolean).map((u) => `@${u.displayName ?? u.name}`).join(' ');
-      if (names) await linear.addComment(req.linearKey, issue.id, `Ajouté·e·s comme contributeurs : ${names}`);
+    if (added.length && req.viewer?.organization?.urlKey) {
+      const urlKey = req.viewer.organization.urlKey;
+      const mentions = added.map((id) => byId.get(id)).filter(Boolean).map((u) => mentionUrl(urlKey, u)).join(' ');
+      if (mentions) await linear.addComment(req.linearKey, issue.id, `Ajouté·e·s comme contributeurs : ${mentions}`);
     }
     const snap = await store.forceRefresh(req.linearKey);
     return { domain: snap.domain };

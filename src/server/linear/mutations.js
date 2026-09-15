@@ -96,3 +96,13 @@ export async function addComment(key, issueId, body, opts) {
   const data = await gql(key, COMMENT_CREATE, { input: { issueId, body } }, opts);
   if (!data.commentCreate.success) throw new Error('Linear a refusé l\'ajout du commentaire');
 }
+
+// Un simple texte « @nom » posté via l'API n'est jamais converti en mention
+// réelle (Linear ne fait cette conversion que dans son propre éditeur). La
+// seule façon documentée de produire une mention identifiante — donc une
+// notification — depuis l'API est d'inclure l'URL de profil en clair dans le
+// texte ; Linear la convertit alors en mention à l'affichage.
+// https://linear.app/developers/agent-interaction
+export function mentionUrl(orgUrlKey, user) {
+  return `https://linear.app/${orgUrlKey}/profiles/${encodeURIComponent(user.displayName ?? user.name)}`;
+}

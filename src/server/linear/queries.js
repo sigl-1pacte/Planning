@@ -38,7 +38,7 @@ const ISSUES = `query Issues($after: String, $filter: IssueFilter) {
   }
 }`;
 
-const VIEWER = 'query Viewer { viewer { id name email } }';
+const VIEWER = 'query Viewer { viewer { id name email organization { urlKey } } }';
 
 const DIAGNOSTIC_ISSUES = `query DiagnosticIssues($first: Int!) {
   issues(first: $first, orderBy: updatedAt) {

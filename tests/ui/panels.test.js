@@ -340,6 +340,16 @@ describe('cycle de vie', () => {
     expect(t.body.querySelector('input')).not.toBe(input);
   });
 
+  it('redessine tout de suite après une case à cocher (contributeurs)', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const checkbox = t.body.querySelector('[data-field="contributors"] input');
+    checkbox.focus();
+    const input = t.body.querySelector('input[data-field="title"]');
+    t.panels.update(context());
+    expect(t.body.querySelector('input[data-field="title"]')).not.toBe(input);
+  });
+
   it('redessine après un clic sur un bouton du panneau', () => {
     const t = setup();
     t.panels.openIssue('i-11');

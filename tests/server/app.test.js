@@ -25,7 +25,7 @@ beforeEach(async () => {
   store = { get: vi.fn(async () => snap), forceRefresh: vi.fn(async () => snap), current: vi.fn(() => snap) };
   const validateKey = async (key) => {
     if (key !== 'good') throw new LinearAuthError();
-    return { id: 'u-sacha', name: 'Sacha', email: 'sacha@ex.fr' };
+    return { id: 'u-sacha', name: 'Sacha', email: 'sacha@ex.fr', organization: { urlKey: '1pacte' } };
   };
   linear = {
     updateIssue: vi.fn(async () => ({})),
@@ -74,7 +74,7 @@ describe('authentification', () => {
 
   it('renvoie l’utilisateur Linear de la clé', async () => {
     expect((await call('POST', '/api/key/validate')).json()).toEqual({
-      user: { id: 'u-sacha', name: 'Sacha', email: 'sacha@ex.fr' },
+      user: { id: 'u-sacha', name: 'Sacha', email: 'sacha@ex.fr', organization: { urlKey: '1pacte' } },
     });
   });
 });
@@ -248,7 +248,9 @@ describe('écriture', () => {
     expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-12', {
       description: 'Starting date: 28/09/2026\n\nContributors: @louis @sacha',
     });
-    expect(linear.addComment).toHaveBeenCalledWith('good', 'i-12', 'Ajouté·e·s comme contributeurs : @sacha');
+    expect(linear.addComment).toHaveBeenCalledWith(
+      'good', 'i-12', 'Ajouté·e·s comme contributeurs : https://linear.app/1pacte/profiles/sacha',
+    );
   });
 
   it('ne commente pas quand personne de nouveau n\'est ajouté', async () => {

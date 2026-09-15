@@ -39,7 +39,11 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
   function update(nextContext) {
     ctx = nextContext;
     const active = document.activeElement;
-    const editing = body.contains(active) && active.matches('input, select, textarea');
+    // Une case à cocher n'est jamais "en cours de saisie" (contrairement à un
+    // champ texte) : son changement est une action ponctuelle déjà terminée,
+    // donc ne doit pas bloquer le redessin qui affiche son effet (ici, les
+    // parts recalculées sous la liste des contributeurs).
+    const editing = body.contains(active) && active.matches('input:not([type="checkbox"]), select, textarea');
     if (current && !editing) draw();
   }
 

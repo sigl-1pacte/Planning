@@ -30,6 +30,7 @@ export function createApi({ fetchImpl = (...args) => fetch(...args), storage = g
 
   const person = (id) => `/api/people/${encodeURIComponent(id)}`;
   const issue = (id) => `/api/issues/${encodeURIComponent(id)}`;
+  const project = (id) => `/api/projects/${encodeURIComponent(id)}`;
 
   return {
     getKey: readKey,
@@ -52,5 +53,12 @@ export function createApi({ fetchImpl = (...args) => fetch(...args), storage = g
     clearContributions: (issueId) => request('DELETE', `${issue(issueId)}/contributions`),
     addHoliday: (day, label) => request('POST', '/api/holidays', { day, label }),
     deleteHoliday: (day) => request('DELETE', `/api/holidays/${day}`),
+    updateIssue: (id, patch) => request('PUT', issue(id), patch),
+    reschedule: (id, dates) => request('POST', `${issue(id)}/reschedule`, dates),
+    setDependencies: (id, blockedBy) => request('PUT', `${issue(id)}/dependencies`, { blockedBy }),
+    createIssue: (input) => request('POST', '/api/issues', input),
+    updateProject: (id, patch) => request('PUT', project(id), patch),
+    createProject: (input) => request('POST', '/api/projects', input),
+    createTeam: (input) => request('POST', '/api/teams', input),
   };
 }

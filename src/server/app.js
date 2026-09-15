@@ -196,7 +196,7 @@ export function buildApp({ db, store, validateKey, linear, staticDir = null, log
     return since === snap.version ? { ...snap, domain: null } : snap;
   });
 
-  app.post('/api/refresh', async (req) => store.forceRefresh(req.linearKey));
+  app.post('/api/refresh', async (req) => store.forceRefresh(req.linearKey, { full: true }));
 
   app.get('/api/planning', withDatabase(async () => repo.getPlanning(db)));
 

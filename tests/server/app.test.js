@@ -121,9 +121,9 @@ describe('instantané', () => {
     expect(res.json()).toEqual({ error: 'Linear injoignable' });
   });
 
-  it('force un rafraîchissement', async () => {
+  it('force un rafraîchissement complet', async () => {
     expect((await call('POST', '/api/refresh')).statusCode).toBe(200);
-    expect(store.forceRefresh).toHaveBeenCalledWith('good');
+    expect(store.forceRefresh).toHaveBeenCalledWith('good', { full: true });
   });
 });
 

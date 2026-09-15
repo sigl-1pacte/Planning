@@ -146,12 +146,22 @@ describe('snapshotStore', () => {
     expect(fetchIssuesSince).toHaveBeenCalledTimes(2);
   });
 
-  it('force un cycle immédiat', async () => {
+  it('force un cycle immédiat, incrémental par défaut', async () => {
     const { store, clock, deps } = setup();
     await store.get('k');
     clock.advance(1_000);
     await store.forceRefresh('k');
     expect(deps.fetchIssuesSince).toHaveBeenCalledOnce();
+    expect(deps.fetchWorkspace).toHaveBeenCalledOnce();
+  });
+
+  it('force un cycle complet avec { full: true }, même avant les dix minutes', async () => {
+    const { store, clock, deps } = setup();
+    await store.get('k');
+    clock.advance(1_000);
+    await store.forceRefresh('k', { full: true });
+    expect(deps.fetchWorkspace).toHaveBeenCalledTimes(2);
+    expect(deps.fetchIssuesSince).not.toHaveBeenCalled();
   });
 
   it('propage une erreur de onSync sans marquer l’instantané périmé', async () => {

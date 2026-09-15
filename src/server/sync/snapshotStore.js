@@ -35,10 +35,10 @@ export function createSnapshotStore({
     domain,
   });
 
-  async function cycle(key) {
+  async function cycle(key, forceFull) {
     const startedAt = now();
     lastAttemptAt = startedAt;
-    const full = raw === null || startedAt - lastFullAt >= fullEveryMs;
+    const full = forceFull || raw === null || startedAt - lastFullAt >= fullEveryMs;
     try {
       if (full) {
         raw = await fetchWorkspace(key);
@@ -75,8 +75,8 @@ export function createSnapshotStore({
     if (full) await onFullSync(domain);
   }
 
-  function refresh(key) {
-    inFlight ??= cycle(key).finally(() => { inFlight = null; });
+  function refresh(key, forceFull) {
+    inFlight ??= cycle(key, forceFull).finally(() => { inFlight = null; });
     return inFlight;
   }
 
@@ -89,12 +89,20 @@ export function createSnapshotStore({
     async get(key) {
       const t = now();
       const due = domain === null || lastAttemptAt === null || t - lastAttemptAt >= ttlMs;
-      if (due && t >= backoffUntil) await refresh(key);
+      if (due && t >= backoffUntil) await refresh(key, false);
       else if (inFlight) await inFlight;
       return result();
     },
-    async forceRefresh(key) {
-      if (now() >= backoffUntil) await refresh(key);
+    // full: true force une synchronisation complète même si le dernier cycle
+    // complet date de moins de dix minutes. Un cycle incrémental filtre les
+    // issues par updatedAt côté Linear, qui ne change pas quand on ajoute
+    // seulement un commentaire (ex. la ligne « Contributors »). Le bouton
+    // « Actualiser » et la route /api/refresh demandent donc explicitement
+    // un cycle complet ; les rafraîchissements après une écriture restent
+    // incrémentaux (rapides), l'écriture elle-même ayant déjà mis à jour ce
+    // qui vient de changer.
+    async forceRefresh(key, { full = false } = {}) {
+      if (now() >= backoffUntil) await refresh(key, full);
       return result();
     },
     current() {

@@ -10,6 +10,7 @@ import { renderLoadRows } from './render/loadRows.js';
 import { summarize, renderFacts, renderPeopleTable, renderProjectsTable, renderLegend } from './render/tables.js';
 import { renderUnplannedTab } from './render/unplannedTab.js';
 import { esc, longDay } from './render/format.js';
+import { scopedConflicts } from './conflictResolution.js';
 
 const zoomButton = (prefs, zoom, label) => `<button type="button" data-zoom="${zoom}" class="${prefs.zoom === zoom ? 'on' : ''}">${label}</button>`;
 
@@ -37,6 +38,12 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
   if (view.cycles.length) {
     const ident = (id) => domain.issues.find((i) => i.id === id)?.identifier ?? id;
     banners.push(`<div class="banner">Dépendances circulaires : ${view.cycles.map((c) => esc([...c, c[0]].map(ident).join(' → '))).join(' ; ')}</div>`);
+  } else {
+    const conflicts = scopedConflicts(domain, view.teamId);
+    if (conflicts.length) {
+      banners.push(`<div class="banner act"><span>${conflicts.length} conflit${conflicts.length > 1 ? 's' : ''} de dépendances${team ? ` pour ${esc(team.name)}` : ''} : une dépendante démarre avant la fin de sa bloqueuse.</span>
+        <button class="btn" type="button" data-action="resolve-conflicts">Résoudre automatiquement</button></div>`);
+    }
   }
 
   root.innerHTML = `

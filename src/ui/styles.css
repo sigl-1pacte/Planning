@@ -53,6 +53,8 @@ button,select,input{font-family:inherit;font-size:inherit;color:inherit}
 .hyp b{color:var(--ink);font-weight:600}
 .banner{background:#FBF1E4;border-left:3px solid var(--doing);padding:7px 12px;margin:0 0 10px;color:#5A3B08;font-size:11px}
 .banner.err{background:#FBF2F2;border-left-color:var(--block);color:#6A1B20}
+.banner.act{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.banner.act .btn{flex:0 0 auto}
 
 /* plateau */
 .board{display:flex;border:1px solid var(--line)}

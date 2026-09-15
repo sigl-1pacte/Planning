@@ -12,6 +12,7 @@ import { shortDay } from './render/format.js';
 import { todayISO } from '../shared/calendar.js';
 import { createUndo } from './undo.js';
 import { dayDeltaFromPixels, shiftedDates } from './dragReschedule.js';
+import { resolveConflicts } from './conflictResolution.js';
 
 const api = createApi();
 const root = document.getElementById('app');
@@ -21,6 +22,7 @@ let recenter = true;
 let printOverride = null;
 const undo = createUndo();
 let lastAxis = null;
+let lastTeamId = null;
 let drag = null;
 let suppressNextClick = false;
 
@@ -104,6 +106,7 @@ function draw() {
     },
   });
   lastAxis = result.axis;
+  lastTeamId = result.view.teamId;
   const pane = root.querySelector('.pr');
   pane.scrollLeft = recenter ? scrollLeftForToday(result.axis, today, pane.clientWidth) : previousScroll;
   recenter = false;
@@ -164,8 +167,40 @@ root.addEventListener('click', (event) => {
     draw();
   } else if (el('[data-action="undo"]')) {
     undo.trigger();
+  } else if (el('[data-action="resolve-conflicts"]')) {
+    resolveConflictsInScope();
   }
 });
+
+// Résolution automatique des conflits de dépendances, limitée à la team
+// affichée (ou au workspace entier en vue globale). Rejoue chaque conflit
+// un par un via la même route de replanification en cascade que le
+// glisser-déposer et le panneau, en relisant l'état entre chaque décalage
+// (un décalage peut en révéler ou en résoudre d'autres plus loin dans la
+// chaîne). Une seule annulation couvre tout le lot, dans l'ordre inverse.
+function resolveConflictsInScope() {
+  controller.mutate(async (api) => {
+    const teamId = lastTeamId;
+    const { domain, fixed, originals, blockedByCycle } = await resolveConflicts(
+      controller.state.snapshot.domain, teamId, (id, dates) => api.reschedule(id, dates),
+    );
+    if (blockedByCycle || fixed === 0) return controller.state.planning;
+    controller.state.snapshot = { ...controller.state.snapshot, domain };
+    controller.state.planning = await api.planning();
+    undo.arm(`${fixed} conflit${fixed > 1 ? 's' : ''} résolu${fixed > 1 ? 's' : ''}`, async (api2) => {
+      let current = controller.state.snapshot.domain;
+      for (const o of [...originals].reverse()) {
+        const result = await api2.reschedule(o.issueId, { start: o.start, end: o.end });
+        current = result.domain;
+      }
+      controller.state.snapshot = { ...controller.state.snapshot, domain: current };
+      controller.state.planning = await api2.planning();
+      draw();
+    });
+    draw();
+    return controller.state.planning;
+  });
+}
 
 // Glisser-déposer d'une barre : décale début et échéance du même nombre de
 // jours calendaires (pas de bornage aux jours ouvrés, comme une saisie

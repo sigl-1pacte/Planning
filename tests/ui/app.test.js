@@ -69,6 +69,39 @@ describe('renderApp', () => {
     const missing = draw({ route: { view: 'team', teamKey: 'NOPE' } }).root;
     expect(missing.querySelector('.banner.err').textContent).toBe('Team « NOPE » introuvable dans le workspace.');
   });
+
+  it('propose de résoudre les conflits, limités à la team affichée', () => {
+    const raw = rawWorkspace();
+    raw.issues[1].description = 'Starting date: 20/09/2026'; // i-12 démarre avant la fin de i-11 (25/09)
+    const root = document.createElement('div');
+    const state = { snapshot: { version: 1, fetchedAt: '2026-09-14T10:00:00.000Z', stale: false, lastError: null, domain: mapWorkspace(raw) }, planning, error: null };
+    const prefs = { zoom: 'all', dayWidth: null, collapsed: new Set(), showCanceled: false };
+    renderApp(root, { state, route: { view: 'global', teamKey: null }, prefs, selectedIssueId: null, today: '2026-09-17', viewportWidth: 560 });
+    const banner = root.querySelector('[data-action="resolve-conflicts"]').closest('.banner');
+    expect(banner.textContent).toContain('1 conflit');
+    expect(banner.textContent).not.toContain('pour IoT');
+
+    const teamRoot = document.createElement('div');
+    renderApp(teamRoot, { state, route: { view: 'team', teamKey: 'IOT' }, prefs, selectedIssueId: null, today: '2026-09-17', viewportWidth: 560 });
+    expect(teamRoot.querySelector('[data-action="resolve-conflicts"]').closest('.banner').textContent).toContain('pour IoT');
+
+    const webRoot = document.createElement('div');
+    renderApp(webRoot, { state, route: { view: 'team', teamKey: 'WEB' }, prefs, selectedIssueId: null, today: '2026-09-17', viewportWidth: 560 });
+    expect(webRoot.querySelector('[data-action="resolve-conflicts"]')).toBeNull();
+  });
+
+  it('n\'affiche pas le bouton de résolution quand un cycle existe', () => {
+    const raw = rawWorkspace();
+    raw.issues[1].description = 'Starting date: 20/09/2026';
+    // i-11 bloque déjà i-12 (fixture) ; on ajoute l'inverse pour former un cycle.
+    raw.issues[0].inverseRelations = { nodes: [{ type: 'blocks', issue: { id: 'i-12' } }] };
+    const root = document.createElement('div');
+    const state = { snapshot: { version: 1, fetchedAt: '2026-09-14T10:00:00.000Z', stale: false, lastError: null, domain: mapWorkspace(raw) }, planning, error: null };
+    const prefs = { zoom: 'all', dayWidth: null, collapsed: new Set(), showCanceled: false };
+    renderApp(root, { state, route: { view: 'global', teamKey: null }, prefs, selectedIssueId: null, today: '2026-09-17', viewportWidth: 560 });
+    expect(root.querySelector('[data-action="resolve-conflicts"]')).toBeNull();
+    expect(root.textContent).toContain('Dépendances circulaires');
+  });
 });
 
 describe('renderLoadError', () => {

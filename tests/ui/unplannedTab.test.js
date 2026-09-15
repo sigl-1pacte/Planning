@@ -33,4 +33,12 @@ describe('renderUnplannedTab', () => {
     renderUnplannedTab(section, { issues: [], teams: [], onPlan: vi.fn() });
     expect(section.textContent).toContain('Aucune tâche non planifiée');
   });
+
+  it('échappe les textes issus de Linear', () => {
+    const section = document.createElement('section');
+    const unsafe = [{ ...issues[0], title: '<b>x</b>' }];
+    renderUnplannedTab(section, { issues: unsafe, teams, onPlan: vi.fn() });
+    expect(section.innerHTML).not.toContain('<b>x</b>');
+    expect(section.querySelector('tbody tr').textContent).toContain('<b>x</b>');
+  });
 });

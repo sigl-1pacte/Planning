@@ -3,7 +3,6 @@ import { describe, it, expect } from 'vitest';
 import {
   summarize, renderFacts, renderPeopleTable, renderProjectsTable, renderLegend,
 } from '../../src/ui/render/tables.js';
-import { renderUnplanned } from '../../src/ui/render/unplanned.js';
 import { buildView } from '../../src/ui/view.js';
 import { computeLoad } from '../../src/shared/load.js';
 import { mapWorkspace } from '../../src/server/linear/mapper.js';
@@ -71,19 +70,4 @@ describe('rendu', () => {
     expect(el.textContent).toContain('au-dessus de 80 %');
   });
 
-  it('liste les non planifiées avec leur motif, en échappant les textes', () => {
-    const section = document.createElement('section');
-    const { domain, view } = context((raw) => { raw.issues[2].title = '<b>x</b>'; });
-    renderUnplanned(section, { issues: view.unplanned, teams: domain.teams });
-    expect(section.hidden).toBe(false);
-    expect(section.querySelector('h3').textContent).toBe('Tâches non planifiées (1)');
-    const cells = [...section.querySelectorAll('tbody tr')[0].cells].map((c) => c.textContent);
-    expect(cells).toEqual(['IOT-13', '<b>x</b>', 'IOT', '3', 'Aucune ligne « Starting date » dans la description']);
-  });
-
-  it('masque le bloc quand tout est planifié', () => {
-    const section = document.createElement('section');
-    renderUnplanned(section, { issues: [], teams: [] });
-    expect(section.hidden).toBe(true);
-  });
 });

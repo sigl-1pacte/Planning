@@ -325,6 +325,10 @@ export function buildApp({ db, store, validateKey, linear, staticDir = null, log
       const mentions = added.map((id) => byId.get(id)).filter(Boolean).map((u) => mentionUrl(urlKey, u)).join(' ');
       if (mentions) await linear.addComment(req.linearKey, issue.id, `Ajouté·e·s comme contributeurs : ${mentions}`);
     }
+    // Linear reste la source de vérité pour qui est contributeur : une part
+    // en base pour quelqu'un qu'on vient de retirer ne doit pas survivre
+    // jusqu'au prochain cycle complet de synchronisation.
+    await repo.pruneContributions(db, issue.id, req.body.contributorIds);
     const snap = await store.forceRefresh(req.linearKey);
     return { domain: snap.domain };
   });

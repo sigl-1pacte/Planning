@@ -3,7 +3,7 @@ import { createTestDb } from '../../helpers/db.js';
 import { migrate } from '../../../src/server/db/migrate.js';
 import {
   getPlanning, updateSettings, ensurePeople, updatePerson, setWeeklyCapacity, deleteWeeklyCapacity,
-  setContributions, clearContributions, addHoliday, deleteHoliday, purgeContributions,
+  setContributions, clearContributions, addHoliday, deleteHoliday, purgeContributions, pruneContributions,
 } from '../../../src/server/db/repo.js';
 
 let db;
@@ -77,5 +77,21 @@ describe('repo', () => {
     const removed = await purgeContributions(db, [{ issueId: 'i1', linearUserId: 'u1' }]);
     expect(removed).toBe(2);
     expect((await getPlanning(db)).contributions).toEqual([{ issueId: 'i1', linearUserId: 'u1', share: 50 }]);
+  });
+
+  it('retire les parts d\'une issue pour qui n\'est plus contributeur, sans toucher les autres issues', async () => {
+    await setContributions(db, 'i1', [{ linearUserId: 'u1', share: 50 }, { linearUserId: 'u2', share: 50 }]);
+    await setContributions(db, 'i2', [{ linearUserId: 'u2', share: 100 }]);
+    await pruneContributions(db, 'i1', ['u1']);
+    expect((await getPlanning(db)).contributions).toEqual([
+      { issueId: 'i1', linearUserId: 'u1', share: 50 },
+      { issueId: 'i2', linearUserId: 'u2', share: 100 },
+    ]);
+  });
+
+  it('retire toutes les parts d\'une issue quand la liste voulue est vide', async () => {
+    await setContributions(db, 'i1', [{ linearUserId: 'u1', share: 100 }]);
+    await pruneContributions(db, 'i1', []);
+    expect((await getPlanning(db)).contributions).toEqual([]);
   });
 });

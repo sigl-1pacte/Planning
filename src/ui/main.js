@@ -42,14 +42,20 @@ const panels = createPanels({
       // La réponse d'écriture renvoie déjà le domaine à jour (le serveur a
       // forcé un rafraîchissement Linear avant de répondre) : on l'applique
       // tout de suite plutôt que d'attendre jusqu'à 30 s le prochain sondage.
+      // La planification (parts, capacités, réglages…) est aussi rechargée à
+      // chaque écriture : certaines écritures Linear (ex. retirer un
+      // contributeur) purgent des données côté base, qui doivent apparaître
+      // à jour tout de suite plutôt que d'attendre le prochain sondage.
       if (result?.domain) controller.state.snapshot = { ...controller.state.snapshot, domain: result.domain };
       if (restore) {
         undo.arm(label, async () => {
           const back = await restore(api);
           if (back?.domain) controller.state.snapshot = { ...controller.state.snapshot, domain: back.domain };
+          controller.state.planning = await api.planning();
           draw();
         });
       }
+      controller.state.planning = await api.planning();
       draw();
       return controller.state.planning;
     });

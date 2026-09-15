@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { buildApp } from '../../src/server/app.js';
 import { createTestDb } from '../helpers/db.js';
+import { setContributions, getPlanning } from '../../src/server/db/repo.js';
 import { mapWorkspace } from '../../src/server/linear/mapper.js';
 import { rawWorkspace } from '../fixtures/workspace.js';
 import { LinearAuthError, LinearUnavailableError } from '../../src/server/linear/client.js';
@@ -261,6 +262,13 @@ describe('écriture', () => {
       description: 'Starting date: 16/09/2026\nContributors: @sacha',
     });
     expect(linear.addComment).not.toHaveBeenCalled();
+  });
+
+  it('purge en base la part de qui n\'est plus contributeur', async () => {
+    await setContributions(db, 'i-11', [{ linearUserId: 'u-sacha', share: 60 }, { linearUserId: 'u-louis', share: 40 }]);
+    const res = await call('PUT', '/api/issues/i-11/contributors', { contributorIds: ['u-sacha'] });
+    expect(res.statusCode).toBe(200);
+    expect((await getPlanning(db)).contributions).toEqual([{ issueId: 'i-11', linearUserId: 'u-sacha', share: 60 }]);
   });
 
   it('refuse une issue inconnue pour les contributeurs', async () => {

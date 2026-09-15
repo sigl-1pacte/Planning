@@ -101,6 +101,23 @@ export async function deleteHoliday(db, day) {
   await db.query('delete from holiday where day = $1', [day]);
 }
 
+// Supprime, pour une seule issue, les parts de contributeurs qui ne sont
+// plus dans la liste voulue — sans attendre le prochain cycle complet de
+// synchronisation (purgeContributions, plus large mais jusqu'à dix minutes
+// de retard). Linear reste la source de vérité pour l'appartenance ; la
+// base ne fait que porter les parts de ceux qui en font encore partie.
+export async function pruneContributions(db, issueId, keepUserIds) {
+  const keep = new Set(keepUserIds);
+  const rows = (await db.query('select linear_user_id from contribution where issue_id = $1', [issueId])).rows;
+  const stale = rows.filter((r) => !keep.has(r.linear_user_id));
+  if (!stale.length) return;
+  await db.transaction(async (tx) => {
+    for (const r of stale) {
+      await tx.query('delete from contribution where issue_id = $1 and linear_user_id = $2', [issueId, r.linear_user_id]);
+    }
+  });
+}
+
 export async function purgeContributions(db, validPairs) {
   const valid = new Set(validPairs.map((p) => `${p.issueId}|${p.linearUserId}`));
   const rows = (await db.query('select issue_id, linear_user_id from contribution')).rows;

@@ -30,6 +30,20 @@ const showKey = (reason) => renderKeyScreen(overlay, { api, reason, onValidated:
 
 const controller = createController({ api, render: draw, showKeyScreen: showKey });
 
+// Point de passage unique pour toute écriture qui touche Linear (édition de
+// champ, replanification, dépendances, contributeurs, glisser-déposer…) :
+// applique le domaine à jour renvoyé par la route (le serveur a déjà forcé
+// un rafraîchissement Linear avant de répondre, inutile d'attendre jusqu'à
+// 30 s le prochain sondage), et recharge aussi la planification (parts,
+// capacités, réglages) — certaines écritures Linear purgent des données
+// côté base (ex. retirer un contributeur), qui doivent apparaître à jour
+// tout de suite plutôt qu'au prochain sondage. Utilisé après une écriture
+// ET après son annulation, puisque l'annulation est elle-même une écriture.
+async function applyWriteResult(api, result) {
+  if (result?.domain) controller.state.snapshot = { ...controller.state.snapshot, domain: result.domain };
+  controller.state.planning = await api.planning();
+}
+
 const panels = createPanels({
   drawer: document.getElementById('drw'),
   title: document.getElementById('dwT'),
@@ -38,24 +52,13 @@ const panels = createPanels({
   onMutate: (call) => controller.mutate(call),
   onWrite: (call, label, restore) => {
     controller.mutate(async (api) => {
-      const result = await call(api);
-      // La réponse d'écriture renvoie déjà le domaine à jour (le serveur a
-      // forcé un rafraîchissement Linear avant de répondre) : on l'applique
-      // tout de suite plutôt que d'attendre jusqu'à 30 s le prochain sondage.
-      // La planification (parts, capacités, réglages…) est aussi rechargée à
-      // chaque écriture : certaines écritures Linear (ex. retirer un
-      // contributeur) purgent des données côté base, qui doivent apparaître
-      // à jour tout de suite plutôt que d'attendre le prochain sondage.
-      if (result?.domain) controller.state.snapshot = { ...controller.state.snapshot, domain: result.domain };
+      await applyWriteResult(api, await call(api));
       if (restore) {
         undo.arm(label, async () => {
-          const back = await restore(api);
-          if (back?.domain) controller.state.snapshot = { ...controller.state.snapshot, domain: back.domain };
-          controller.state.planning = await api.planning();
+          await applyWriteResult(api, await restore(api));
           draw();
         });
       }
-      controller.state.planning = await api.planning();
       draw();
       return controller.state.planning;
     });
@@ -94,8 +97,7 @@ function draw() {
     viewportWidth,
     onPlan: (issueId, dates) => {
       controller.mutate(async (api) => {
-        const result = await api.reschedule(issueId, dates);
-        if (result?.domain) controller.state.snapshot = { ...controller.state.snapshot, domain: result.domain };
+        await applyWriteResult(api, await api.reschedule(issueId, dates));
         draw();
         return controller.state.planning;
       });
@@ -215,11 +217,9 @@ function endDrag(commit) {
   setTimeout(() => { suppressNextClick = false; }, 0);
   const { start, end } = shiftedDates(origStart, origEnd, dayDelta);
   controller.mutate(async (api) => {
-    const result = await api.reschedule(issueId, { start, end });
-    if (result?.domain) controller.state.snapshot = { ...controller.state.snapshot, domain: result.domain };
+    await applyWriteResult(api, await api.reschedule(issueId, { start, end }));
     undo.arm(`${identifier} déplacée`, async (api2) => {
-      const back = await api2.reschedule(issueId, { start: origStart, end: origEnd });
-      if (back?.domain) controller.state.snapshot = { ...controller.state.snapshot, domain: back.domain };
+      await applyWriteResult(api2, await api2.reschedule(issueId, { start: origStart, end: origEnd }));
       draw();
     });
     draw();

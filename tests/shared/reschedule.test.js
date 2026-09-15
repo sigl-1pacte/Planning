@@ -42,6 +42,17 @@ describe('computeReschedule', () => {
     expect(out.find((c) => c.issueId === 'b')).toMatchObject({ newStart: '2026-11-12' });
   });
 
+  it('traverse un dépendant non planifié pour atteindre ce qu’il bloque à son tour', () => {
+    const issues = [
+      t('a', '2026-09-14', '2026-09-15'),
+      t('b', null, null, ['a']),
+      t('c', '2026-09-16', '2026-09-17', ['b']),
+    ];
+    const out = computeReschedule(issues, none, 'a', { start: '2026-09-16', end: '2026-09-17' });
+    expect(out.find((c) => c.issueId === 'b')).toBeUndefined();
+    expect(out.find((c) => c.issueId === 'c')).toMatchObject({ newStart: '2026-09-18', newEnd: '2026-09-21' });
+  });
+
   it('refuse un decalage tant qu un cycle existe dans le graphe', () => {
     const issues = [t('a', '2026-09-14', '2026-09-15', ['b']), t('b', '2026-09-16', '2026-09-17', ['a'])];
     expect(() => computeReschedule(issues, none, 'a', { start: '2026-09-16', end: '2026-09-17' }))

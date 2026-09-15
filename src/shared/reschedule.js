@@ -48,17 +48,21 @@ export function computeReschedule(issues, holidays, issueId, { start, end }) {
   if (shift !== 0) {
     const dependentsOf = (id) => issues.filter((i) => i.blockedBy.includes(id));
     const queue = [issueId];
+    const visited = new Set([issueId]);
     while (queue.length) {
       const current = queue.shift();
       for (const dep of dependentsOf(current)) {
-        if (changes.has(dep.id) || !dep.start || !dep.end) continue;
-        changes.set(dep.id, {
-          issueId: dep.id,
-          oldStart: dep.start,
-          oldEnd: dep.end,
-          newStart: shiftWorkingDays(dep.start, shift, holidays),
-          newEnd: shiftWorkingDays(dep.end, shift, holidays),
-        });
+        if (visited.has(dep.id)) continue;
+        if (dep.start && dep.end) {
+          changes.set(dep.id, {
+            issueId: dep.id,
+            oldStart: dep.start,
+            oldEnd: dep.end,
+            newStart: shiftWorkingDays(dep.start, shift, holidays),
+            newEnd: shiftWorkingDays(dep.end, shift, holidays),
+          });
+        }
+        visited.add(dep.id);
         queue.push(dep.id);
       }
     }

@@ -9,6 +9,7 @@ import { parseRoute } from './router.js';
 import { renderApp, renderLoadError } from './app.js';
 import { scrollLeftForToday } from './render/layout.js';
 import { todayISO } from '../shared/calendar.js';
+import { createUndo } from './undo.js';
 
 const api = createApi();
 const root = document.getElementById('app');
@@ -16,6 +17,7 @@ const overlay = document.getElementById('key-overlay');
 let prefs = loadPrefs();
 let recenter = true;
 let printOverride = null;
+const undo = createUndo();
 
 if (!location.hash && prefs.lastRoute !== '#/') location.hash = prefs.lastRoute;
 
@@ -29,6 +31,14 @@ const panels = createPanels({
   body: document.getElementById('dwB'),
   closeButton: document.getElementById('dwX'),
   onMutate: (call) => controller.mutate(call),
+  onWrite: (call, label, restore) => {
+    controller.mutate(async (api) => {
+      const result = await call(api);
+      if (restore) undo.arm(label, async () => { await restore(api); draw(); });
+      draw();
+      return controller.state.planning;
+    });
+  },
   onPrefs: (patch) => setPrefs(patch),
   onForgetKey: () => {
     api.forgetKey();
@@ -61,11 +71,31 @@ function draw() {
     selectedIssueId: panels.selectedIssueId(),
     today,
     viewportWidth,
+    onPlan: (issueId, dates) => {
+      controller.mutate(async (api) => {
+        await api.reschedule(issueId, dates);
+        draw();
+        return controller.state.planning;
+      });
+    },
   });
   const pane = root.querySelector('.pr');
   pane.scrollLeft = recenter ? scrollLeftForToday(result.axis, today, pane.clientWidth) : previousScroll;
   recenter = false;
   panels.update({ domain: state.snapshot.domain, planning: state.planning, load: result.load, view: result.view, prefs });
+  const pending = undo.current();
+  let toast = root.querySelector('.undo-toast');
+  if (pending) {
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.className = 'undo-toast';
+      toast.innerHTML = '<span></span><button class="btn" type="button" data-action="undo">Annuler</button>';
+      root.appendChild(toast);
+    }
+    toast.querySelector('span').textContent = pending.label;
+  } else if (toast) {
+    toast.remove();
+  }
 }
 
 root.addEventListener('click', (event) => {
@@ -99,6 +129,15 @@ root.addEventListener('click', (event) => {
     };
     window.addEventListener('afterprint', restore, { once: true });
     window.print();
+  } else if (el('[data-action="add-task"]')) {
+    const btn = el('[data-action="add-task"]');
+    panels.openIssue(null, { teamId: btn.dataset.team, projectId: btn.dataset.project || undefined });
+    draw();
+  } else if (el('[data-action="add-project"]')) {
+    panels.openProject(null);
+    draw();
+  } else if (el('[data-action="undo"]')) {
+    undo.trigger();
   }
 });
 

@@ -217,11 +217,16 @@ th:first-child,td:first-child{padding-left:0}
   box-shadow:0 8px 22px rgba(8,18,26,.3);line-height:1.45}
 .tip b{color:#fff}.tip s{color:#93A8B8;text-decoration:none}
 
+.undo-toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:80;
+  background:var(--ink);color:#fff;padding:10px 14px;border-radius:4px;display:flex;gap:12px;
+  align-items:center;box-shadow:0 8px 22px rgba(8,18,26,.3);font-size:12px}
+.undo-toast .btn{background:#fff;color:var(--ink);border:0}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{
   @page{size:A3 landscape;margin:8mm}
   html,body{background:#fff}
-  .rail,.tip,.drw,.addb,.tw,.overlay,.banner{display:none!important}
+  .rail,.tip,.drw,.addb,.tw,.overlay,.banner,.undo-toast{display:none!important}
   .sheet{width:auto;max-width:none;margin:0;padding:0;box-shadow:none}
   .pr{overflow:visible!important}
   .cols,.lg,.unp{break-inside:avoid}

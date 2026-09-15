@@ -259,6 +259,8 @@ export function buildApp({ db, store, validateKey, linear, staticDir = null, log
     if (!current) throw Object.assign(new Error('Instantané indisponible'), { statusCode: 503 });
     let changes;
     try {
+      // Jours chômés non lus depuis la base ici : la cascade ignore les jours fériés
+      // pour ce lot. Remplacer par les jours chômés de repo.getPlanning(db) si ça gêne.
       changes = computeReschedule(current.domain.issues, new Set(), req.params.issueId, req.body);
     } catch (err) {
       if (err instanceof RescheduleCycleError) throw Object.assign(err, { statusCode: 400 });

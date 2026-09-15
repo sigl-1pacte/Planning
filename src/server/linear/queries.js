@@ -30,6 +30,7 @@ const ISSUES = `query Issues($after: String, $filter: IssueFilter) {
       assignee { id }
       team { id }
       project { id }
+      parent { id }
       relations { nodes { type relatedIssue { id } } }
       inverseRelations { nodes { type issue { id } } }
       comments(last: 50) { nodes { id body createdAt } }

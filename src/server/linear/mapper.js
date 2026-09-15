@@ -70,6 +70,7 @@ function mapIssue(i, users, blockedBy) {
     title: i.title,
     teamId: i.team.id,
     projectId: i.project?.id ?? null,
+    parentId: i.parent?.id ?? null,
     estimate: i.estimate ?? null,
     status: STATUS[i.state.type] ?? 'todo',
     assigneeId: i.assignee?.id ?? null,

@@ -3,7 +3,7 @@ const conn = (nodes = []) => ({ nodes });
 function issue(over) {
   return {
     description: null, estimate: null, dueDate: null, updatedAt: '2026-09-10T08:00:00.000Z',
-    archivedAt: null, state: { type: 'unstarted' }, assignee: null, project: null,
+    archivedAt: null, state: { type: 'unstarted' }, assignee: null, project: null, parent: null,
     relations: conn(), inverseRelations: conn(), comments: conn(),
     ...over,
   };
@@ -38,7 +38,7 @@ export function rawWorkspace() {
       issue({
         id: 'i-12', identifier: 'IOT-12', title: 'Software', team: { id: 't-iot' }, project: { id: 'p-poc1' },
         description: 'Starting date: 28/09/2026', dueDate: '2026-10-09', estimate: 5,
-        assignee: { id: 'u-louis' },
+        assignee: { id: 'u-louis' }, parent: { id: 'i-11' },
         inverseRelations: conn([{ type: 'blocks', issue: { id: 'i-11' } }]),
       }),
       issue({

@@ -101,6 +101,36 @@ export function renderMilestones(sink, rightRows, projects, axis) {
   sink.push(left, right, 28);
 }
 
+// Ordonne les issues d'un bloc pour que chaque sous-issue suive directement
+// son issue parente (quand celle-ci est visible dans le même bloc), avec sa
+// profondeur d'imbrication. Une sous-issue dont le parent est ailleurs (autre
+// projet/équipe, ou masqué) reste au niveau racine — pas de rattachement
+// inter-blocs pour ne pas complexifier le rendu.
+function withSubIssuesOrder(issues) {
+  const ids = new Set(issues.map((i) => i.id));
+  const childrenOf = new Map();
+  for (const issue of issues) {
+    if (issue.parentId && issue.parentId !== issue.id && ids.has(issue.parentId)) {
+      if (!childrenOf.has(issue.parentId)) childrenOf.set(issue.parentId, []);
+      childrenOf.get(issue.parentId).push(issue);
+    }
+  }
+  const isNested = new Set([...childrenOf.values()].flat().map((i) => i.id));
+  const out = [];
+  const visit = (issue, depth, seen) => {
+    out.push({ issue, depth, parentId: depth > 0 ? issue.parentId : null });
+    for (const child of childrenOf.get(issue.id) ?? []) {
+      if (seen.has(child.id)) continue;
+      visit(child, depth + 1, new Set(seen).add(child.id));
+    }
+  };
+  for (const issue of issues) {
+    if (isNested.has(issue.id)) continue;
+    visit(issue, 0, new Set([issue.id]));
+  }
+  return out;
+}
+
 export function renderGroups(sink, { view, axis, holidays, load, users, collapsed, selectedIssueId }) {
   const blocked = new Set(view.conflicts.map((c) => c.issueId));
   const rowY = {};
@@ -127,13 +157,14 @@ export function renderGroups(sink, { view, axis, holidays, load, users, collapse
       const open = !collapsed.has(block.key);
       renderProjectRow(sink, block, open, axis);
       if (!open) continue;
-      for (const issue of block.issues) {
+      for (const { issue, depth, parentId } of withSubIssuesOrder(block.issues)) {
         colorOf[issue.id] = block.project.color;
         renderIssueRow(sink, issue, {
           color: block.project.color,
           status: issueStatus(issue, blocked),
           axis, holidays, load, users,
           selected: issue.id === selectedIssueId,
+          depth, parentId,
         });
         rowY[issue.id] = sink.top - 12;
       }
@@ -177,16 +208,23 @@ function teamSummary(issue, info, users) {
     .join(' · ');
 }
 
-function renderIssueRow(sink, issue, { color, status, axis, holidays, load, users, selected }) {
-  const [left, right] = rowPair(`r tk${issue.status === 'canceled' ? ' cx' : ''}${selected ? ' sel' : ''}`);
+function renderIssueRow(sink, issue, { color, status, axis, holidays, load, users, selected, depth = 0, parentId = null }) {
+  const [left, right] = rowPair(`r tk${issue.status === 'canceled' ? ' cx' : ''}${selected ? ' sel' : ''}${depth > 0 ? ' sub' : ''}`);
   left.dataset.t = issue.id;
   right.dataset.t = issue.id;
+  if (parentId) {
+    // Contour de sous-issue : cliquer la zone vide de la ligne ouvre l'issue
+    // parente ; les éléments internes (badge équipe, barre) gardent leur
+    // propre data-open vers la sous-issue elle-même (le plus proche l'emporte).
+    left.dataset.open = parentId;
+    right.dataset.open = parentId;
+  }
   const info = load.issues[issue.id];
   const warn = issue.unresolvedMentions.length > 0 || issue.contributorsSource === 'none';
   const noEstimate = issue.estimate === null;
 
   left.innerHTML = `<span class="pill" style="background:${STATUS[status].color}">${STATUS[status].label}</span>
-    <span class="id">${esc(issue.identifier)}</span>
+    <span class="id"${depth > 0 ? ` style="padding-left:${depth * 14}px"` : ''}>${esc(issue.identifier)}</span>
     <span class="nmw" title="${esc(issue.title)}">${esc(issue.title)}</span>
     <span class="flag" title="${warn ? 'Contributeurs à vérifier' : ''}">${warn ? '!' : ''}</span>
     <span class="tm" data-open="${esc(issue.id)}" title="Répartition">${teamSummary(issue, info, users)}</span>

@@ -127,6 +127,30 @@ describe('board', () => {
     expect(d.axisEl.querySelector('.mo').firstElementChild.textContent).toBe('septembre 2026');
   });
 
+  it('imbrique une sous-issue directement sous sa parente, avec un contour cliquable', () => {
+    const d = draw();
+    const parentRow = d.row(d.leftRows, 'i-11');
+    const childRow = d.row(d.leftRows, 'i-12');
+    expect(childRow.classList.contains('sub')).toBe(true);
+    expect(parentRow.classList.contains('sub')).toBe(false);
+    expect(childRow.dataset.open).toBe('i-11');
+    expect(childRow.querySelector('.id').style.paddingLeft).toBe('14px');
+    // La zone vide de la ligne ouvre la parente, mais le badge équipe garde
+    // son propre data-open vers la sous-issue elle-même.
+    expect(childRow.querySelector('.tm').dataset.open).toBe('i-12');
+    const childRight = d.row(d.rightRows, 'i-12');
+    expect(childRight.dataset.open).toBe('i-11');
+    expect(childRight.querySelector('.bar').dataset.open).toBe('i-12');
+  });
+
+  it(`ne rattache pas une sous-issue dont la parente n'est pas dans le même bloc`, () => {
+    const d = draw({ mutate: (raw) => { raw.issues[1].parent = { id: 'i-20' }; } });
+    // i-20 est dans un autre projet/équipe : i-12 reste au niveau racine.
+    const childRow = d.row(d.leftRows, 'i-12');
+    expect(childRow.classList.contains('sub')).toBe(false);
+    expect(childRow.dataset.open).toBeUndefined();
+  });
+
   it('échappe les textes venus de Linear', () => {
     const d = draw({ mutate: (raw) => { raw.issues[0].title = '<img src=x onerror=alert(1)>'; } });
     const l = d.row(d.leftRows, 'i-11');

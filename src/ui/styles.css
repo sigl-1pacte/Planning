@@ -94,6 +94,8 @@ svg.dep{position:absolute;left:0;top:0;overflow:visible;z-index:3;pointer-events
 .pr .r.tk:hover,.pr .r.tk.hi{background:rgba(224,235,241,.5)}
 .r.sel{box-shadow:inset 3px 0 0 var(--ink)}
 .r.cx .nmw{text-decoration:line-through;color:var(--ink3)}
+.pl .r.tk.sub,.pr .r.tk.sub{box-shadow:inset 3px 0 0 var(--line);cursor:pointer}
+.pl .r.tk.sub .id,.pl .r.tk.sub .nmw{color:var(--ink2)}
 .pl .r.band{color:#fff;font-family:"IBM Plex Sans Condensed";font-size:13px;font-weight:600;letter-spacing:.01em}
 .pl .r.band span.n{margin-left:auto;font-family:"IBM Plex Sans";font-size:10px;font-weight:400;color:#93A8B8}
 

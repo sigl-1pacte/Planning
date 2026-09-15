@@ -4,6 +4,7 @@ import { createTestDb } from '../helpers/db.js';
 import { mapWorkspace } from '../../src/server/linear/mapper.js';
 import { rawWorkspace } from '../fixtures/workspace.js';
 import { LinearAuthError, LinearUnavailableError } from '../../src/server/linear/client.js';
+import { RescheduleCycleError } from '../../src/shared/reschedule.js';
 
 const KEY = { 'x-linear-key': 'good' };
 const snap = {
@@ -14,15 +15,29 @@ const snap = {
 let app;
 let db;
 let store;
+let linear;
 
 beforeEach(async () => {
   db = await createTestDb();
-  store = { get: vi.fn(async () => snap), forceRefresh: vi.fn(async () => snap) };
+  // store.current() renvoie l'instantané courant en mémoire (déjà présent dans la
+  // vraie snapshotStore du sous-projet 1) ; on l'ajoute ici au mock car les
+  // nouvelles routes d'écriture (décalage) le lisent de façon synchrone.
+  store = { get: vi.fn(async () => snap), forceRefresh: vi.fn(async () => snap), current: vi.fn(() => snap) };
   const validateKey = async (key) => {
     if (key !== 'good') throw new LinearAuthError();
     return { id: 'u-sacha', name: 'Sacha', email: 'sacha@ex.fr' };
   };
-  app = buildApp({ db, store, validateKey });
+  linear = {
+    updateIssue: vi.fn(async () => ({})),
+    createIssue: vi.fn(async () => ({ id: 'i-new', identifier: 'IOT-99' })),
+    issueBlockers: vi.fn(async () => [{ relationId: 'r1', blockerId: 'i-11' }]),
+    addBlocker: vi.fn(async () => {}),
+    removeBlocker: vi.fn(async () => {}),
+    updateProject: vi.fn(async () => ({})),
+    createProject: vi.fn(async () => ({ id: 'p-new' })),
+    createTeam: vi.fn(async () => ({})),
+  };
+  app = buildApp({ db, store, validateKey, linear });
   await app.ready();
 });
 
@@ -165,5 +180,68 @@ describe('planification', () => {
     expect((await call('POST', '/api/holidays', { day: '2026-12-24', label: '' })).statusCode).toBe(400);
     const del = await call('DELETE', '/api/holidays/2026-11-11');
     expect(del.json().holidays.map((h) => h.day)).not.toContain('2026-11-11');
+  });
+});
+
+describe('écriture', () => {
+  it('modifie une issue puis force un rafraîchissement', async () => {
+    const res = await call('PUT', '/api/issues/i-11', { title: 'Nouveau titre' });
+    expect(res.statusCode).toBe(200);
+    expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-11', { title: 'Nouveau titre' });
+    expect(store.forceRefresh).toHaveBeenCalledWith('good');
+    expect(res.json().domain.issues).toHaveLength(4);
+  });
+
+  it('refuse un corps sans aucun champ', async () => {
+    expect((await call('PUT', '/api/issues/i-11', {})).statusCode).toBe(400);
+  });
+
+  it('décale une issue et ses dépendantes', async () => {
+    const res = await call('POST', '/api/issues/i-11/reschedule', { start: '2026-09-18', end: '2026-09-27' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.changes.find((c) => c.issueId === 'i-11')).toMatchObject({ newStart: '2026-09-18' });
+    expect(linear.updateIssue).toHaveBeenCalled();
+    const call1 = linear.updateIssue.mock.calls.find((c) => c[1] === 'i-11');
+    expect(call1[2].dueDate).toBe('2026-09-27');
+    expect(call1[2].description).toContain('Starting date: 18/09/2026');
+  });
+
+  it('refuse un décalage en cycle avec un message explicite', async () => {
+    linear.updateIssue.mockClear();
+    const cyclic = { ...snap, domain: { ...snap.domain, issues: [
+      { id: 'a', identifier: 'A', teamId: 't-iot', status: 'todo', start: '2026-09-14', end: '2026-09-15', blockedBy: ['b'], contributorIds: [], estimate: 1 },
+      { id: 'b', identifier: 'B', teamId: 't-iot', status: 'todo', start: '2026-09-16', end: '2026-09-17', blockedBy: ['a'], contributorIds: [], estimate: 1 },
+    ] } };
+    store.current.mockReturnValueOnce(cyclic);
+    const res = await call('POST', '/api/issues/a/reschedule', { start: '2026-09-20', end: '2026-09-21' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/circulaires/);
+    expect(linear.updateIssue).not.toHaveBeenCalled();
+  });
+
+  it('remplace la liste des bloqueurs par la différence exacte', async () => {
+    const res = await call('PUT', '/api/issues/i-12/dependencies', { blockedBy: ['i-20'] });
+    expect(res.statusCode).toBe(200);
+    expect(linear.removeBlocker).toHaveBeenCalledWith('good', 'r1');
+    expect(linear.addBlocker).toHaveBeenCalledWith('good', 'i-12', 'i-20');
+  });
+
+  it('crée une issue', async () => {
+    const res = await call('POST', '/api/issues', { teamId: 't-iot', title: 'Nouvelle' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().issueId).toBe('i-new');
+    expect(linear.createIssue).toHaveBeenCalledWith('good', { teamId: 't-iot', title: 'Nouvelle' });
+  });
+
+  it('refuse une création sans team ni titre', async () => {
+    expect((await call('POST', '/api/issues', { teamId: 't-iot' })).statusCode).toBe(400);
+  });
+
+  it('modifie et crée un projet, crée une team', async () => {
+    expect((await call('PUT', '/api/projects/p-poc1', { name: 'Nouveau nom' })).statusCode).toBe(200);
+    const created = await call('POST', '/api/projects', { teamIds: ['t-iot'], name: 'X' });
+    expect(created.json().projectId).toBe('p-new');
+    expect((await call('POST', '/api/teams', { key: 'NEW', name: 'Nouvelle team' })).statusCode).toBe(200);
   });
 });

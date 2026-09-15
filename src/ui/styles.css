@@ -125,7 +125,9 @@ svg.dep{position:absolute;left:0;top:0;overflow:visible;z-index:3;pointer-events
   border-radius:3px;display:flex;gap:5px;align-items:center}
 .addb:hover{color:var(--ink);background:#EAF0F4}
 
-.bar{position:absolute;height:12px;top:6px;border-radius:2px;cursor:pointer}
+.bar{position:absolute;height:12px;top:6px;border-radius:2px;cursor:grab;touch-action:none}
+.dragging .bar{cursor:grabbing}
+.dragging .bar,.dragging .gp,.dragging .bl{transition:none}
 .bar.doing{background-image:repeating-linear-gradient(115deg,rgba(255,255,255,.55) 0 3px,transparent 3px 6px)}
 .bar.done{opacity:.34}
 .bar.todo{opacity:.82}

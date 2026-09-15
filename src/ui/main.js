@@ -8,8 +8,10 @@ import { loadPrefs, savePrefs } from './prefs.js';
 import { parseRoute } from './router.js';
 import { renderApp, renderLoadError } from './app.js';
 import { scrollLeftForToday } from './render/layout.js';
+import { shortDay } from './render/format.js';
 import { todayISO } from '../shared/calendar.js';
 import { createUndo } from './undo.js';
+import { dayDeltaFromPixels, shiftedDates } from './dragReschedule.js';
 
 const api = createApi();
 const root = document.getElementById('app');
@@ -18,6 +20,9 @@ let prefs = loadPrefs();
 let recenter = true;
 let printOverride = null;
 const undo = createUndo();
+let lastAxis = null;
+let drag = null;
+let suppressNextClick = false;
 
 if (!location.hash && prefs.lastRoute !== '#/') location.hash = prefs.lastRoute;
 
@@ -79,6 +84,7 @@ function draw() {
       });
     },
   });
+  lastAxis = result.axis;
   const pane = root.querySelector('.pr');
   pane.scrollLeft = recenter ? scrollLeftForToday(result.axis, today, pane.clientWidth) : previousScroll;
   recenter = false;
@@ -99,6 +105,7 @@ function draw() {
 }
 
 root.addEventListener('click', (event) => {
+  if (suppressNextClick) { suppressNextClick = false; return; }
   const el = (selector) => event.target.closest(selector);
   if (el('[data-tog]')) {
     const key = el('[data-tog]').dataset.tog;
@@ -140,6 +147,69 @@ root.addEventListener('click', (event) => {
     undo.trigger();
   }
 });
+
+// Glisser-déposer d'une barre : décale début et échéance du même nombre de
+// jours calendaires (pas de bornage aux jours ouvrés, comme une saisie
+// manuelle de date dans le panneau), puis passe par la même route de
+// replanification en cascade que le bouton « Replanifier ». Le déclic est
+// distingué du clic simple par le nombre de jours réellement franchis : sans
+// déplacement, aucun appel n'est fait et le clic normal (ouverture du
+// panneau) reprend la main.
+root.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0) return;
+  const bar = event.target.closest('.bar');
+  if (!bar || !lastAxis) return;
+  const row = bar.closest('.r.tk');
+  const issue = row && controller.state.snapshot?.domain.issues.find((i) => i.id === row.dataset.t);
+  if (!issue?.start || !issue.end) return;
+  drag = {
+    pointerId: event.pointerId, row, issueId: issue.id, identifier: issue.identifier,
+    origStart: issue.start, origEnd: issue.end, startX: event.clientX, dayWidth: lastAxis.dayWidth, dayDelta: 0,
+  };
+  bar.setPointerCapture(event.pointerId);
+  root.classList.add('dragging');
+  event.preventDefault();
+});
+
+root.addEventListener('pointermove', (event) => {
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  const dayDelta = dayDeltaFromPixels(event.clientX - drag.startX, drag.dayWidth);
+  if (dayDelta === drag.dayDelta) return;
+  drag.dayDelta = dayDelta;
+  const tx = `translateX(${dayDelta * drag.dayWidth}px)`;
+  drag.row.querySelectorAll('.bar, .gp, .bl').forEach((el) => { el.style.transform = tx; });
+  const label = drag.row.querySelector('.bl');
+  if (label) {
+    const { start, end } = shiftedDates(drag.origStart, drag.origEnd, dayDelta);
+    label.textContent = dayDelta === 0 ? label.textContent : `${shortDay(start)} → ${shortDay(end)}`;
+  }
+});
+
+function endDrag(commit) {
+  if (!drag) return;
+  root.classList.remove('dragging');
+  const { issueId, identifier, origStart, origEnd, dayDelta } = drag;
+  drag = null;
+  if (dayDelta === 0) return;
+  if (!commit) { draw(); return; }
+  suppressNextClick = true;
+  // Filet de sécurité si le clic de fin de déclic ne se déclenche pas (cas
+  // limite selon navigateur) : ne bloque pas indéfiniment le clic suivant.
+  setTimeout(() => { suppressNextClick = false; }, 0);
+  const { start, end } = shiftedDates(origStart, origEnd, dayDelta);
+  controller.mutate(async (api) => {
+    await api.reschedule(issueId, { start, end });
+    undo.arm(`${identifier} déplacée`, async (api2) => {
+      await api2.reschedule(issueId, { start: origStart, end: origEnd });
+      draw();
+    });
+    draw();
+    return controller.state.planning;
+  });
+}
+
+root.addEventListener('pointerup', () => endDrag(true));
+root.addEventListener('pointercancel', () => endDrag(false));
 
 root.addEventListener('change', (event) => {
   if (!event.target.matches('[data-zoom-range]')) return;

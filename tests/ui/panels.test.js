@@ -117,10 +117,22 @@ describe('panneau de tâche', () => {
   it('reprend une répartition ajustée et permet de revenir à l’égalité', async () => {
     const t = setup(context({ planningOver: { contributions: [{ issueId: 'i-11', linearUserId: 'u-sacha', share: 80 }] } }));
     t.panels.openIssue('i-11');
-    expect([...t.body.querySelectorAll('form[data-form="shares"] input')].map((i) => i.value)).toEqual(['80', '50']);
+    // La part de Louis (dernier de la liste) se calcule pour compléter celle
+    // de Sacha jusqu'à 100, pas juste sa valeur par défaut à parts égales.
+    expect([...t.body.querySelectorAll('form[data-form="shares"] input')].map((i) => i.value)).toEqual(['80', '20']);
     t.body.querySelector('[data-action="equal-shares"]').click();
     await flush();
     expect(t.api.clearContributions).toHaveBeenCalledWith('i-11');
+  });
+
+  it('recalcule en direct la dernière part pour que le total fasse toujours 100', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const [sacha, louis] = t.body.querySelectorAll('form[data-form="shares"] input');
+    expect(louis.readOnly).toBe(true);
+    sacha.value = '70';
+    sacha.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(louis.value).toBe('30');
   });
 
   it('explique une tâche non planifiée et une tâche en conflit', () => {

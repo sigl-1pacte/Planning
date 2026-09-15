@@ -79,18 +79,30 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     title.textContent = issue.identifier;
     const otherIssues = domain.issues.filter((x) => x.id !== issue.id);
 
+    // La dernière part se calcule automatiquement (100 moins les autres) : le
+    // total fait toujours 100 sans calcul mental, comme un partage d'addition.
+    // Avec un seul contributeur, sa part n'a pas d'importance (il porte 100 %
+    // de toute façon) : le champ reste alors librement éditable.
+    const lastUid = ids.length > 1 ? ids[ids.length - 1] : null;
+    const lastValue = lastUid !== null
+      ? Math.round((100 - ids.slice(0, -1).reduce((s, uid) => s + shareOf(uid), 0)) * 10) / 10
+      : 0;
     const sharesForm = ids.length ? `<form data-form="shares">
         ${ids.map((uid) => {
           const user = userOf(uid);
           const person = info?.perPerson[uid];
+          const isLast = uid === lastUid;
+          const value = isLast ? lastValue : shareOf(uid);
           return `<div class="cbo">
             <span class="ci" style="background:${personColor(uid, domain.users)}">${esc(initials(user))}</span>
             <span class="cn">${esc(user?.name ?? uid)}</span>
-            <input type="number" min="0" step="any" name="${esc(uid)}" value="${shareOf(uid)}" aria-label="Part de ${esc(user?.name ?? uid)}">
+            <input type="number" min="0" step="any" name="${esc(uid)}" value="${value}"
+              ${isLast ? 'readonly title="Calculée pour que le total fasse 100 %"' : ''}
+              aria-label="Part de ${esc(user?.name ?? uid)}">
             <span class="cx">${person ? `${fr1(person.hours)} h · ${person.ratePct ?? '—'} %` : '—'}</span>
           </div>`;
         }).join('')}
-        <p class="hint">Les parts sont ramenées à 100 %. ${rows.length ? 'Répartition ajustée à la main.' : 'Répartition égale par défaut.'}</p>
+        <p class="hint">${lastUid !== null ? `La part de ${esc(userOf(lastUid)?.name ?? lastUid)} complète les autres jusqu'à 100 %.` : 'Les parts sont ramenées à 100 %.'} ${rows.length ? 'Répartition ajustée à la main.' : 'Répartition égale par défaut.'}</p>
         ${errorSlot}
         <div class="actions">
           <button class="btn pri" type="submit">Enregistrer les parts</button>
@@ -175,6 +187,16 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         (api) => api.setContributors(issue.id, issue.contributorIds),
       );
     });
+    if (lastUid !== null) {
+      const numberInputs = [...body.querySelectorAll('form[data-form="shares"] input[type="number"]')];
+      const lastInput = numberInputs.at(-1);
+      const others = numberInputs.slice(0, -1);
+      const recomputeLast = () => {
+        const sum = others.reduce((s, inp) => s + (Number(inp.value) || 0), 0);
+        lastInput.value = Math.round((100 - sum) * 10) / 10;
+      };
+      for (const inp of others) inp.addEventListener('input', recomputeLast);
+    }
   }
 
   function drawNewIssue({ teamId, projectId }) {

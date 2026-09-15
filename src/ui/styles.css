@@ -195,6 +195,7 @@ th:first-child,td:first-child{padding-left:0}
 .cbo .cn{flex:1;font-size:11px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cbo input{width:60px;text-align:right;border:1px solid var(--line);border-radius:3px;padding:2px 4px;
   font-variant-numeric:tabular-nums;font-size:11px;background:#FBFCFD}
+.cbo input[readonly]{background:var(--off);color:var(--ink2);cursor:default}
 .cbo .cx{width:84px;flex:0 0 84px;text-align:right;font-size:9.5px;color:var(--ink3);font-variant-numeric:tabular-nums}
 .cbo button{border:0;background:none;color:var(--ink3);cursor:pointer}
 .chklist{max-height:170px;overflow:auto;border:1px solid var(--line);border-radius:3px;padding:2px 7px;background:#FBFCFD}

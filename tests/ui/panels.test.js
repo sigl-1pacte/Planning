@@ -39,13 +39,21 @@ function setup(ctx = context()) {
     updateSettings: vi.fn(async () => ({})),
     addHoliday: vi.fn(async () => ({})),
     deleteHoliday: vi.fn(async () => ({})),
+    updateIssue: vi.fn(async () => ({})),
+    reschedule: vi.fn(async () => ({})),
+    setDependencies: vi.fn(async () => ({})),
+    createIssue: vi.fn(async () => ({})),
+    updateProject: vi.fn(async () => ({})),
+    createProject: vi.fn(async () => ({})),
+    createTeam: vi.fn(async () => ({})),
   };
   const onMutate = vi.fn((call) => call(api));
+  const onWrite = vi.fn((call) => call(api));
   const onPrefs = vi.fn();
   const onForgetKey = vi.fn();
-  const panels = createPanels({ drawer, title, body, closeButton, onMutate, onPrefs, onForgetKey });
+  const panels = createPanels({ drawer, title, body, closeButton, onMutate, onPrefs, onForgetKey, onWrite });
   panels.update(ctx);
-  return { drawer, title, body, closeButton, api, onMutate, onPrefs, onForgetKey, panels };
+  return { drawer, title, body, closeButton, api, onMutate, onWrite, onPrefs, onForgetKey, panels };
 }
 
 const submit = (form) => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
@@ -57,31 +65,34 @@ const change = (input, value) => {
 afterEach(() => { document.body.innerHTML = ''; });
 
 describe('panneau de tâche', () => {
-  it('affiche les données Linear en lecture seule et les parts égales', () => {
+  it('affiche les données Linear avec des champs éditables et les parts égales', () => {
     const t = setup();
     t.panels.openIssue('i-11');
     expect(t.drawer.classList.contains('on')).toBe(true);
     expect(t.title.textContent).toBe('IOT-11');
     expect(t.panels.selectedIssueId()).toBe('i-11');
     const rows = Object.fromEntries([...t.body.querySelectorAll('.ro')].map((r) => [r.children[0].textContent, r.children[1].textContent]));
-    expect(rows).toMatchObject({
-      Team: 'IoT', Projet: 'Réalisation POC v1', Statut: 'En cours', Responsable: 'Sacha',
-      Estimation: '8 pts', Début: '16 septembre 2026', 'Échéance': '25 septembre 2026',
-      'Jours ouvrés': '8', Heures: '40 h', 'Bloquée par': 'aucune',
-    });
-    expect(t.body.querySelector('.soon')).not.toBeNull();
-    const inputs = [...t.body.querySelectorAll('input')];
-    expect(inputs.map((i) => [i.name, i.value])).toEqual([['u-sacha', '50'], ['u-louis', '50']]);
+    expect(rows.Statut).toMatch(/^En cours/);
+    expect(t.body.querySelector('[data-field="title"]').value).toBe('Conception');
+    expect(t.body.querySelector('[data-field="assignee"]').value).toBe('u-sacha');
+    expect(t.body.querySelector('[data-field="estimate"]').value).toBe('8');
+    expect(t.body.querySelector('[data-field="start"]').value).toBe('2026-09-16');
+    expect(t.body.querySelector('[data-field="end"]').value).toBe('2026-09-25');
+    const depsSelected = [...t.body.querySelector('[data-field="deps"]').selectedOptions].map((o) => o.value);
+    expect(depsSelected).toEqual([]);
+    expect(t.body.querySelector('.soon')).toBeNull();
+    const shareInputs = [...t.body.querySelectorAll('form[data-form="shares"] input')];
+    expect(shareInputs.map((i) => [i.name, i.value])).toEqual([['u-sacha', '50'], ['u-louis', '50']]);
     expect(t.body.querySelector('[data-action="equal-shares"]')).toBeNull();
   });
 
   it('enregistre les parts saisies', async () => {
     const t = setup();
     t.panels.openIssue('i-11');
-    const [sacha, louis] = t.body.querySelectorAll('input');
+    const [sacha, louis] = t.body.querySelectorAll('form[data-form="shares"] input');
     sacha.value = '70';
     louis.value = '30';
-    submit(t.body.querySelector('form'));
+    submit(t.body.querySelector('form[data-form="shares"]'));
     await flush();
     expect(t.api.setContributions).toHaveBeenCalledWith('i-11', [
       { linearUserId: 'u-sacha', share: 70 },
@@ -92,8 +103,8 @@ describe('panneau de tâche', () => {
   it('refuse des parts toutes nulles sans rien envoyer', () => {
     const t = setup();
     t.panels.openIssue('i-11');
-    for (const input of t.body.querySelectorAll('input')) input.value = '0';
-    submit(t.body.querySelector('form'));
+    for (const input of t.body.querySelectorAll('form[data-form="shares"] input')) input.value = '0';
+    submit(t.body.querySelector('form[data-form="shares"]'));
     expect(t.onMutate).not.toHaveBeenCalled();
     const error = t.body.querySelector('[data-error]');
     expect(error.hidden).toBe(false);
@@ -103,7 +114,7 @@ describe('panneau de tâche', () => {
   it('reprend une répartition ajustée et permet de revenir à l’égalité', async () => {
     const t = setup(context({ planningOver: { contributions: [{ issueId: 'i-11', linearUserId: 'u-sacha', share: 80 }] } }));
     t.panels.openIssue('i-11');
-    expect([...t.body.querySelectorAll('input')].map((i) => i.value)).toEqual(['80', '50']);
+    expect([...t.body.querySelectorAll('form[data-form="shares"] input')].map((i) => i.value)).toEqual(['80', '50']);
     t.body.querySelector('[data-action="equal-shares"]').click();
     await flush();
     expect(t.api.clearContributions).toHaveBeenCalledWith('i-11');
@@ -116,7 +127,7 @@ describe('panneau de tâche', () => {
     expect(t.body.textContent).toContain('Ni ligne « Contributors » ni assigné');
     expect(t.body.querySelector('form')).toBeNull();
     t.panels.openIssue('i-12');
-    expect(t.body.querySelector('.warn').textContent).toBe('Démarre le 24 septembre 2026, avant la fin de IOT-11.');
+    expect(t.body.querySelector('.warn').textContent).toBe('Démarre avant la fin de IOT-11.');
     expect(t.body.textContent).toContain('l\'assigné porte toute la charge');
   });
 
@@ -124,6 +135,78 @@ describe('panneau de tâche', () => {
     const t = setup();
     t.panels.openIssue('i-inconnue');
     expect(t.title.textContent).toBe('Tâche introuvable');
+  });
+});
+
+describe('champs éditables', () => {
+  it('modifie le titre au blur', async () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const input = t.body.querySelector('[data-field="title"]');
+    input.value = 'Titre corrigé';
+    input.dispatchEvent(new Event('blur', { bubbles: true }));
+    await flush();
+    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { title: 'Titre corrigé' });
+  });
+
+  it('change l’assigné et l’estimation', async () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    change(t.body.querySelector('[data-field="assignee"]'), 'u-louis');
+    await flush();
+    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { assigneeId: 'u-louis' });
+    change(t.body.querySelector('[data-field="estimate"]'), '13');
+    await flush();
+    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { estimate: 13 });
+  });
+
+  it('replanifie début et fin en un seul appel', async () => {
+    const t = setup();
+    t.panels.openIssue('i-13');
+    change(t.body.querySelector('[data-field="start"]'), '2026-10-01');
+    change(t.body.querySelector('[data-field="end"]'), '2026-10-05');
+    t.body.querySelector('[data-action="reschedule"]').click();
+    await flush();
+    expect(t.api.reschedule).toHaveBeenCalledWith('i-13', { start: '2026-10-01', end: '2026-10-05' });
+  });
+
+  it('modifie les dépendances', async () => {
+    const t = setup();
+    t.panels.openIssue('i-12');
+    const select = t.body.querySelector('[data-field="deps"]');
+    [...select.options].forEach((o) => { o.selected = o.value === 'i-20'; });
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await flush();
+    expect(t.api.setDependencies).toHaveBeenCalledWith('i-12', ['i-20']);
+  });
+});
+
+describe('création', () => {
+  it('ouvre un panneau de tâche vide avec team et projet préremplis', () => {
+    const t = setup();
+    t.panels.openIssue(null, { teamId: 't-iot', projectId: 'p-poc1' });
+    expect(t.title.textContent).toBe('Nouvelle tâche');
+    expect(t.body.querySelector('[data-field="title"]').value).toBe('');
+  });
+
+  it('crée la tâche et arme une annulation d’étiquette explicite', async () => {
+    const t = setup();
+    t.panels.openIssue(null, { teamId: 't-iot', projectId: 'p-poc1' });
+    t.body.querySelector('[data-field="title"]').value = 'Nouvelle tâche';
+    t.body.querySelector('[data-action="create-issue"]').click();
+    await flush();
+    expect(t.api.createIssue).toHaveBeenCalledWith({ teamId: 't-iot', projectId: 'p-poc1', title: 'Nouvelle tâche' });
+    expect(t.onWrite).toHaveBeenCalled();
+    expect(t.onWrite.mock.calls[0][1]).toMatch(/créée/);
+  });
+
+  it('ouvre un panneau de projet vide et le crée', async () => {
+    const t = setup();
+    t.panels.openProject(null);
+    t.body.querySelector('[data-field="pname"]').value = 'Nouveau projet';
+    t.body.querySelector('[data-action="create-project"]').click();
+    await flush();
+    expect(t.api.createProject).toHaveBeenCalledWith({ teamIds: [], name: 'Nouveau projet' });
   });
 });
 

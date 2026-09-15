@@ -1,6 +1,8 @@
 import { STATUS, esc, initials, personColor, fr1, shortDay, longDay, issueStatus } from './render/format.js';
 import { defaultWeeklyHours } from '../shared/load.js';
 
+const FIB = [1, 2, 3, 5, 8, 13, 21, 34];
+
 const ro = (label, value) => `<div class="ro"><span>${label}</span><span>${esc(value)}</span></div>`;
 const errorSlot = '<p class="warn" data-error hidden></p>';
 
@@ -16,7 +18,7 @@ function showError(form, message) {
   slot.hidden = false;
 }
 
-export function createPanels({ drawer, title, body, closeButton, onMutate, onPrefs, onForgetKey }) {
+export function createPanels({ drawer, title, body, closeButton, onMutate, onPrefs, onForgetKey, onWrite }) {
   let current = null;
   let ctx = null;
 
@@ -43,13 +45,15 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     if (!ctx || !current) return;
     drawer.classList.add('on');
     drawer.setAttribute('aria-hidden', 'false');
-    if (current.kind === 'issue') drawIssue(current.id);
+    if (current.kind === 'issue') drawIssue(current.id, current.seed);
     else if (current.kind === 'person') drawPerson(current.id);
+    else if (current.kind === 'proj') drawProj(current.id);
     else drawSettings();
   }
 
-  function drawIssue(issueId) {
+  function drawIssue(issueId, seed) {
     const { domain, planning, load, view } = ctx;
+    if (issueId === null) return drawNewIssue(seed ?? {});
     const issue = domain.issues.find((i) => i.id === issueId);
     if (!issue) {
       title.textContent = 'Tâche introuvable';
@@ -67,10 +71,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     const shareOf = (uid) => rows.find((r) => r.linearUserId === uid)?.share ?? equal;
 
     title.textContent = issue.identifier;
-    const schedule = issue.start
-      ? ro('Début', longDay(issue.start)) + ro('Échéance', longDay(issue.end))
-        + ro('Jours ouvrés', String(info?.days.length ?? 0)) + ro('Heures', `${Math.round(info?.hours ?? 0)} h`)
-      : ro('Planification', issue.unplannedReason);
+    const otherIssues = domain.issues.filter((x) => x.id !== issue.id);
 
     const sharesForm = ids.length ? `<form data-form="shares">
         ${ids.map((uid) => {
@@ -92,21 +93,117 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       </form>` : '';
 
     body.innerHTML = `
-      ${blockers.length ? `<div class="warn">Démarre le ${longDay(issue.start)}, avant la fin de ${esc(blockers.join(', '))}.</div>` : ''}
+      ${blockers.length ? `<div class="warn">Démarre avant la fin de ${esc(blockers.join(', '))}.</div>` : ''}
       ${issue.unresolvedMentions.length ? `<div class="warn">Mentions non reconnues : ${issue.unresolvedMentions.map((m) => `@${esc(m)}`).join(', ')}.</div>` : ''}
-      ${issue.estimate === null ? '<div class="warn">Sans estimation : la tâche ne compte pour aucune heure.</div>' : ''}
-      <div class="fg"><b>${esc(issue.title)}</b></div>
-      ${ro('Team', domain.teams.find((t) => t.id === issue.teamId)?.name ?? '—')}
-      ${ro('Projet', domain.projects.find((p) => p.id === issue.projectId)?.name ?? 'Sans projet')}
-      ${ro('Statut', STATUS[status].label)}
-      ${ro('Responsable', userOf(issue.assigneeId)?.name ?? '—')}
-      ${ro('Estimation', issue.estimate === null ? 'aucune' : `${issue.estimate} pts`)}
-      ${schedule}
-      ${ro('Bloquée par', issue.blockedBy.map(identifierOf).join(', ') || 'aucune')}
-      <div class="soon">Titre, statut, estimation, dates, assigné et dépendances se modifient dans Linear pour l'instant. L'édition depuis ce site arrivera avec l'écriture vers Linear.</div>
+      <div class="fg"><label for="f-title">Titre</label>
+        <input id="f-title" data-field="title" value="${esc(issue.title)}"></div>
+      ${ro('Statut', `${STATUS[status].label} (se modifie dans Linear pour l'instant)`)}
+      <div class="fg"><label for="f-assignee">Responsable</label>
+        <select id="f-assignee" data-field="assignee">
+          <option value="">— aucun —</option>
+          ${domain.users.map((u) => `<option value="${esc(u.id)}"${u.id === issue.assigneeId ? ' selected' : ''}>${esc(u.name)}</option>`).join('')}
+        </select></div>
+      <div class="fg"><label for="f-estimate">Estimation (points)</label>
+        <select id="f-estimate" data-field="estimate">
+          <option value="">— aucune —</option>
+          ${FIB.map((f) => `<option value="${f}"${f === issue.estimate ? ' selected' : ''}>${f}</option>`).join('')}
+        </select></div>
+      <div class="f2">
+        <div class="fg"><label for="f-start">Début</label><input id="f-start" type="date" data-field="start" value="${issue.start ?? ''}"></div>
+        <div class="fg"><label for="f-end">Échéance</label><input id="f-end" type="date" data-field="end" value="${issue.end ?? ''}"></div>
+      </div>
+      ${issue.unplannedReason ? `<p class="hint">${esc(issue.unplannedReason)}</p>` : ''}
+      <div class="actions"><button class="btn pri" type="button" data-action="reschedule">Replanifier</button></div>
+      <div class="fg"><label for="f-deps">Bloquée par</label>
+        <select id="f-deps" data-field="deps" multiple size="6">
+          ${otherIssues.map((x) => `<option value="${esc(x.id)}"${issue.blockedBy.includes(x.id) ? ' selected' : ''}>${esc(x.identifier)} · ${esc(x.title)}</option>`).join('')}
+        </select></div>
       <div class="sec">Parts des contributeurs</div>
       <p class="hint">${SOURCE_HINT[issue.contributorsSource]}</p>
       ${sharesForm}`;
+
+    body.querySelector('[data-field="title"]').addEventListener('blur', (e) => {
+      const value = e.target.value.trim();
+      if (value && value !== issue.title) {
+        onWrite((api) => api.updateIssue(issue.id, { title: value }), `Titre de ${issue.identifier} modifié`, (api) => api.updateIssue(issue.id, { title: issue.title }));
+      }
+    });
+    body.querySelector('[data-field="assignee"]').addEventListener('change', (e) => {
+      const value = e.target.value || null;
+      onWrite((api) => api.updateIssue(issue.id, { assigneeId: value }), `Responsable de ${issue.identifier} modifié`, (api) => api.updateIssue(issue.id, { assigneeId: issue.assigneeId }));
+    });
+    body.querySelector('[data-field="estimate"]').addEventListener('change', (e) => {
+      const value = e.target.value ? Number(e.target.value) : null;
+      onWrite((api) => api.updateIssue(issue.id, { estimate: value }), `Estimation de ${issue.identifier} modifiée`, (api) => api.updateIssue(issue.id, { estimate: issue.estimate }));
+    });
+    body.querySelector('[data-action="reschedule"]').addEventListener('click', () => {
+      const start = body.querySelector('[data-field="start"]').value || undefined;
+      const end = body.querySelector('[data-field="end"]').value || undefined;
+      if (!start && !end) return;
+      onWrite(
+        (api) => api.reschedule(issue.id, { start, end }),
+        `${issue.identifier} replanifiée`,
+        (api) => api.reschedule(issue.id, { start: issue.start ?? undefined, end: issue.end ?? undefined }),
+      );
+    });
+    body.querySelector('[data-field="deps"]').addEventListener('change', (e) => {
+      const blockedBy = [...e.target.selectedOptions].map((o) => o.value);
+      onWrite((api) => api.setDependencies(issue.id, blockedBy), `Dépendances de ${issue.identifier} modifiées`, (api) => api.setDependencies(issue.id, issue.blockedBy));
+    });
+  }
+
+  function drawNewIssue({ teamId, projectId }) {
+    title.textContent = 'Nouvelle tâche';
+    body.innerHTML = `
+      <div class="fg"><label for="f-title">Titre</label><input id="f-title" data-field="title"></div>
+      ${errorSlot}
+      <div class="actions"><button class="btn pri" type="button" data-action="create-issue">Créer la tâche</button></div>`;
+    body.querySelector('[data-action="create-issue"]').addEventListener('click', () => {
+      const value = body.querySelector('[data-field="title"]').value.trim();
+      if (!value) return showError(body, 'Le titre est obligatoire.');
+      const input = { teamId, title: value };
+      if (projectId) input.projectId = projectId;
+      onWrite((api) => api.createIssue(input), `Tâche « ${value} » créée`, null);
+    });
+  }
+
+  function drawNewProject() {
+    title.textContent = 'Nouveau projet';
+    body.innerHTML = `
+      <div class="fg"><label for="f-pname">Nom du projet</label><input id="f-pname" data-field="pname"></div>
+      ${errorSlot}
+      <div class="actions"><button class="btn pri" type="button" data-action="create-project">Créer le projet</button></div>`;
+    body.querySelector('[data-action="create-project"]').addEventListener('click', () => {
+      const value = body.querySelector('[data-field="pname"]').value.trim();
+      if (!value) return showError(body, 'Le nom est obligatoire.');
+      onWrite((api) => api.createProject({ teamIds: [], name: value }), `Projet « ${value} » créé`, null);
+    });
+  }
+
+  function drawProj(projectId) {
+    if (projectId === null) return drawNewProject();
+    const { domain } = ctx;
+    const project = domain.projects.find((p) => p.id === projectId);
+    if (!project) {
+      title.textContent = 'Projet introuvable';
+      body.innerHTML = '<p class="warn">Ce projet ne figure plus dans l\'instantané Linear.</p>';
+      return;
+    }
+    title.textContent = project.name;
+    const teamNames = project.teamIds.map((id) => domain.teams.find((t) => t.id === id)?.name ?? id);
+    body.innerHTML = `
+      <div class="fg"><label for="f-pname">Nom du projet</label>
+        <input id="f-pname" data-field="pname" value="${esc(project.name)}"></div>
+      ${ro('Teams', teamNames.join(', ') || 'aucune')}
+      ${ro('Début', project.startDate ? longDay(project.startDate) : '—')}
+      ${ro('Échéance', project.targetDate ? longDay(project.targetDate) : '—')}
+      ${project.milestones.length ? `<div class="sec">Jalons</div>${project.milestones.map((m) => ro(m.name, m.date ? longDay(m.date) : '—')).join('')}` : ''}`;
+    body.querySelector('[data-field="pname"]').addEventListener('blur', (e) => {
+      const value = e.target.value.trim();
+      if (value && value !== project.name) {
+        onWrite((api) => api.updateProject(project.id, { name: value }), `Nom du projet ${project.name} modifié`, (api) => api.updateProject(project.id, { name: project.name }));
+      }
+    });
   }
 
   function drawPerson(userId) {
@@ -270,7 +367,8 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
   closeButton.addEventListener('click', close);
 
   return {
-    openIssue: (id) => open({ kind: 'issue', id }),
+    openIssue: (id, seed) => open({ kind: 'issue', id, seed }),
+    openProject: (id) => open({ kind: 'proj', id }),
     openPerson: (id) => open({ kind: 'person', id }),
     openSettings: () => open({ kind: 'settings' }),
     close,

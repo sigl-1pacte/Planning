@@ -39,7 +39,17 @@ const panels = createPanels({
   onWrite: (call, label, restore) => {
     controller.mutate(async (api) => {
       const result = await call(api);
-      if (restore) undo.arm(label, async () => { await restore(api); draw(); });
+      // La réponse d'écriture renvoie déjà le domaine à jour (le serveur a
+      // forcé un rafraîchissement Linear avant de répondre) : on l'applique
+      // tout de suite plutôt que d'attendre jusqu'à 30 s le prochain sondage.
+      if (result?.domain) controller.state.snapshot = { ...controller.state.snapshot, domain: result.domain };
+      if (restore) {
+        undo.arm(label, async () => {
+          const back = await restore(api);
+          if (back?.domain) controller.state.snapshot = { ...controller.state.snapshot, domain: back.domain };
+          draw();
+        });
+      }
       draw();
       return controller.state.planning;
     });
@@ -78,7 +88,8 @@ function draw() {
     viewportWidth,
     onPlan: (issueId, dates) => {
       controller.mutate(async (api) => {
-        await api.reschedule(issueId, dates);
+        const result = await api.reschedule(issueId, dates);
+        if (result?.domain) controller.state.snapshot = { ...controller.state.snapshot, domain: result.domain };
         draw();
         return controller.state.planning;
       });
@@ -198,9 +209,11 @@ function endDrag(commit) {
   setTimeout(() => { suppressNextClick = false; }, 0);
   const { start, end } = shiftedDates(origStart, origEnd, dayDelta);
   controller.mutate(async (api) => {
-    await api.reschedule(issueId, { start, end });
+    const result = await api.reschedule(issueId, { start, end });
+    if (result?.domain) controller.state.snapshot = { ...controller.state.snapshot, domain: result.domain };
     undo.arm(`${identifier} déplacée`, async (api2) => {
-      await api2.reschedule(issueId, { start: origStart, end: origEnd });
+      const back = await api2.reschedule(issueId, { start: origStart, end: origEnd });
+      if (back?.domain) controller.state.snapshot = { ...controller.state.snapshot, domain: back.domain };
       draw();
     });
     draw();

@@ -179,6 +179,14 @@ describe('champs éditables', () => {
     await flush();
     expect(t.api.setDependencies).toHaveBeenCalledWith('i-12', ['i-20']);
   });
+
+  it('affiche la team et le projet de la tâche', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const rows = Object.fromEntries([...t.body.querySelectorAll('.ro')].map((r) => [r.children[0].textContent, r.children[1].textContent]));
+    expect(rows.Team).toBe('IoT');
+    expect(rows.Projet).toBe('Réalisation POC v1');
+  });
 });
 
 describe('création', () => {

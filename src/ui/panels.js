@@ -95,6 +95,8 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     body.innerHTML = `
       ${blockers.length ? `<div class="warn">Démarre avant la fin de ${esc(blockers.join(', '))}.</div>` : ''}
       ${issue.unresolvedMentions.length ? `<div class="warn">Mentions non reconnues : ${issue.unresolvedMentions.map((m) => `@${esc(m)}`).join(', ')}.</div>` : ''}
+      ${ro('Team', domain.teams.find((t) => t.id === issue.teamId)?.name ?? '—')}
+      ${ro('Projet', domain.projects.find((p) => p.id === issue.projectId)?.name ?? 'Sans projet')}
       <div class="fg"><label for="f-title">Titre</label>
         <input id="f-title" data-field="title" value="${esc(issue.title)}"></div>
       ${ro('Statut', `${STATUS[status].label} (se modifie dans Linear pour l'instant)`)}

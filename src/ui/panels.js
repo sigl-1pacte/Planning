@@ -129,10 +129,12 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
           ${FIB.map((f) => `<option value="${f}"${f === issue.estimate ? ' selected' : ''}>${f}</option>`).join('')}
         </select></div>
       <div class="f2">
-        <div class="fg"><label for="f-start">Début</label><input id="f-start" type="date" data-field="start" value="${issue.start ?? ''}">
-          <span class="dhint">${issue.start ? ddmmyyyy(issue.start) : ''}</span></div>
-        <div class="fg"><label for="f-end">Échéance</label><input id="f-end" type="date" data-field="end" value="${issue.end ?? ''}">
-          <span class="dhint">${issue.end ? ddmmyyyy(issue.end) : ''}</span></div>
+        <div class="fg"><label for="f-start">Début</label><div class="dfield">
+          <input id="f-start" type="date" data-field="start" value="${issue.start ?? ''}">
+          <span class="dovl">${issue.start ? ddmmyyyy(issue.start) : ''}</span></div></div>
+        <div class="fg"><label for="f-end">Échéance</label><div class="dfield">
+          <input id="f-end" type="date" data-field="end" value="${issue.end ?? ''}">
+          <span class="dovl">${issue.end ? ddmmyyyy(issue.end) : ''}</span></div></div>
       </div>
       ${issue.unplannedReason ? `<p class="hint">${esc(issue.unplannedReason)}</p>` : ''}
       <div class="actions"><button class="btn pri" type="button" data-action="reschedule">Replanifier</button></div>
@@ -316,8 +318,9 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       </div>`).join('')}
       <form data-form="holiday">
         <div class="f2">
-          <div class="fg"><label for="h-day">Date</label><input id="h-day" name="day" type="date">
-            <span class="dhint"></span></div>
+          <div class="fg"><label for="h-day">Date</label><div class="dfield">
+            <input id="h-day" name="day" type="date">
+            <span class="dovl"></span></div></div>
           <div class="fg"><label for="h-label">Libellé</label><input id="h-label" name="label"></div>
         </div>
         ${errorSlot}
@@ -383,8 +386,8 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
   body.addEventListener('input', (event) => {
     const target = event.target;
     if (target.type !== 'date') return;
-    const hint = target.nextElementSibling;
-    if (hint?.classList.contains('dhint')) hint.textContent = target.value ? ddmmyyyy(target.value) : '';
+    const overlay = target.nextElementSibling;
+    if (overlay?.classList.contains('dovl')) overlay.textContent = target.value ? ddmmyyyy(target.value) : '';
   });
 
   body.addEventListener('click', (event) => {

@@ -16,8 +16,8 @@ export function renderUnplannedTab(section, { issues, teams, onPlan }) {
         <td>${esc(teamKey(i.teamId))}</td>
         <td class="r">${i.estimate ?? '—'}</td>
         <td class="why">${esc(i.unplannedReason)}</td>
-        <td><input type="date" data-start data-issue="${esc(i.id)}"><span class="dhint"></span></td>
-        <td><input type="date" data-end data-issue="${esc(i.id)}"><span class="dhint"></span></td>
+        <td><div class="dfield"><input type="date" data-start data-issue="${esc(i.id)}"><span class="dovl"></span></div></td>
+        <td><div class="dfield"><input type="date" data-end data-issue="${esc(i.id)}"><span class="dovl"></span></div></td>
         <td><button class="btn" type="button" data-action="plan" data-issue="${esc(i.id)}">Planifier</button></td>
       </tr>`).join('')}</tbody>
     </table></div>`;
@@ -25,8 +25,8 @@ export function renderUnplannedTab(section, { issues, teams, onPlan }) {
   section.addEventListener('input', (event) => {
     const target = event.target;
     if (target.type !== 'date') return;
-    const hint = target.nextElementSibling;
-    if (hint?.classList.contains('dhint')) hint.textContent = target.value ? ddmmyyyy(target.value) : '';
+    const overlay = target.nextElementSibling;
+    if (overlay?.classList.contains('dovl')) overlay.textContent = target.value ? ddmmyyyy(target.value) : '';
   });
 
   section.querySelectorAll('[data-action="plan"]').forEach((button) => {

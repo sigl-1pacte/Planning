@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseStartingDate, parseContributors, resolveMention } from '../../../src/server/linear/parsing.js';
+import { parseStartingDate, parseContributors, resolveMention, setStartingDate } from '../../../src/server/linear/parsing.js';
 
 const users = [
   { id: 'u1', name: 'Sacha Martin', displayName: 'sacha', email: 'sacha.martin@ex.fr' },
@@ -77,5 +77,27 @@ describe('parseContributors', () => {
 
   it('indique l\'absence de ligne', () => {
     expect(parseContributors([], users)).toEqual({ found: false, commentId: null, userIds: [], unresolved: [] });
+  });
+});
+
+describe('setStartingDate', () => {
+  it('remplace une ligne valide existante sans toucher au reste', () => {
+    expect(setStartingDate('Avant\nStarting date: 01/10/2026\nAprès', '2026-11-05'))
+      .toBe('Avant\nStarting date: 05/11/2026\nAprès');
+  });
+
+  it('remplace une ligne illisible existante', () => {
+    expect(setStartingDate('Starting date: pas une date\nSuite', '2026-11-05'))
+      .toBe('Starting date: 05/11/2026\nSuite');
+  });
+
+  it('insère la ligne en tête quand aucune ligne n\'existe', () => {
+    expect(setStartingDate('Contexte du projet', '2026-11-05'))
+      .toBe('Starting date: 05/11/2026\n\nContexte du projet');
+  });
+
+  it('produit uniquement la ligne pour une description vide ou absente', () => {
+    expect(setStartingDate('', '2026-11-05')).toBe('Starting date: 05/11/2026');
+    expect(setStartingDate(null, '2026-11-05')).toBe('Starting date: 05/11/2026');
   });
 });

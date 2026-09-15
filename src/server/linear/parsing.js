@@ -47,3 +47,12 @@ export function parseContributors(comments, users) {
   }
   return { found: false, commentId: null, userIds: [], unresolved: [] };
 }
+
+export function setStartingDate(description, isoDate) {
+  const [y, mo, d] = isoDate.split('-');
+  const line = `Starting date: ${d}/${mo}/${y}`;
+  if (!description) return line;
+  if (START_RE.test(description)) return description.replace(START_RE, line);
+  if (START_LABEL_RE.test(description)) return description.replace(START_LABEL_RE, line);
+  return `${line}\n\n${description}`;
+}

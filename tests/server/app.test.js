@@ -26,7 +26,7 @@ beforeEach(async () => {
   store = { get: vi.fn(async () => snap), forceRefresh: vi.fn(async () => snap), current: vi.fn(() => snap) };
   const validateKey = async (key) => {
     if (key !== 'good') throw new LinearAuthError();
-    return { id: 'u-sacha', name: 'Sacha', email: 'sacha@ex.fr', organization: { urlKey: '1pacte' } };
+    return { id: 'u-sacha', name: 'Sacha', email: 'sacha@ex.fr' };
   };
   linear = {
     updateIssue: vi.fn(async () => ({})),
@@ -75,7 +75,7 @@ describe('authentification', () => {
 
   it('renvoie l’utilisateur Linear de la clé', async () => {
     expect((await call('POST', '/api/key/validate')).json()).toEqual({
-      user: { id: 'u-sacha', name: 'Sacha', email: 'sacha@ex.fr', organization: { urlKey: '1pacte' } },
+      user: { id: 'u-sacha', name: 'Sacha', email: 'sacha@ex.fr' },
     });
   });
 });

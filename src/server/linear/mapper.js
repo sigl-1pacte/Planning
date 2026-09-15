@@ -10,7 +10,7 @@ const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 export function mapWorkspace(raw) {
   const users = raw.users
-    .map((u) => ({ id: u.id, name: u.name, displayName: u.displayName ?? null, email: u.email, active: u.active }))
+    .map((u) => ({ id: u.id, name: u.name, displayName: u.displayName ?? null, email: u.email, active: u.active, url: u.url }))
     .sort(byId);
   const teams = raw.teams.map((t) => ({ id: t.id, key: t.key, name: t.name })).sort(byId);
   const projects = raw.projects.map((p) => ({

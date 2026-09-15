@@ -8,7 +8,10 @@ describe('mapWorkspace', () => {
   it('traduit teams, membres, projets et jalons', () => {
     const d = mapWorkspace(rawWorkspace());
     expect(d.teams.map((t) => t.key)).toEqual(['IOT', 'WEB']);
-    expect(d.users[0]).toEqual({ id: 'u-louis', name: 'Louis', displayName: 'louis', email: 'louis@ex.fr', active: true });
+    expect(d.users[0]).toEqual({
+      id: 'u-louis', name: 'Louis', displayName: 'louis', email: 'louis@ex.fr', active: true,
+      url: 'https://linear.app/1pacte/profiles/louis',
+    });
     expect(d.projects[0]).toEqual({
       id: 'p-poc1', name: 'Réalisation POC v1', color: '#0D7278', startDate: '2026-09-16', targetDate: '2026-11-05',
       teamIds: ['t-iot'], milestones: [{ id: 'm-1', name: 'Objet construit', date: '2026-11-05' }],

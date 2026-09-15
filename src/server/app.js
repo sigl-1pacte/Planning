@@ -5,7 +5,6 @@ import { dayOfWeek, isValidDate } from '../shared/calendar.js';
 import * as repo from './db/repo.js';
 import { computeReschedule, RescheduleCycleError } from '../shared/reschedule.js';
 import { setStartingDate, setContributors } from './linear/parsing.js';
-import { mentionUrl } from './linear/mutations.js';
 
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -316,13 +315,12 @@ export function buildApp({ db, store, validateKey, linear, staticDir = null, log
     // Un commentaire identifie les nouveaux contributeurs (ceux qui ne
     // portaient pas déjà la charge, contributeur explicite ou assigné par
     // défaut). Un simple texte « @nom » posté via l'API n'est pas converti
-    // en mention par Linear (seul son éditeur le fait) : on utilise l'URL de
-    // profil en clair, que Linear convertit bien en mention identifiante à
-    // l'affichage — voir mentionUrl.
+    // en mention par Linear (seul son éditeur le fait) : on utilise
+    // directement user.url (l'URL de profil que Linear fournit lui-même),
+    // que Linear convertit bien en mention identifiante à l'affichage.
     const added = req.body.contributorIds.filter((id) => !issue.contributorIds.includes(id));
-    if (added.length && req.viewer?.organization?.urlKey) {
-      const urlKey = req.viewer.organization.urlKey;
-      const mentions = added.map((id) => byId.get(id)).filter(Boolean).map((u) => mentionUrl(urlKey, u)).join(' ');
+    if (added.length) {
+      const mentions = added.map((id) => byId.get(id)).filter((u) => u?.url).map((u) => u.url).join(' ');
       if (mentions) await linear.addComment(req.linearKey, issue.id, `Ajouté·e·s comme contributeurs : ${mentions}`);
     }
     // Linear reste la source de vérité pour qui est contributeur : une part

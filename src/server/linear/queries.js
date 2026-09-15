@@ -8,7 +8,7 @@ const TEAMS = `query Teams($after: String) {
 }`;
 
 const USERS = `query Users($after: String) {
-  users(first: ${PAGE_SIZE}, after: $after) { nodes { id name displayName email active } ${PAGE_INFO} }
+  users(first: ${PAGE_SIZE}, after: $after) { nodes { id name displayName email active url } ${PAGE_INFO} }
 }`;
 
 const PROJECTS = `query Projects($after: String) {
@@ -38,7 +38,7 @@ const ISSUES = `query Issues($after: String, $filter: IssueFilter) {
   }
 }`;
 
-const VIEWER = 'query Viewer { viewer { id name email organization { urlKey } } }';
+const VIEWER = 'query Viewer { viewer { id name email } }';
 
 const DIAGNOSTIC_ISSUES = `query DiagnosticIssues($first: Int!) {
   issues(first: $first, orderBy: updatedAt) {

@@ -16,8 +16,8 @@ export function rawWorkspace() {
       { id: 't-web', key: 'WEB', name: 'Web' },
     ],
     users: [
-      { id: 'u-sacha', name: 'Sacha', displayName: 'sacha', email: 'sacha@ex.fr', active: true },
-      { id: 'u-louis', name: 'Louis', displayName: 'louis', email: 'louis@ex.fr', active: true },
+      { id: 'u-sacha', name: 'Sacha', displayName: 'sacha', email: 'sacha@ex.fr', active: true, url: 'https://linear.app/1pacte/profiles/sacha' },
+      { id: 'u-louis', name: 'Louis', displayName: 'louis', email: 'louis@ex.fr', active: true, url: 'https://linear.app/1pacte/profiles/louis' },
     ],
     projects: [
       {

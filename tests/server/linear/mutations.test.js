@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   MUTATIONS, updateIssue, createIssue, issueBlockers, addBlocker, removeBlocker,
-  updateProject, createProject, createTeam, addComment, mentionUrl,
+  updateProject, createProject, createTeam, addComment,
 } from '../../../src/server/linear/mutations.js';
 import { fakeFetch, jsonResponse } from '../../helpers/fakeFetch.js';
 
@@ -64,12 +64,5 @@ describe('mutations', () => {
   it('signale un refus d\'ajout de commentaire', async () => {
     const f = fakeFetch([jsonResponse({ data: { commentCreate: { success: false, comment: null } } })]);
     await expect(addComment('k', 'i1', 'x', { fetchImpl: f })).rejects.toThrow('Linear a refusé l\'ajout du commentaire');
-  });
-
-  it('construit une URL de mention à partir du displayName, encodée', () => {
-    expect(mentionUrl('1pacte', { displayName: 'sacha', name: 'Sacha Martin' }))
-      .toBe('https://linear.app/1pacte/profiles/sacha');
-    expect(mentionUrl('1pacte', { displayName: null, name: 'Louis Dupont' }))
-      .toBe('https://linear.app/1pacte/profiles/Louis%20Dupont');
   });
 });

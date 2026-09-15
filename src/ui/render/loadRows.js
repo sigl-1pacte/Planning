@@ -19,7 +19,6 @@ export function renderLoadRows(sink, { people, load, planning, axis, users, team
   sink.push(bandLeft, bandRight, 30);
 
   const ceiling = planning.settings.loadCeilingPct;
-  const adjusted = new Set(planning.weeklyCapacities.map((c) => `${c.linearUserId}|${c.weekStart}`));
 
   for (const user of people) {
     const weeks = load.people[user.id];
@@ -32,11 +31,9 @@ export function renderLoadRows(sink, { people, load, planning, axis, users, team
         <span style="color:${stats.peakPct > ceiling ? '#B9700A' : 'var(--ink3)'}">pic ${pctText(stats.peakPct)} · moy. ${Math.round(stats.avgPct)} %</span></span>`;
 
     for (const week of weeks) {
-      const isAdjusted = adjusted.has(`${user.id}|${week.weekStart}`);
-      const working = week.hours > 0.01;
-      if (!working && !isAdjusted) continue;
+      if (week.hours <= 0.01) continue;
       const cell = document.createElement('div');
-      cell.className = `cell${isAdjusted ? ' adj' : ''}`;
+      cell.className = 'cell';
       cell.dataset.pw = `${user.id}|${week.weekStart}`;
       cell.style.left = `${dayIndex(axis, week.weekStart) * axis.dayWidth}px`;
       cell.style.width = `${7 * axis.dayWidth - 1.5}px`;
@@ -44,9 +41,6 @@ export function renderLoadRows(sink, { people, load, planning, axis, users, team
         cell.style.backgroundColor = '#B23A3A';
         cell.style.color = '#fff';
         cell.innerHTML = '<b>indispo.</b>';
-      } else if (!working) {
-        cell.style.backgroundColor = '#FFFFFF';
-        cell.innerHTML = `<u>${fr1(week.capacity)} h dispo</u>`;
       } else {
         const t = tint(week.pct, ceiling);
         cell.style.backgroundColor = t.background;

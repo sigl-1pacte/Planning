@@ -54,7 +54,7 @@ describe('renderLoadRows', () => {
     expect(d.left.querySelector('.r.ld .sm').textContent).toContain('pic 45 %');
   });
 
-  it('montre les semaines ajustées et les indisponibilités', () => {
+  it('montre les indisponibilités mais pas les semaines ajustées sans charge', () => {
     const d = draw(basePlanning({
       weeklyCapacities: [
         { linearUserId: 'u-louis', weekStart: '2026-09-21', hours: 0 },
@@ -64,8 +64,9 @@ describe('renderLoadRows', () => {
     const cells = [...d.right.querySelectorAll('.r.ld')[0].querySelectorAll('.cell')];
     const byWeek = Object.fromEntries(cells.map((c) => [c.dataset.pw.split('|')[1], c]));
     expect(byWeek['2026-09-21'].textContent).toBe('indispo.');
-    expect(byWeek['2026-09-21'].classList.contains('adj')).toBe(true);
-    expect(byWeek['2026-10-12'].textContent).toBe('20,0 h dispo');
+    // Une capacité ajustée sur une semaine sans charge ne dessine plus de cellule dédiée :
+    // seule la surcharge (indispo. / couleur) doit rester visible, pas le simple ajustement.
+    expect(byWeek['2026-10-12']).toBeUndefined();
     expect(d.left.querySelector('.r.ld .sm').textContent).toContain('pic ∞');
   });
 

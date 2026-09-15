@@ -147,7 +147,6 @@ svg.dep{position:absolute;left:0;top:0;overflow:visible;z-index:3;pointer-events
 .cell{position:absolute;top:3px;height:28px;border-radius:2px;border:1px solid rgba(16,29,40,.08);
   display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;
   font-variant-numeric:tabular-nums}
-.cell.adj{box-shadow:inset 0 -3px 0 var(--ink)}
 .cell b{font-size:10.5px;font-weight:600}
 .cell u{font-size:8.5px;text-decoration:none;opacity:.72}
 

@@ -151,7 +151,10 @@ root.addEventListener('click', (event) => {
     if (printOverride) return;
     printOverride = { zoom: 'all', collapsed: [] };
     draw();
+    fitSheetToOnePage();
     const restore = () => {
+      const sheet = root.querySelector('.sheet');
+      if (sheet) sheet.style.zoom = '';
       printOverride = null;
       recenter = true;
       draw();
@@ -238,6 +241,37 @@ root.addEventListener('pointermove', (event) => {
     label.textContent = dayDelta === 0 ? label.textContent : `${shortDay(start)} → ${shortDay(end)}`;
   }
 });
+
+// Réduit la feuille imprimée pour qu'elle tienne sur une seule page dans la
+// mesure du raisonnable : une échelle uniforme (jamais d'agrandissement, et
+// jamais en dessous de 40 % pour rester lisible) calculée à partir de la
+// hauteur/largeur imprimables réelles de la page — cohérent avec @page dans
+// styles.css (A3 paysage, marges de 8 mm). Un très gros planning restera sur
+// plusieurs pages plutôt que de devenir illisible : c'est le compromis
+// « raisonnable » plutôt qu'un ajustement garanti en toute circonstance.
+//
+// Utilise style.zoom (non standard, mais géré par Chrome/Edge/Safari et par
+// Firefox depuis 2024) plutôt que transform:scale() : un transform ne change
+// que le rendu, pas la place réservée dans la mise en page, donc l'impression
+// découperait quand même les pages à la hauteur d'origine, blanc compris. zoom
+// reflow réellement l'élément à la taille réduite, ce qui est indispensable
+// ici. Si zoom n'a aucun effet sur un navigateur donné, l'impression reste
+// simplement sur plusieurs pages comme avant — aucune régression possible.
+const PRINT_PAGE_MM = { width: 420, height: 297, margin: 8 };
+const MIN_PRINT_SCALE = 0.4;
+
+function fitSheetToOnePage() {
+  const sheet = root.querySelector('.sheet');
+  if (!sheet) return;
+  sheet.style.zoom = '';
+  const pxPerMm = 96 / 25.4;
+  const maxWidth = (PRINT_PAGE_MM.width - 2 * PRINT_PAGE_MM.margin) * pxPerMm;
+  const maxHeight = (PRINT_PAGE_MM.height - 2 * PRINT_PAGE_MM.margin) * pxPerMm;
+  const rect = sheet.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const scale = Math.max(MIN_PRINT_SCALE, Math.min(1, maxWidth / rect.width, maxHeight / rect.height));
+  if (scale < 1) sheet.style.zoom = String(scale);
+}
 
 function endDrag(commit) {
   if (!drag) return;

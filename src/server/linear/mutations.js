@@ -40,9 +40,13 @@ const COMMENT_CREATE = `mutation CommentCreate($input: CommentCreateInput!) {
   commentCreate(input: $input) { success comment { id } }
 }`;
 
+const ISSUE_SUBSCRIBE = `mutation IssueSubscribe($id: String!, $userId: String) {
+  issueSubscribe(id: $id, userId: $userId) { success }
+}`;
+
 export const MUTATIONS = [
   ISSUE_UPDATE, ISSUE_CREATE, ISSUE_RELATION_CREATE, ISSUE_RELATION_DELETE,
-  PROJECT_UPDATE, PROJECT_CREATE, TEAM_CREATE, COMMENT_CREATE,
+  PROJECT_UPDATE, PROJECT_CREATE, TEAM_CREATE, COMMENT_CREATE, ISSUE_SUBSCRIBE,
 ];
 
 export async function updateIssue(key, issueId, input, opts) {
@@ -95,4 +99,14 @@ export async function createTeam(key, input, opts) {
 export async function addComment(key, issueId, body, opts) {
   const data = await gql(key, COMMENT_CREATE, { input: { issueId, body } }, opts);
   if (!data.commentCreate.success) throw new Error('Linear a refusé l\'ajout du commentaire');
+}
+
+// Abonne directement quelqu'un à l'issue (fait apparaître les mises à jour
+// dans son inbox Linear), sans dépendre du rendu d'une mention dans un
+// texte — cette conversion (URL de profil en clair → mention) s'est
+// montrée peu fiable dans les retours de la communauté Linear
+// (github.com/linear/linear/issues/351), y compris avec la bonne URL.
+export async function subscribeToIssue(key, issueId, userId, opts) {
+  const data = await gql(key, ISSUE_SUBSCRIBE, { id: issueId, userId }, opts);
+  if (!data.issueSubscribe.success) throw new Error('Linear a refusé l\'abonnement');
 }

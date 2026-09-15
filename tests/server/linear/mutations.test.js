@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   MUTATIONS, updateIssue, createIssue, issueBlockers, addBlocker, removeBlocker,
-  updateProject, createProject, createTeam, addComment,
+  updateProject, createProject, createTeam, addComment, subscribeToIssue,
 } from '../../../src/server/linear/mutations.js';
 import { fakeFetch, jsonResponse } from '../../helpers/fakeFetch.js';
 
@@ -64,5 +64,16 @@ describe('mutations', () => {
   it('signale un refus d\'ajout de commentaire', async () => {
     const f = fakeFetch([jsonResponse({ data: { commentCreate: { success: false, comment: null } } })]);
     await expect(addComment('k', 'i1', 'x', { fetchImpl: f })).rejects.toThrow('Linear a refusé l\'ajout du commentaire');
+  });
+
+  it('abonne quelqu\'un à une issue', async () => {
+    const f = fakeFetch([jsonResponse({ data: { issueSubscribe: { success: true } } })]);
+    await subscribeToIssue('k', 'i1', 'u1', { fetchImpl: f });
+    expect(f.calls[0].body.variables).toEqual({ id: 'i1', userId: 'u1' });
+  });
+
+  it('signale un refus d\'abonnement', async () => {
+    const f = fakeFetch([jsonResponse({ data: { issueSubscribe: { success: false } } })]);
+    await expect(subscribeToIssue('k', 'i1', 'u1', { fetchImpl: f })).rejects.toThrow('Linear a refusé l\'abonnement');
   });
 });

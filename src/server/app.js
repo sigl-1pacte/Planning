@@ -314,14 +314,18 @@ export function buildApp({ db, store, validateKey, linear, staticDir = null, log
     });
     // Un commentaire identifie les nouveaux contributeurs (ceux qui ne
     // portaient pas déjà la charge, contributeur explicite ou assigné par
-    // défaut). Un simple texte « @nom » posté via l'API n'est pas converti
-    // en mention par Linear (seul son éditeur le fait) : on utilise
-    // directement user.url (l'URL de profil que Linear fournit lui-même),
-    // que Linear convertit bien en mention identifiante à l'affichage.
+    // défaut) — en texte lisible, sans dépendre d'une conversion en mention
+    // (une URL de profil en clair peut sembler devenir une mention à
+    // l'affichage sans réellement abonner qui que ce soit : retours
+    // documentés de la communauté Linear, github.com/linear/linear/issues/351).
+    // L'abonnement réel passe par issueSubscribe, la route dédiée à ça —
+    // indépendante du rendu d'un texte, donc fiable.
     const added = req.body.contributorIds.filter((id) => !issue.contributorIds.includes(id));
-    if (added.length) {
-      const mentions = added.map((id) => byId.get(id)).filter((u) => u?.url).map((u) => u.url).join(' ');
-      if (mentions) await linear.addComment(req.linearKey, issue.id, `Ajouté·e·s comme contributeurs : ${mentions}`);
+    const addedUsers = added.map((id) => byId.get(id)).filter(Boolean);
+    if (addedUsers.length) {
+      const names = addedUsers.map((u) => u.name).join(', ');
+      await linear.addComment(req.linearKey, issue.id, `Ajouté·e·s comme contributeurs : ${names}`);
+      for (const u of addedUsers) await linear.subscribeToIssue(req.linearKey, issue.id, u.id);
     }
     // Linear reste la source de vérité pour qui est contributeur : une part
     // en base pour quelqu'un qu'on vient de retirer ne doit pas survivre

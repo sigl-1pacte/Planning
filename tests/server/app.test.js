@@ -38,6 +38,7 @@ beforeEach(async () => {
     createProject: vi.fn(async () => ({ id: 'p-new' })),
     createTeam: vi.fn(async () => ({})),
     addComment: vi.fn(async () => {}),
+    subscribeToIssue: vi.fn(async () => {}),
   };
   app = buildApp({ db, store, validateKey, linear });
   await app.ready();
@@ -242,19 +243,19 @@ describe('écriture', () => {
     expect((await call('POST', '/api/issues', { teamId: 't-iot' })).statusCode).toBe(400);
   });
 
-  it('remplace les contributeurs et commente uniquement les nouveaux', async () => {
+  it('remplace les contributeurs, commente et abonne uniquement les nouveaux', async () => {
     // i-12 n'a pas de ligne Contributors (contributeur par défaut : l'assigné, u-louis).
     const res = await call('PUT', '/api/issues/i-12/contributors', { contributorIds: ['u-louis', 'u-sacha'] });
     expect(res.statusCode).toBe(200);
     expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-12', {
       description: 'Starting date: 28/09/2026\n\nContributors: @louis @sacha',
     });
-    expect(linear.addComment).toHaveBeenCalledWith(
-      'good', 'i-12', 'Ajouté·e·s comme contributeurs : https://linear.app/1pacte/profiles/sacha',
-    );
+    expect(linear.addComment).toHaveBeenCalledWith('good', 'i-12', 'Ajouté·e·s comme contributeurs : Sacha');
+    expect(linear.subscribeToIssue).toHaveBeenCalledWith('good', 'i-12', 'u-sacha');
+    expect(linear.subscribeToIssue).not.toHaveBeenCalledWith('good', 'i-12', 'u-louis');
   });
 
-  it('ne commente pas quand personne de nouveau n\'est ajouté', async () => {
+  it('ne commente ni n\'abonne quand personne de nouveau n\'est ajouté', async () => {
     // i-11 porte déjà @sacha et @louis ; on retire louis, personne n'est nouveau.
     const res = await call('PUT', '/api/issues/i-11/contributors', { contributorIds: ['u-sacha'] });
     expect(res.statusCode).toBe(200);
@@ -262,6 +263,7 @@ describe('écriture', () => {
       description: 'Starting date: 16/09/2026\nContributors: @sacha',
     });
     expect(linear.addComment).not.toHaveBeenCalled();
+    expect(linear.subscribeToIssue).not.toHaveBeenCalled();
   });
 
   it('purge en base la part de qui n\'est plus contributeur', async () => {

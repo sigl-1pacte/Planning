@@ -204,7 +204,9 @@ describe('écriture', () => {
     expect(linear.updateIssue).toHaveBeenCalled();
     const call1 = linear.updateIssue.mock.calls.find((c) => c[1] === 'i-11');
     expect(call1[2].dueDate).toBe('2026-09-27');
-    expect(call1[2].description).toContain('Starting date: 18/09/2026');
+    // La cascade ne doit remplacer que la ligne « Starting date » : le reste
+    // de la description (dont la ligne Contributors) doit survivre intact.
+    expect(call1[2].description).toBe('Starting date: 18/09/2026\nContributors: @sacha @louis');
   });
 
   it('refuse un décalage en cycle avec un message explicite', async () => {

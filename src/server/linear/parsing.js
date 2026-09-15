@@ -31,21 +31,21 @@ export function resolveMention(token, users) {
     ?? null;
 }
 
-export function parseContributors(comments, users) {
-  const newestFirst = [...comments].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  for (const c of newestFirst) {
-    const line = c.body.match(CONTRIB_RE);
-    if (!line) continue;
-    const userIds = [];
-    const unresolved = [];
-    for (const [, token] of line[1].matchAll(MENTION_RE)) {
-      const user = resolveMention(token, users);
-      if (!user) unresolved.push(token);
-      else if (!userIds.includes(user.id)) userIds.push(user.id);
-    }
-    return { found: true, commentId: c.id, userIds, unresolved };
+// La ligne « Contributors » vit dans la description (comme « Starting
+// date »), pas dans un commentaire : ça reste au même endroit que le reste
+// de la planification, et un commentaire de mention séparé peut toujours
+// être ajouté à la main dans Linear pour abonner ces personnes au ticket.
+export function parseContributors(description, users) {
+  const userIds = [];
+  const unresolved = [];
+  const line = description?.match(CONTRIB_RE);
+  if (!line) return { userIds, unresolved };
+  for (const [, token] of line[1].matchAll(MENTION_RE)) {
+    const user = resolveMention(token, users);
+    if (!user) unresolved.push(token);
+    else if (!userIds.includes(user.id)) userIds.push(user.id);
   }
-  return { found: false, commentId: null, userIds: [], unresolved: [] };
+  return { userIds, unresolved };
 }
 
 export function setStartingDate(description, isoDate) {

@@ -269,9 +269,9 @@ export function buildApp({ db, store, validateKey, linear, staticDir = null, log
     const byId = new Map(current.domain.issues.map((i) => [i.id, i]));
     for (const change of changes) {
       const issue = byId.get(change.issueId);
-      // La description brute n'est pas conservée dans le domaine : on part de la
-      // dernière ligne connue pour ne remplacer qu'elle. Si l'issue n'a jamais eu
-      // de ligne lisible, setStartingDate l'ajoute en tête sans rien perdre d'autre.
+      // setStartingDate ne remplace que la ligne « Starting date » (issue.rawDescription
+      // porte le reste, Contributors compris) ; si l'issue n'a jamais eu de ligne
+      // lisible, elle est ajoutée en tête sans rien perdre du reste de la description.
       await linear.updateIssue(req.linearKey, change.issueId, {
         description: setStartingDate(issue?.rawDescription ?? null, change.newStart),
         dueDate: change.newEnd,

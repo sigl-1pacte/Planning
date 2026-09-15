@@ -1,5 +1,5 @@
 import { mapWorkspace } from './linear/mapper.js';
-import { parseStartingDate, parseContributors } from './linear/parsing.js';
+import { parseStartingDate } from './linear/parsing.js';
 
 export function buildDiagnostic({ users, issues }) {
   const domain = mapWorkspace({ teams: [], projects: [], users, issues });
@@ -9,8 +9,6 @@ export function buildDiagnostic({ users, issues }) {
 
   return issues.map((raw) => {
     const issue = mapped.get(raw.id);
-    const contrib = parseContributors(raw.comments.nodes, domain.users);
-    const comment = raw.comments.nodes.find((c) => c.id === contrib.commentId);
     return {
       identifier: raw.identifier,
       title: raw.title,
@@ -18,7 +16,6 @@ export function buildDiagnostic({ users, issues }) {
       startingDate: parseStartingDate(raw.description),
       dueDate: raw.dueDate,
       estimate: raw.estimate,
-      contributorsComment: comment ? { id: comment.id, body: comment.body } : null,
       contributors: issue.contributorIds.map((id) => ({ id, name: names.get(id) })),
       unresolvedMentions: issue.unresolvedMentions,
       contributorsSource: issue.contributorsSource,

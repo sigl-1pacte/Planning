@@ -52,31 +52,30 @@ describe('resolveMention', () => {
 });
 
 describe('parseContributors', () => {
-  it('prend le commentaire le plus récent qui contient la ligne', () => {
-    const comments = [
-      { id: 'c1', body: 'Contributors: @sacha', createdAt: '2026-09-01T10:00:00Z' },
-      { id: 'c2', body: 'Point d\'étape\nContributors: @louis @maxou', createdAt: '2026-09-03T10:00:00Z' },
-      { id: 'c3', body: 'Un avis sans ligne', createdAt: '2026-09-05T10:00:00Z' },
-    ];
-    expect(parseContributors(comments, users)).toEqual({
-      found: true, commentId: 'c2', userIds: ['u2', 'u3'], unresolved: [],
-    });
+  it('lit la ligne dans la description', () => {
+    expect(parseContributors('Point d\'étape\nContributors: @louis @maxou\nSuite', users))
+      .toEqual({ userIds: ['u2', 'u3'], unresolved: [] });
   });
 
   it('dédoublonne et signale les mentions non résolues', () => {
-    const comments = [{ id: 'c1', body: 'contributors : @sacha @Sacha @fantome', createdAt: '2026-09-01T10:00:00Z' }];
-    expect(parseContributors(comments, users)).toEqual({
-      found: true, commentId: 'c1', userIds: ['u1'], unresolved: ['fantome'],
-    });
+    expect(parseContributors('contributors : @sacha @Sacha @fantome', users))
+      .toEqual({ userIds: ['u1'], unresolved: ['fantome'] });
   });
 
   it('reconnaît une mention placée dans un lien markdown', () => {
-    const comments = [{ id: 'c1', body: 'Contributors: [@sacha](https://linear.app/x/profiles/sacha)', createdAt: '2026-09-01T10:00:00Z' }];
-    expect(parseContributors(comments, users).userIds).toEqual(['u1']);
+    expect(parseContributors('Contributors: [@sacha](https://linear.app/x/profiles/sacha)', users).userIds)
+      .toEqual(['u1']);
   });
 
   it('indique l\'absence de ligne', () => {
-    expect(parseContributors([], users)).toEqual({ found: false, commentId: null, userIds: [], unresolved: [] });
+    expect(parseContributors(null, users)).toEqual({ userIds: [], unresolved: [] });
+    expect(parseContributors('rien ici', users)).toEqual({ userIds: [], unresolved: [] });
+  });
+
+  it('coexiste avec la ligne Starting date dans la même description', () => {
+    const description = 'Starting date: 16/09/2026\nContributors: @sacha @louis\nContexte';
+    expect(parseStartingDate(description)).toEqual({ ok: true, date: '2026-09-16' });
+    expect(parseContributors(description, users)).toEqual({ userIds: ['u1', 'u2'], unresolved: [] });
   });
 });
 

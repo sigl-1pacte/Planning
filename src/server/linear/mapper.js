@@ -53,12 +53,12 @@ function mapIssue(i, users, blockedBy) {
   else if (end < start.date) unplannedReason = `Échéance ${end} antérieure au début ${start.date}`;
   const planned = unplannedReason === null;
 
-  const contrib = parseContributors(i.comments.nodes, users);
+  const contrib = parseContributors(i.description, users);
   let contributorIds = [];
   let contributorsSource = 'none';
   if (contrib.userIds.length) {
     contributorIds = contrib.userIds;
-    contributorsSource = 'comment';
+    contributorsSource = 'description';
   } else if (i.assignee) {
     contributorIds = [i.assignee.id];
     contributorsSource = 'assignee';
@@ -82,5 +82,9 @@ function mapIssue(i, users, blockedBy) {
     unresolvedMentions: contrib.unresolved,
     blockedBy,
     updatedAt: i.updatedAt,
+    // Conservée pour les écritures qui réécrivent la description (cascade de
+    // replanification) : sans elle, remplacer la ligne « Starting date »
+    // effacerait le reste de la description, Contributors compris.
+    rawDescription: i.description ?? null,
   };
 }

@@ -7,7 +7,7 @@ const ro = (label, value) => `<div class="ro"><span>${label}</span><span>${esc(v
 const errorSlot = '<p class="warn" data-error hidden></p>';
 
 const SOURCE_HINT = {
-  comment: 'Contributeurs lus dans le commentaire « Contributors ».',
+  description: 'Contributeurs lus dans la ligne « Contributors » de la description.',
   assignee: 'Pas de ligne « Contributors » : l\'assigné porte toute la charge.',
   none: 'Ni ligne « Contributors » ni assigné : la tâche ne pèse sur personne.',
 };

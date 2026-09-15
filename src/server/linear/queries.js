@@ -33,7 +33,6 @@ const ISSUES = `query Issues($after: String, $filter: IssueFilter) {
       parent { id }
       relations { nodes { type relatedIssue { id } } }
       inverseRelations { nodes { type issue { id } } }
-      comments(last: 50) { nodes { id body createdAt } }
     }
     ${PAGE_INFO}
   }
@@ -51,7 +50,6 @@ const DIAGNOSTIC_ISSUES = `query DiagnosticIssues($first: Int!) {
       project { id }
       relations { nodes { type relatedIssue { id } } }
       inverseRelations { nodes { type issue { id } } }
-      comments(last: 50) { nodes { id body createdAt } }
     }
   }
 }`;

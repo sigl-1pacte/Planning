@@ -15,14 +15,13 @@ describe('buildDiagnostic', () => {
     expect(conception).toEqual({
       identifier: 'IOT-11',
       title: 'Conception',
-      description: 'Starting date: 16/09/2026',
+      description: 'Starting date: 16/09/2026\nContributors: @sacha @louis',
       startingDate: { ok: true, date: '2026-09-16' },
       dueDate: '2026-09-25',
       estimate: 8,
-      contributorsComment: { id: 'c-1', body: 'Contributors: @sacha @louis' },
       contributors: [{ id: 'u-sacha', name: 'Sacha' }, { id: 'u-louis', name: 'Louis' }],
       unresolvedMentions: [],
-      contributorsSource: 'comment',
+      contributorsSource: 'description',
       blockedBy: [],
       unplannedReason: null,
     });

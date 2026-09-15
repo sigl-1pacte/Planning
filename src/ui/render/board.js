@@ -101,13 +101,22 @@ export function renderMilestones(sink, rightRows, projects, axis) {
   sink.push(left, right, 28);
 }
 
-// Ordonne les issues d'un bloc pour que chaque sous-issue suive directement
-// son issue parente (quand celle-ci est visible dans le même bloc), avec sa
-// profondeur d'imbrication. Une sous-issue dont le parent est ailleurs (autre
-// projet/équipe, ou masqué) reste au niveau racine — pas de rattachement
-// inter-blocs pour ne pas complexifier le rendu.
-function withSubIssuesOrder(issues) {
+const byStart = (a, b) => (a.start === b.start ? (a.id < b.id ? -1 : 1) : a.start < b.start ? -1 : 1);
+
+// Ordonne les issues d'un bloc par date de début, mais garde chaque fil de
+// dépendances et chaque sous-issue juste sous sa tâche d'origine plutôt que
+// de les disperser selon leur seule date : on part des tâches racines (sans
+// bloqueuse ni parente dans le bloc), triées par date de début, et pour
+// chacune on descend d'abord dans tout son fil (sous-issues ET dépendantes,
+// elles-mêmes triées par date) avant de passer à la racine suivante. Un
+// rattachement (sous-issue ou dépendance) dont l'autre bout est hors du bloc
+// (autre projet/équipe, ou masqué) reste au niveau racine — pas de lien
+// inter-blocs pour ne pas complexifier le rendu. Seule la relation
+// sous-issue → parente indente visuellement (profondeur) ; une dépendance ne
+// fait que fixer la position, sans indentation.
+function orderIssues(issues) {
   const ids = new Set(issues.map((i) => i.id));
+
   const childrenOf = new Map();
   for (const issue of issues) {
     if (issue.parentId && issue.parentId !== issue.id && ids.has(issue.parentId)) {
@@ -115,19 +124,45 @@ function withSubIssuesOrder(issues) {
       childrenOf.get(issue.parentId).push(issue);
     }
   }
-  const isNested = new Set([...childrenOf.values()].flat().map((i) => i.id));
+  const isChild = new Set([...childrenOf.values()].flat().map((i) => i.id));
+
+  const dependentsOf = new Map();
+  for (const issue of issues) {
+    for (const blockerId of issue.blockedBy) {
+      if (blockerId === issue.id || !ids.has(blockerId)) continue;
+      if (!dependentsOf.has(blockerId)) dependentsOf.set(blockerId, []);
+      dependentsOf.get(blockerId).push(issue);
+    }
+  }
+  const isDependent = new Set([...dependentsOf.values()].flat().map((i) => i.id));
+
+  const successorsOf = (issue) => {
+    const kids = (childrenOf.get(issue.id) ?? []).map((s) => ({ issue: s, isChild: true }));
+    const kidIds = new Set(kids.map((s) => s.issue.id));
+    const deps = (dependentsOf.get(issue.id) ?? [])
+      .filter((s) => !kidIds.has(s.id))
+      .map((s) => ({ issue: s, isChild: false }));
+    return [...kids, ...deps].sort((a, b) => byStart(a.issue, b.issue));
+  };
+
   const out = [];
-  const visit = (issue, depth, seen) => {
-    out.push({ issue, depth, parentId: depth > 0 ? issue.parentId : null });
-    for (const child of childrenOf.get(issue.id) ?? []) {
-      if (seen.has(child.id)) continue;
-      visit(child, depth + 1, new Set(seen).add(child.id));
+  const visited = new Set();
+  const visit = (issue, depth, parentId) => {
+    if (visited.has(issue.id)) return;
+    visited.add(issue.id);
+    out.push({ issue, depth, parentId });
+    for (const { issue: succ, isChild: succIsChild } of successorsOf(issue)) {
+      visit(succ, succIsChild ? depth + 1 : depth, succIsChild ? issue.id : null);
     }
   };
-  for (const issue of issues) {
-    if (isNested.has(issue.id)) continue;
-    visit(issue, 0, new Set([issue.id]));
-  }
+
+  const roots = issues.filter((i) => !isChild.has(i.id) && !isDependent.has(i.id)).sort(byStart);
+  for (const root of roots) visit(root, 0, null);
+  // Filet de sécurité : une issue restée non visitée (cycle de dépendances,
+  // ou chaîne dont chaque maillon dépend d'un autre) est tout de même
+  // affichée, dans l'ordre d'origine, plutôt que d'être silencieusement
+  // perdue de l'affichage.
+  for (const issue of issues) visit(issue, 0, null);
   return out;
 }
 
@@ -157,7 +192,7 @@ export function renderGroups(sink, { view, axis, holidays, load, users, collapse
       const open = !collapsed.has(block.key);
       renderProjectRow(sink, block, open, axis);
       if (!open) continue;
-      for (const { issue, depth, parentId } of withSubIssuesOrder(block.issues)) {
+      for (const { issue, depth, parentId } of orderIssues(block.issues)) {
         colorOf[issue.id] = block.project.color;
         renderIssueRow(sink, issue, {
           color: block.project.color,

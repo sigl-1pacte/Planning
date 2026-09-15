@@ -143,6 +143,58 @@ describe('board', () => {
     expect(childRight.querySelector('.bar').dataset.open).toBe('i-12');
   });
 
+  it('trie les racines par date de début, mais termine le fil d’une dépendance avant de passer à la suivante', () => {
+    // i-12 (28/09) dépend de i-11 (16/09), donc reste juste après lui même si
+    // une 3e issue du même bloc, sans dépendance, démarre plus tôt (20/09).
+    const d = draw({ mutate: (raw) => {
+      raw.issues.push({
+        id: 'i-14', identifier: 'IOT-14', title: 'Racine intercalée', team: { id: 't-iot' }, project: { id: 'p-poc1' },
+        description: 'Starting date: 20/09/2026', dueDate: '2026-09-24', estimate: 2,
+        state: { type: 'unstarted' }, assignee: null, parent: null,
+        relations: { nodes: [] }, inverseRelations: { nodes: [] }, comments: { nodes: [] },
+      });
+    } });
+    const order = [...d.leftRows.querySelectorAll('.r.tk')].map((r) => r.dataset.t);
+    const poc1Order = order.filter((id) => ['i-11', 'i-12', 'i-14'].includes(id));
+    expect(poc1Order).toEqual(['i-11', 'i-12', 'i-14']);
+  });
+
+  it('trie deux racines indépendantes du même bloc par date de début', () => {
+    const d = draw({ mutate: (raw) => {
+      raw.issues.push({
+        id: 'i-15', identifier: 'IOT-15', title: 'Racine plus tôt', team: { id: 't-iot' }, project: { id: 'p-poc1' },
+        description: 'Starting date: 10/09/2026', dueDate: '2026-09-14', estimate: 1,
+        state: { type: 'unstarted' }, assignee: null, parent: null,
+        relations: { nodes: [] }, inverseRelations: { nodes: [] }, comments: { nodes: [] },
+      });
+    } });
+    const order = [...d.leftRows.querySelectorAll('.r.tk')].map((r) => r.dataset.t);
+    expect(order.indexOf('i-15')).toBeLessThan(order.indexOf('i-11'));
+  });
+
+  it('place une dépendante juste sous sa bloqueuse même sans lien parent/sous-issue', () => {
+    // i-20 (WEB, hors projet) ne dépend de rien dans le fixture de base ;
+    // on le fait dépendre d'une nouvelle issue postérieure dans le même
+    // bloc pour vérifier que la chaîne de dépendances prime sur la seule
+    // date de début.
+    const d = draw({ mutate: (raw) => {
+      raw.issues.push({
+        id: 'i-21', identifier: 'WEB-2', title: 'Avant mais bloquante', team: { id: 't-web' },
+        description: 'Starting date: 10/09/2026', dueDate: '2026-09-12', estimate: 1,
+        state: { type: 'unstarted' }, assignee: null, project: null, parent: null,
+        relations: { nodes: [{ type: 'blocks', relatedIssue: { id: 'i-20' } }] },
+        inverseRelations: { nodes: [] }, comments: { nodes: [] },
+      });
+    } });
+    const order = [...d.leftRows.querySelectorAll('.r.tk')].map((r) => r.dataset.t);
+    const idx21 = order.indexOf('i-21');
+    const idx20 = order.indexOf('i-20');
+    expect(idx20).toBe(idx21 + 1);
+    // Pas de rattachement visuel : ce n'est pas une sous-issue.
+    expect(d.row(d.leftRows, 'i-20').classList.contains('sub')).toBe(false);
+    expect(d.row(d.leftRows, 'i-20').dataset.open).toBeUndefined();
+  });
+
   it(`ne rattache pas une sous-issue dont la parente n'est pas dans le même bloc`, () => {
     const d = draw({ mutate: (raw) => { raw.issues[1].parent = { id: 'i-20' }; } });
     // i-20 est dans un autre projet/équipe : i-12 reste au niveau racine.

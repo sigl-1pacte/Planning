@@ -68,21 +68,23 @@ describe('api', () => {
   it('envoie les nouvelles routes d\'écriture', async () => {
     const f = fakeFetch([
       jsonResponse({ domain: {} }), jsonResponse({ domain: {}, changes: [] }), jsonResponse({ domain: {} }),
-      jsonResponse({ domain: {}, issueId: 'i1' }), jsonResponse({ domain: {} }),
+      jsonResponse({ domain: {} }), jsonResponse({ domain: {}, issueId: 'i1' }), jsonResponse({ domain: {} }),
       jsonResponse({ domain: {}, projectId: 'p1' }), jsonResponse({ domain: {} }),
     ]);
     const api = createApi({ fetchImpl: f, storage: memoryStorage() });
     await api.updateIssue('i1', { title: 'X' });
     await api.reschedule('i1', { start: '2026-09-18' });
     await api.setDependencies('i1', ['b1']);
+    await api.setContributors('i1', ['u1', 'u2']);
     await api.createIssue({ teamId: 't1', title: 'Y' });
     await api.updateProject('p1', { name: 'Z' });
     await api.createProject({ teamIds: ['t1'], name: 'W' });
     await api.createTeam({ key: 'K', name: 'N' });
     expect(f.calls.map((c) => c.url)).toEqual([
-      '/api/issues/i1', '/api/issues/i1/reschedule', '/api/issues/i1/dependencies',
+      '/api/issues/i1', '/api/issues/i1/reschedule', '/api/issues/i1/dependencies', '/api/issues/i1/contributors',
       '/api/issues', '/api/projects/p1', '/api/projects', '/api/teams',
     ]);
     expect(f.calls[2].body).toEqual({ blockedBy: ['b1'] });
+    expect(f.calls[3].body).toEqual({ contributorIds: ['u1', 'u2'] });
   });
 });

@@ -4,7 +4,7 @@ import { LinearAuthError, LinearRateLimitError, LinearUnavailableError } from '.
 import { dayOfWeek, isValidDate } from '../shared/calendar.js';
 import * as repo from './db/repo.js';
 import { computeReschedule, RescheduleCycleError } from '../shared/reschedule.js';
-import { setStartingDate } from './linear/parsing.js';
+import { setStartingDate, setContributors } from './linear/parsing.js';
 
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -113,6 +113,13 @@ const dependenciesBody = {
   required: ['blockedBy'],
   additionalProperties: false,
   properties: { blockedBy: { type: 'array', items: { type: 'string' } } },
+};
+
+const contributorsBody = {
+  type: 'object',
+  required: ['contributorIds'],
+  additionalProperties: false,
+  properties: { contributorIds: { type: 'array', items: { type: 'string' } } },
 };
 
 const issueCreateBody = {
@@ -290,6 +297,30 @@ export function buildApp({ db, store, validateKey, linear, staticDir = null, log
     }
     for (const blockerId of desired) {
       if (!existing.has(blockerId)) await linear.addBlocker(req.linearKey, req.params.issueId, blockerId);
+    }
+    const snap = await store.forceRefresh(req.linearKey);
+    return { domain: snap.domain };
+  });
+
+  app.put('/api/issues/:issueId/contributors', { schema: { body: contributorsBody } }, async (req) => {
+    const current = store.current();
+    if (!current) throw Object.assign(new Error('Instantané indisponible'), { statusCode: 503 });
+    const issue = current.domain.issues.find((i) => i.id === req.params.issueId);
+    if (!issue) throw Object.assign(new Error('Issue inconnue'), { statusCode: 404 });
+    const byId = new Map(current.domain.users.map((u) => [u.id, u]));
+    const selected = req.body.contributorIds.map((id) => byId.get(id)).filter(Boolean);
+    await linear.updateIssue(req.linearKey, issue.id, {
+      description: setContributors(issue.rawDescription, selected),
+    });
+    // Un commentaire identifie les nouveaux contributeurs (ceux qui ne
+    // portaient pas déjà la charge, contributeur explicite ou assigné par
+    // défaut) — [Hypothèse] la mention texte « @nom » suffit à abonner la
+    // personne au ticket côté Linear ; à vérifier en usage réel, sinon il
+    // faudra la syntaxe de mention exacte de Linear (identifiant embarqué).
+    const added = req.body.contributorIds.filter((id) => !issue.contributorIds.includes(id));
+    if (added.length) {
+      const names = added.map((id) => byId.get(id)).filter(Boolean).map((u) => `@${u.displayName ?? u.name}`).join(' ');
+      if (names) await linear.addComment(req.linearKey, issue.id, `Ajouté·e·s comme contributeurs : ${names}`);
     }
     const snap = await store.forceRefresh(req.linearKey);
     return { domain: snap.domain };

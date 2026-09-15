@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   MUTATIONS, updateIssue, createIssue, issueBlockers, addBlocker, removeBlocker,
-  updateProject, createProject, createTeam,
+  updateProject, createProject, createTeam, addComment,
 } from '../../../src/server/linear/mutations.js';
 import { fakeFetch, jsonResponse } from '../../helpers/fakeFetch.js';
 
@@ -53,5 +53,16 @@ describe('mutations', () => {
   it('crée une team', async () => {
     const f = fakeFetch([jsonResponse({ data: { teamCreate: { success: true, team: { id: 't2', key: 'NEW', name: 'Nouvelle' } } } })]);
     expect((await createTeam('k', { key: 'NEW', name: 'Nouvelle' }, { fetchImpl: f })).key).toBe('NEW');
+  });
+
+  it('ajoute un commentaire', async () => {
+    const f = fakeFetch([jsonResponse({ data: { commentCreate: { success: true, comment: { id: 'c1' } } } })]);
+    await addComment('k', 'i1', 'Contributeurs ajoutés : @sacha', { fetchImpl: f });
+    expect(f.calls[0].body.variables.input).toEqual({ issueId: 'i1', body: 'Contributeurs ajoutés : @sacha' });
+  });
+
+  it('signale un refus d\'ajout de commentaire', async () => {
+    const f = fakeFetch([jsonResponse({ data: { commentCreate: { success: false, comment: null } } })]);
+    await expect(addComment('k', 'i1', 'x', { fetchImpl: f })).rejects.toThrow('Linear a refusé l\'ajout du commentaire');
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseStartingDate, parseContributors, resolveMention, setStartingDate } from '../../../src/server/linear/parsing.js';
+import { parseStartingDate, parseContributors, resolveMention, setStartingDate, setContributors } from '../../../src/server/linear/parsing.js';
 
 const users = [
   { id: 'u1', name: 'Sacha Martin', displayName: 'sacha', email: 'sacha.martin@ex.fr' },
@@ -98,5 +98,36 @@ describe('setStartingDate', () => {
   it('produit uniquement la ligne pour une description vide ou absente', () => {
     expect(setStartingDate('', '2026-11-05')).toBe('Starting date: 05/11/2026');
     expect(setStartingDate(null, '2026-11-05')).toBe('Starting date: 05/11/2026');
+  });
+});
+
+describe('setContributors', () => {
+  it('remplace une ligne existante sans toucher au reste', () => {
+    expect(setContributors('Starting date: 16/09/2026\nContributors: @sacha\nContexte', [users[1], users[2]]))
+      .toBe('Starting date: 16/09/2026\nContributors: @Louis @maxou\nContexte');
+  });
+
+  it('ajoute la ligne à la fin quand aucune ligne n\'existe', () => {
+    expect(setContributors('Starting date: 16/09/2026', [users[0]]))
+      .toBe('Starting date: 16/09/2026\n\nContributors: @sacha');
+  });
+
+  it('produit uniquement la ligne pour une description vide ou absente', () => {
+    expect(setContributors('', [users[0]])).toBe('Contributors: @sacha');
+    expect(setContributors(null, [users[0]])).toBe('Contributors: @sacha');
+  });
+
+  it('utilise le nom complet si la personne n\'a pas de displayName', () => {
+    expect(setContributors(null, [users[1]])).toBe('Contributors: @Louis');
+  });
+
+  it('retire la ligne (sans laisser de blanc) quand la liste est vide', () => {
+    expect(setContributors('Avant\nContributors: @sacha\nAprès', [])).toBe('Avant\nAprès');
+    expect(setContributors('Contributors: @sacha', [])).toBe('');
+  });
+
+  it('ne touche rien quand la liste est déjà vide et qu\'il n\'y a pas de ligne', () => {
+    expect(setContributors('Rien ici', [])).toBe('Rien ici');
+    expect(setContributors(null, [])).toBe('');
   });
 });

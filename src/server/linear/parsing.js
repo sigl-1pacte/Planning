@@ -56,3 +56,17 @@ export function setStartingDate(description, isoDate) {
   if (START_LABEL_RE.test(description)) return description.replace(START_LABEL_RE, line);
   return `${line}\n\n${description}`;
 }
+
+// Remplace (ou retire, si users est vide) la ligne « Contributors » de la
+// description, sans toucher au reste — même logique que setStartingDate.
+export function setContributors(description, users) {
+  const hasLine = Boolean(description) && CONTRIB_RE.test(description);
+  if (users.length === 0) {
+    if (!hasLine) return description ?? '';
+    return description.replace(CONTRIB_RE, '').replace(/\n{2,}/g, '\n').trim();
+  }
+  const line = `Contributors: ${users.map((u) => `@${u.displayName ?? u.name}`).join(' ')}`;
+  if (!description) return line;
+  if (hasLine) return description.replace(CONTRIB_RE, line);
+  return `${description}\n\n${line}`;
+}

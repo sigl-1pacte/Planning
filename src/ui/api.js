@@ -56,6 +56,7 @@ export function createApi({ fetchImpl = (...args) => fetch(...args), storage = g
     updateIssue: (id, patch) => request('PUT', issue(id), patch),
     reschedule: (id, dates) => request('POST', `${issue(id)}/reschedule`, dates),
     setDependencies: (id, blockedBy) => request('PUT', `${issue(id)}/dependencies`, { blockedBy }),
+    setContributors: (id, contributorIds) => request('PUT', `${issue(id)}/contributors`, { contributorIds }),
     createIssue: (input) => request('POST', '/api/issues', input),
     updateProject: (id, patch) => request('PUT', project(id), patch),
     createProject: (input) => request('POST', '/api/projects', input),

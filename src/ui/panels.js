@@ -1,7 +1,9 @@
 import { STATUS, esc, initials, personColor, fr1, shortDay, longDay, issueStatus } from './render/format.js';
 import { defaultWeeklyHours } from '../shared/load.js';
 
-const FIB = [1, 2, 3, 5, 8, 13, 21, 34];
+// [Hypothèse] Le barème d'estimation Linear de cette équipe plafonne à 8
+// points (Fibonacci tronqué) ; à ajuster si le barème change côté Linear.
+const FIB = [1, 2, 3, 5, 8];
 
 const ro = (label, value) => `<div class="ro"><span>${label}</span><span>${esc(value)}</span></div>`;
 const errorSlot = '<p class="warn" data-error hidden></p>';
@@ -120,8 +122,12 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         <select id="f-deps" data-field="deps" multiple size="6">
           ${otherIssues.map((x) => `<option value="${esc(x.id)}"${issue.blockedBy.includes(x.id) ? ' selected' : ''}>${esc(x.identifier)} · ${esc(x.title)}</option>`).join('')}
         </select></div>
+      <div class="fg"><label for="f-contrib">Contributeurs</label>
+        <select id="f-contrib" data-field="contributors" multiple size="6">
+          ${domain.users.map((u) => `<option value="${esc(u.id)}"${issue.contributorIds.includes(u.id) ? ' selected' : ''}>${esc(u.name)}</option>`).join('')}
+        </select></div>
+      <p class="hint">${SOURCE_HINT[issue.contributorsSource]} Un commentaire signale les nouveaux venus dans Linear.</p>
       <div class="sec">Parts des contributeurs</div>
-      <p class="hint">${SOURCE_HINT[issue.contributorsSource]}</p>
       ${sharesForm}`;
 
     body.querySelector('[data-field="title"]').addEventListener('blur', (e) => {
@@ -151,6 +157,14 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     body.querySelector('[data-field="deps"]').addEventListener('change', (e) => {
       const blockedBy = [...e.target.selectedOptions].map((o) => o.value);
       onWrite((api) => api.setDependencies(issue.id, blockedBy), `Dépendances de ${issue.identifier} modifiées`, (api) => api.setDependencies(issue.id, issue.blockedBy));
+    });
+    body.querySelector('[data-field="contributors"]').addEventListener('change', (e) => {
+      const contributorIds = [...e.target.selectedOptions].map((o) => o.value);
+      onWrite(
+        (api) => api.setContributors(issue.id, contributorIds),
+        `Contributeurs de ${issue.identifier} modifiés`,
+        (api) => api.setContributors(issue.id, issue.contributorIds),
+      );
     });
   }
 

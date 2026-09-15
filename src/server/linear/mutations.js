@@ -36,7 +36,14 @@ const TEAM_CREATE = `mutation TeamCreate($input: TeamCreateInput!) {
   teamCreate(input: $input) { success team { id key name } }
 }`;
 
-export const MUTATIONS = [ISSUE_UPDATE, ISSUE_CREATE, ISSUE_RELATION_CREATE, ISSUE_RELATION_DELETE, PROJECT_UPDATE, PROJECT_CREATE, TEAM_CREATE];
+const COMMENT_CREATE = `mutation CommentCreate($input: CommentCreateInput!) {
+  commentCreate(input: $input) { success comment { id } }
+}`;
+
+export const MUTATIONS = [
+  ISSUE_UPDATE, ISSUE_CREATE, ISSUE_RELATION_CREATE, ISSUE_RELATION_DELETE,
+  PROJECT_UPDATE, PROJECT_CREATE, TEAM_CREATE, COMMENT_CREATE,
+];
 
 export async function updateIssue(key, issueId, input, opts) {
   const data = await gql(key, ISSUE_UPDATE, { id: issueId, input }, opts);
@@ -83,4 +90,9 @@ export async function createTeam(key, input, opts) {
   const data = await gql(key, TEAM_CREATE, { input }, opts);
   if (!data.teamCreate.success) throw new Error('Linear a refusé la création de la team');
   return data.teamCreate.team;
+}
+
+export async function addComment(key, issueId, body, opts) {
+  const data = await gql(key, COMMENT_CREATE, { input: { issueId, body } }, opts);
+  if (!data.commentCreate.success) throw new Error('Linear a refusé l\'ajout du commentaire');
 }

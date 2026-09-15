@@ -42,6 +42,7 @@ function setup(ctx = context()) {
     updateIssue: vi.fn(async () => ({})),
     reschedule: vi.fn(async () => ({})),
     setDependencies: vi.fn(async () => ({})),
+    setContributors: vi.fn(async () => ({})),
     createIssue: vi.fn(async () => ({})),
     updateProject: vi.fn(async () => ({})),
     createProject: vi.fn(async () => ({})),
@@ -80,6 +81,8 @@ describe('panneau de tâche', () => {
     expect(t.body.querySelector('[data-field="end"]').value).toBe('2026-09-25');
     const depsSelected = [...t.body.querySelector('[data-field="deps"]').selectedOptions].map((o) => o.value);
     expect(depsSelected).toEqual([]);
+    const contribSelected = [...t.body.querySelector('[data-field="contributors"]').selectedOptions].map((o) => o.value);
+    expect(contribSelected).toEqual(['u-louis', 'u-sacha']);
     expect(t.body.querySelector('.soon')).toBeNull();
     const shareInputs = [...t.body.querySelectorAll('form[data-form="shares"] input')];
     expect(shareInputs.map((i) => [i.name, i.value])).toEqual([['u-sacha', '50'], ['u-louis', '50']]);
@@ -155,9 +158,19 @@ describe('champs éditables', () => {
     change(t.body.querySelector('[data-field="assignee"]'), 'u-louis');
     await flush();
     expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { assigneeId: 'u-louis' });
-    change(t.body.querySelector('[data-field="estimate"]'), '13');
+    change(t.body.querySelector('[data-field="estimate"]'), '5');
     await flush();
-    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { estimate: 13 });
+    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { estimate: 5 });
+  });
+
+  it('modifie les contributeurs', async () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const select = t.body.querySelector('[data-field="contributors"]');
+    [...select.options].find((o) => o.value === 'u-louis').selected = false;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await flush();
+    expect(t.api.setContributors).toHaveBeenCalledWith('i-11', ['u-sacha']);
   });
 
   it('replanifie début et fin en un seul appel', async () => {

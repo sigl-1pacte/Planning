@@ -98,6 +98,7 @@ const issuePatchBody = {
     title: { type: 'string', minLength: 1 },
     assigneeId: { type: ['string', 'null'] },
     estimate: { type: ['number', 'null'], minimum: 0 },
+    stateId: { type: 'string', minLength: 1 },
   },
 };
 

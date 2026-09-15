@@ -84,11 +84,13 @@ describe('requêtes', () => {
       page('teams', [{ id: 't1' }]),
       page('users', [{ id: 'u1' }]),
       page('projects', [{ id: 'p1' }]),
+      page('workflowStates', [{ id: 's1' }]),
       page('issues', [{ id: 'i1' }]),
     ]);
     expect(await fetchWorkspace('k', { fetchImpl: f })).toEqual({
-      teams: [{ id: 't1' }], users: [{ id: 'u1' }], projects: [{ id: 'p1' }], issues: [{ id: 'i1' }],
+      teams: [{ id: 't1' }], users: [{ id: 'u1' }], projects: [{ id: 'p1' }],
+      workflowStates: [{ id: 's1' }], issues: [{ id: 'i1' }],
     });
-    expect(f.calls[3].body.variables.filter).toBeNull();
+    expect(f.calls[4].body.variables.filter).toBeNull();
   });
 });

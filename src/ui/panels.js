@@ -1,4 +1,4 @@
-import { STATUS, esc, initials, personColor, fr1, shortDay, longDay, ddmmyyyy, issueStatus } from './render/format.js';
+import { esc, initials, personColor, fr1, shortDay, longDay, ddmmyyyy } from './render/format.js';
 import { defaultWeeklyHours } from '../shared/load.js';
 
 // [Hypothèse] Le barème d'estimation Linear de cette équipe plafonne à 8
@@ -69,7 +69,6 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     const userOf = (id) => domain.users.find((u) => u.id === id);
     const identifierOf = (id) => domain.issues.find((i) => i.id === id)?.identifier ?? id;
     const info = load.issues[issue.id];
-    const status = issueStatus(issue, new Set(view.conflicts.map((c) => c.issueId)));
     const blockers = view.conflicts.filter((c) => c.issueId === issue.id).map((c) => identifierOf(c.blockerId));
     const ids = issue.contributorIds;
     const rows = planning.contributions.filter((c) => c.issueId === issue.id && ids.includes(c.linearUserId));
@@ -117,7 +116,11 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       ${ro('Projet', domain.projects.find((p) => p.id === issue.projectId)?.name ?? 'Sans projet')}
       <div class="fg"><label for="f-title">Titre</label>
         <input id="f-title" data-field="title" value="${esc(issue.title)}"></div>
-      ${ro('Statut', `${STATUS[status].label} (se modifie dans Linear pour l'instant)`)}
+      <div class="fg"><label for="f-state">Statut</label>
+        <select id="f-state" data-field="state">
+          ${domain.workflowStates.filter((s) => s.teamId === issue.teamId)
+            .map((s) => `<option value="${esc(s.id)}"${s.id === issue.stateId ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}
+        </select></div>
       <div class="fg"><label for="f-assignee">Responsable</label>
         <select id="f-assignee" data-field="assignee">
           <option value="">— aucun —</option>
@@ -163,6 +166,10 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     body.querySelector('[data-field="assignee"]').addEventListener('change', (e) => {
       const value = e.target.value || null;
       onWrite((api) => api.updateIssue(issue.id, { assigneeId: value }), `Responsable de ${issue.identifier} modifié`, (api) => api.updateIssue(issue.id, { assigneeId: issue.assigneeId }));
+    });
+    body.querySelector('[data-field="state"]').addEventListener('change', (e) => {
+      const value = e.target.value;
+      onWrite((api) => api.updateIssue(issue.id, { stateId: value }), `Statut de ${issue.identifier} modifié`, (api) => api.updateIssue(issue.id, { stateId: issue.stateId }));
     });
     body.querySelector('[data-field="estimate"]').addEventListener('change', (e) => {
       const value = e.target.value ? Number(e.target.value) : null;

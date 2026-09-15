@@ -61,6 +61,6 @@ describe('buildDiagnostic', () => {
   });
 
   it('ajoute la requête d\'échantillon aux requêtes contrôlées', () => {
-    expect(QUERIES).toHaveLength(6);
+    expect(QUERIES).toHaveLength(7);
   });
 });

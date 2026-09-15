@@ -3,7 +3,7 @@ const conn = (nodes = []) => ({ nodes });
 function issue(over) {
   return {
     description: null, estimate: null, dueDate: null, updatedAt: '2026-09-10T08:00:00.000Z',
-    archivedAt: null, state: { type: 'unstarted' }, assignee: null, project: null, parent: null,
+    archivedAt: null, state: { id: 'st-iot-unstarted', type: 'unstarted' }, assignee: null, project: null, parent: null,
     relations: conn(), inverseRelations: conn(),
     ...over,
   };
@@ -27,11 +27,19 @@ export function rawWorkspace() {
         projectMilestones: conn([{ id: 'm-1', name: 'Objet construit', targetDate: '2026-11-05' }]),
       },
     ],
+    workflowStates: [
+      { id: 'st-iot-unstarted', name: 'Todo', type: 'unstarted', position: 1, team: { id: 't-iot' } },
+      { id: 'st-iot-started', name: 'In Progress', type: 'started', position: 2, team: { id: 't-iot' } },
+      { id: 'st-iot-completed', name: 'Done', type: 'completed', position: 3, team: { id: 't-iot' } },
+      { id: 'st-iot-canceled', name: 'Canceled', type: 'canceled', position: 4, team: { id: 't-iot' } },
+      { id: 'st-web-unstarted', name: 'Todo', type: 'unstarted', position: 1, team: { id: 't-web' } },
+      { id: 'st-web-completed', name: 'Done', type: 'completed', position: 2, team: { id: 't-web' } },
+    ],
     issues: [
       issue({
         id: 'i-11', identifier: 'IOT-11', title: 'Conception', team: { id: 't-iot' }, project: { id: 'p-poc1' },
         description: 'Starting date: 16/09/2026\nContributors: @sacha @louis', dueDate: '2026-09-25', estimate: 8,
-        state: { type: 'started' }, assignee: { id: 'u-sacha' },
+        state: { id: 'st-iot-started', type: 'started' }, assignee: { id: 'u-sacha' },
         relations: conn([{ type: 'blocks', relatedIssue: { id: 'i-12' } }]),
       }),
       issue({
@@ -47,7 +55,7 @@ export function rawWorkspace() {
       issue({
         id: 'i-20', identifier: 'WEB-1', title: 'Hors projet', team: { id: 't-web' },
         description: 'Starting date: 21/09/2026', dueDate: '2026-09-22',
-        state: { type: 'completed' },
+        state: { id: 'st-web-completed', type: 'completed' },
         relations: conn([{ type: 'related', relatedIssue: { id: 'i-11' } }]),
       }),
     ],

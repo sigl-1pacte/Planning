@@ -72,9 +72,9 @@ describe('panneau de tâche', () => {
     expect(t.drawer.classList.contains('on')).toBe(true);
     expect(t.title.textContent).toBe('IOT-11');
     expect(t.panels.selectedIssueId()).toBe('i-11');
-    const rows = Object.fromEntries([...t.body.querySelectorAll('.ro')].map((r) => [r.children[0].textContent, r.children[1].textContent]));
-    expect(rows.Statut).toMatch(/^En cours/);
     expect(t.body.querySelector('[data-field="title"]').value).toBe('Conception');
+    expect(t.body.querySelector('[data-field="state"]').value).toBe('st-iot-started');
+    expect(t.body.querySelector('[data-field="state"]').selectedOptions[0].textContent).toBe('In Progress');
     expect(t.body.querySelector('[data-field="assignee"]').value).toBe('u-sacha');
     expect(t.body.querySelector('[data-field="estimate"]').value).toBe('8');
     expect(t.body.querySelector('[data-field="start"]').value).toBe('2026-09-16');
@@ -186,6 +186,9 @@ describe('champs éditables', () => {
     change(t.body.querySelector('[data-field="estimate"]'), '5');
     await flush();
     expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { estimate: 5 });
+    change(t.body.querySelector('[data-field="state"]'), 'st-iot-completed');
+    await flush();
+    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { stateId: 'st-iot-completed' });
   });
 
   it('modifie les contributeurs', async () => {

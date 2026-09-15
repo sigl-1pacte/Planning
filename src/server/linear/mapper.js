@@ -13,6 +13,9 @@ export function mapWorkspace(raw) {
     .map((u) => ({ id: u.id, name: u.name, displayName: u.displayName ?? null, email: u.email, active: u.active, url: u.url }))
     .sort(byId);
   const teams = raw.teams.map((t) => ({ id: t.id, key: t.key, name: t.name })).sort(byId);
+  const workflowStates = raw.workflowStates
+    .map((s) => ({ id: s.id, name: s.name, type: s.type, position: s.position, teamId: s.team.id }))
+    .sort((a, b) => a.teamId.localeCompare(b.teamId) || a.position - b.position);
   const projects = raw.projects.map((p) => ({
     id: p.id,
     name: p.name,
@@ -41,7 +44,7 @@ export function mapWorkspace(raw) {
     .map((i) => mapIssue(i, users, [...(blockers.get(i.id) ?? [])].sort()))
     .sort(byId);
 
-  return { teams, users, projects, issues };
+  return { teams, users, projects, workflowStates, issues };
 }
 
 function mapIssue(i, users, blockedBy) {
@@ -73,6 +76,7 @@ function mapIssue(i, users, blockedBy) {
     parentId: i.parent?.id ?? null,
     estimate: i.estimate ?? null,
     status: STATUS[i.state.type] ?? 'todo',
+    stateId: i.state.id,
     assigneeId: i.assignee?.id ?? null,
     start: planned ? start.date : null,
     end: planned ? end : null,

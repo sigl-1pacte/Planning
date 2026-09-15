@@ -195,6 +195,12 @@ describe('écriture', () => {
     expect(res.json().domain.issues).toHaveLength(4);
   });
 
+  it('modifie le statut d\'une issue', async () => {
+    const res = await call('PUT', '/api/issues/i-11', { stateId: 'st-iot-completed' });
+    expect(res.statusCode).toBe(200);
+    expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-11', { stateId: 'st-iot-completed' });
+  });
+
   it('refuse un corps sans aucun champ', async () => {
     expect((await call('PUT', '/api/issues/i-11', {})).statusCode).toBe(400);
   });

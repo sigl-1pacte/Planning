@@ -22,11 +22,18 @@ const PROJECTS = `query Projects($after: String) {
   }
 }`;
 
+const WORKFLOW_STATES = `query WorkflowStates($after: String) {
+  workflowStates(first: 100, after: $after) {
+    nodes { id name type position team { id } }
+    ${PAGE_INFO}
+  }
+}`;
+
 const ISSUES = `query Issues($after: String, $filter: IssueFilter) {
   issues(first: ${PAGE_SIZE}, after: $after, filter: $filter, orderBy: updatedAt) {
     nodes {
       id identifier title description estimate dueDate updatedAt archivedAt
-      state { type }
+      state { id type }
       assignee { id }
       team { id }
       project { id }
@@ -54,7 +61,7 @@ const DIAGNOSTIC_ISSUES = `query DiagnosticIssues($first: Int!) {
   }
 }`;
 
-export const QUERIES = [TEAMS, USERS, PROJECTS, ISSUES, VIEWER, DIAGNOSTIC_ISSUES];
+export const QUERIES = [TEAMS, USERS, PROJECTS, WORKFLOW_STATES, ISSUES, VIEWER, DIAGNOSTIC_ISSUES];
 
 export async function paginate(key, query, field, variables, opts) {
   const nodes = [];
@@ -76,8 +83,9 @@ export async function fetchWorkspace(key, opts) {
   const teams = await paginate(key, TEAMS, 'teams', {}, opts);
   const users = await paginate(key, USERS, 'users', {}, opts);
   const projects = await paginate(key, PROJECTS, 'projects', {}, opts);
+  const workflowStates = await paginate(key, WORKFLOW_STATES, 'workflowStates', {}, opts);
   const issues = await paginate(key, ISSUES, 'issues', { filter: null }, opts);
-  return { teams, users, projects, issues };
+  return { teams, users, projects, workflowStates, issues };
 }
 
 export function fetchIssuesSince(key, sinceIso, opts) {

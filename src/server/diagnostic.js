@@ -2,7 +2,7 @@ import { mapWorkspace } from './linear/mapper.js';
 import { parseStartingDate } from './linear/parsing.js';
 
 export function buildDiagnostic({ users, issues }) {
-  const domain = mapWorkspace({ teams: [], projects: [], users, issues });
+  const domain = mapWorkspace({ teams: [], projects: [], workflowStates: [], users, issues });
   const mapped = new Map(domain.issues.map((i) => [i.id, i]));
   const identifiers = new Map(issues.map((i) => [i.id, i.identifier]));
   const names = new Map(domain.users.map((u) => [u.id, u.name]));

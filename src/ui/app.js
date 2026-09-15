@@ -8,7 +8,7 @@ import {
 } from './render/board.js';
 import { renderLoadRows } from './render/loadRows.js';
 import { summarize, renderFacts, renderPeopleTable, renderProjectsTable, renderLegend } from './render/tables.js';
-import { renderUnplanned } from './render/unplanned.js';
+import { renderUnplannedTab } from './render/unplannedTab.js';
 import { esc, longDay } from './render/format.js';
 
 const zoomButton = (prefs, zoom, label) => `<button type="button" data-zoom="${zoom}" class="${prefs.zoom === zoom ? 'on' : ''}">${label}</button>`;
@@ -17,7 +17,7 @@ export function renderLoadError(root, message) {
   root.innerHTML = `<section class="sheet"><div class="banner err">${esc(message)}</div><p class="note">Nouvelle tentative automatique toutes les 30 secondes.</p></section>`;
 }
 
-export function renderApp(root, { state, route, prefs, selectedIssueId, today, viewportWidth }) {
+export function renderApp(root, { state, route, prefs, selectedIssueId, today, viewportWidth, onPlan }) {
   const { snapshot, planning } = state;
   const domain = snapshot.domain;
   const view = buildView(domain, { route, showCanceled: prefs.showCanceled });
@@ -46,6 +46,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
       <nav class="nav">
         <a href="#/" class="${route.view === 'global' ? 'on' : ''}">Vue globale</a>
         ${domain.teams.map((t) => `<a href="#/team/${encodeURIComponent(t.key)}" class="${team?.id === t.id ? 'on' : ''}">${esc(t.key)}</a>`).join('')}
+        <a href="#/unplanned" class="${route.tab === 'unplanned' ? 'on' : ''}">Non planifiées (${domain.issues.filter((i) => !i.start).length})</a>
       </nav>
       <div class="tools">
         <div class="zoom">
@@ -87,6 +88,16 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
       <div class="ft"><span>Planning connecté à Linear · lecture seule</span><span>Édition du ${longDay(today)}</span></div>
     </section>`;
 
+  if (route.tab === 'unplanned') {
+    root.querySelector('.board').hidden = true;
+    root.querySelector('.cols').hidden = true;
+    root.querySelector('.unp').hidden = false;
+    renderUnplannedTab(root.querySelector('.unp'), {
+      issues: view.unplanned, teams: domain.teams, onPlan,
+    });
+    return { view, axis, load };
+  }
+
   const left = root.querySelector('[data-left]');
   const right = root.querySelector('[data-right]');
   const sink = createRowSink(left, right);
@@ -103,7 +114,6 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
   const summaryContext = { view, load, planning, domain };
   renderFacts(root.querySelector('.facts'), summarize(summaryContext));
   renderLegend(root.querySelector('.lg'), summaryContext);
-  renderUnplanned(root.querySelector('.unp'), { issues: view.unplanned, teams: domain.teams });
   renderPeopleTable(root.querySelector('[data-people]'), summaryContext);
   renderProjectsTable(root.querySelector('[data-projects]'), summaryContext);
 

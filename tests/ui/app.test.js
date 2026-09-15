@@ -25,15 +25,33 @@ function draw({ route = { view: 'global', teamKey: null }, snapshotOver = {}, er
 describe('renderApp', () => {
   it('assemble navigation, plateau, charge et tableaux', () => {
     const { root, out } = draw();
-    expect([...root.querySelectorAll('.nav a')].map((a) => a.textContent)).toEqual(['Vue globale', 'IOT', 'WEB']);
+    expect([...root.querySelectorAll('.nav a')].map((a) => a.textContent)).toEqual(['Vue globale', 'IOT', 'WEB', 'Non planifiées (1)']);
     expect(root.querySelector('.nav a.on').textContent).toBe('Vue globale');
     expect(root.querySelectorAll('[data-left] .r.tk')).toHaveLength(3);
     expect(root.querySelectorAll('[data-left] .r.ld')).toHaveLength(2);
     expect(out.axis.dayWidth).toBe(10);
     expect(root.querySelector('.canvas').style.width).toBe('560px');
     expect(root.querySelector('[data-grid] .td')).not.toBeNull();
-    expect(root.querySelector('.unp h3').textContent).toBe('Tâches non planifiées (1)');
+    expect(root.querySelector('.unp').innerHTML).toBe('');
     expect(root.querySelector('[data-zoom="all"]').classList.contains('on')).toBe(true);
+  });
+
+  it('bascule sur l’onglet des tâches non planifiées', () => {
+    const onPlan = () => {};
+    const root = document.createElement('div');
+    const state = {
+      snapshot: { version: 1, fetchedAt: '2026-09-14T10:00:00.000Z', stale: false, lastError: null, domain: mapWorkspace(rawWorkspace()) },
+      planning,
+      error: null,
+    };
+    const prefs = { zoom: 'all', dayWidth: null, collapsed: new Set(), showCanceled: false };
+    const route = { view: 'global', teamKey: null, tab: 'unplanned' };
+    renderApp(root, { state, route, prefs, selectedIssueId: null, today: '2026-09-17', viewportWidth: 560, onPlan });
+    expect(root.querySelector('.nav a[href="#/unplanned"]').classList.contains('on')).toBe(true);
+    expect(root.querySelector('.board').hidden).toBe(true);
+    expect(root.querySelector('.cols').hidden).toBe(true);
+    expect(root.querySelector('.unp').hidden).toBe(false);
+    expect(root.querySelector('.unp h2').textContent).toBe('Tâches non planifiées (1)');
   });
 
   it('restreint la page à une team', () => {

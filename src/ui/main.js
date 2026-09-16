@@ -11,7 +11,7 @@ import { scrollLeftForToday } from './render/layout.js';
 import { shortDay } from './render/format.js';
 import { todayISO } from '../shared/calendar.js';
 import { createUndo } from './undo.js';
-import { dayDeltaFromPixels, shiftedDates } from './dragReschedule.js';
+import { dayDeltaFromPixels, shiftedDates, transitiveDependents } from './dragReschedule.js';
 import { resolveConflicts } from './conflictResolution.js';
 
 const api = createApi();
@@ -217,12 +217,20 @@ root.addEventListener('pointerdown', (event) => {
   const bar = event.target.closest('.bar');
   if (!bar || !lastAxis) return;
   const row = bar.closest('.r.tk');
-  const issue = row && controller.state.snapshot?.domain.issues.find((i) => i.id === row.dataset.t);
+  const domain = controller.state.snapshot?.domain;
+  const issue = row && domain?.issues.find((i) => i.id === row.dataset.t);
   if (!issue?.start || !issue.end) return;
+  // Les dépendantes transitives sont prévisualisées en mouvement avec la
+  // barre déplacée : c'est bien elles que la cascade décalera au dépôt.
+  const rightRows = [...root.querySelectorAll('[data-right] .r.tk')];
+  const rowById = new Map(rightRows.map((el) => [el.dataset.t, el]));
+  const affectedRows = transitiveDependents(domain.issues, issue.id).map((id) => rowById.get(id)).filter(Boolean);
   drag = {
     pointerId: event.pointerId, row, issueId: issue.id, identifier: issue.identifier,
     origStart: issue.start, origEnd: issue.end, startX: event.clientX, dayWidth: lastAxis.dayWidth, dayDelta: 0,
+    affectedRows,
   };
+  for (const r of affectedRows) r.classList.add('drag-affected');
   bar.setPointerCapture(event.pointerId);
   root.classList.add('dragging');
   event.preventDefault();
@@ -234,7 +242,9 @@ root.addEventListener('pointermove', (event) => {
   if (dayDelta === drag.dayDelta) return;
   drag.dayDelta = dayDelta;
   const tx = `translateX(${dayDelta * drag.dayWidth}px)`;
-  drag.row.querySelectorAll('.bar, .gp, .bl').forEach((el) => { el.style.transform = tx; });
+  for (const r of [drag.row, ...drag.affectedRows]) {
+    r.querySelectorAll('.bar, .gp, .bl').forEach((el) => { el.style.transform = tx; });
+  }
   const label = drag.row.querySelector('.bl');
   if (label) {
     const { start, end } = shiftedDates(drag.origStart, drag.origEnd, dayDelta);
@@ -276,6 +286,7 @@ function fitSheetToOnePage() {
 function endDrag(commit) {
   if (!drag) return;
   root.classList.remove('dragging');
+  for (const r of drag.affectedRows) r.classList.remove('drag-affected');
   const { issueId, identifier, origStart, origEnd, dayDelta } = drag;
   drag = null;
   if (dayDelta === 0) return;

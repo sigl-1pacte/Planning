@@ -61,8 +61,10 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
           ${zoomButton(prefs, 'all', 'Tout')}${zoomButton(prefs, 'quarter', 'Trimestre')}${zoomButton(prefs, 'month', 'Mois')}
           <input type="range" data-zoom-range min="2" max="60" step="1" value="${Math.round(axis.dayWidth)}" aria-label="Largeur d'un jour">
         </div>
+        <button class="btn accent" type="button" data-action="load-chart">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 13.5V2M2 13.5h12"/><path d="M4.5 11 8 7l2 2 3.5-4"/></svg>
+          Recommandations</button>
         <button class="btn" type="button" data-action="refresh">Actualiser</button>
-        <button class="btn" type="button" data-action="load-chart">Recommandations</button>
         <button class="btn" type="button" data-action="settings">Réglages</button>
         <button class="btn pri" type="button" data-action="print">Imprimer / PDF</button>
       </div>

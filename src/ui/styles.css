@@ -37,6 +37,9 @@ button,select,input{font-family:inherit;font-size:inherit;color:inherit}
 .btn:disabled{opacity:.55;cursor:default}
 .btn.pri{background:#EEF3F6;color:var(--ink);border-color:#EEF3F6;font-weight:500}
 .btn.pri:hover{background:#fff}
+.btn.accent{background:#2E5F8A;color:#fff;border-color:#2E5F8A}
+.btn.accent:hover{background:#3A72A3}
+.btn.accent svg{width:13px;height:13px;flex:0 0 13px}
 
 /* feuille */
 .sheet{width:var(--W);max-width:calc(100% - 32px);margin:20px auto 40px;background:#fff;padding:20px 22px 24px;

@@ -378,22 +378,32 @@ nécessaire.
 
 Cible : la plateforme Cassiopée de l'école.
 
-- **Application** : `planning-app`, un conteneur unique et sans état. Image Node multi-étapes,
-  le front étant compilé à la construction de l'image. Le service écoute sur le port 80,
-  imposé par l'ingress.
-- **Base** : PostgreSQL managé, provisionné par `POST /api/v1/databases`, avec un volume
-  Cinder persistant (`csi-cinder-sc-retain`). Une taille de 1 Gi suffit largement : la
-  couche de planification représente quelques centaines de lignes.
+- **Application** : `planning-app`, un conteneur unique et sans état, déclaré par
+  `POST /api/v1/applications`. Cassiopée ne construit pas d'image : il tire une image déjà
+  compilée. L'image Node multi-étapes (front compilé à la construction) est publiée par
+  GitHub Actions sur `ghcr.io/sigl-1pacte/planning`, en paquet **public** — l'API n'accepte
+  aucun identifiant de registre, et l'image ne contient aucun secret.
+- **Port** : Cassiopée exécute le conteneur en utilisateur non root (`runAsUser: 1000`), qui
+  ne peut pas écouter sur un port inférieur à 1024. Le service Node écoute donc sur 8080 ; le
+  service Cassiopée expose le port 80 attendu par l'ingress et le redirige vers 8080.
+- **Base** : PostgreSQL 17 managé `planning-db`, base `planning`, provisionné par
+  `POST /api/v1/databases`, volume Cinder persistant de 10 Gi (`csi-cinder-sc-retain`).
+  L'hôte `planning-db-postgresql` n'est joignable que depuis le cluster.
 - **Exposition** : ingress `planning-ingress` sur `https://planning.sigl.epita.fr/`, TLS
   Let's Encrypt. WebSocket désactivé sur l'ingress, ce qui exclut tout push et confirme le
   rafraîchissement périodique.
+- **Sondes** : disponibilité sur `/api/health` (vérifie la base) ; vivacité sur `/`, qui
+  ne dépend pas de la base, pour qu'une panne de base ne fasse pas redémarrer le conteneur
+  en boucle.
 - **Sauvegardes** : `pg_dump` via `/api/v1/deployments/{name}/database/backup`, vers un
   volume dédié.
 - **Stockage objet S3** : non utilisé, l'application ne produisant aucun fichier à conserver.
 
-Configuration par variables d'environnement uniquement : `DATABASE_URL`, construite à
-partir des identifiants de la base Cassiopée, `PORT` à 80, `LOG_LEVEL`. **Aucune variable
-ne contient de clé Linear** — l'application n'en détient jamais au repos.
+Configuration par variables d'environnement uniquement : `DATABASE_URL`, `PORT` à 8080,
+`LOG_LEVEL`. L'API Cassiopée n'accepte que des valeurs en clair pour `env`, sans référence à
+un secret Kubernetes : `DATABASE_URL` est donc saisie directement dans la configuration de
+l'application côté Cassiopée, **et jamais dans le dépôt**. **Aucune variable ne contient de
+clé Linear** — l'application n'en détient jamais au repos.
 
 Pour le développement local, un fichier de composition lance l'application et un conteneur
 PostgreSQL officiel. Ce second conteneur n'existe qu'en local et tient lieu de la base

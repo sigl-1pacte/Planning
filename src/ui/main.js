@@ -147,6 +147,9 @@ root.addEventListener('click', (event) => {
     controller.refresh();
   } else if (el('[data-action="settings"]')) {
     panels.openSettings();
+  } else if (el('[data-action="add-team"]')) {
+    panels.openTeam();
+    draw();
   } else if (el('[data-action="print"]')) {
     if (printOverride) return;
     printOverride = { zoom: 'all', collapsed: [] };
@@ -166,7 +169,8 @@ root.addEventListener('click', (event) => {
     panels.openIssue(null, { teamId: btn.dataset.team, projectId: btn.dataset.project || undefined });
     draw();
   } else if (el('[data-action="add-project"]')) {
-    panels.openProject(null);
+    const btn = el('[data-action="add-project"]');
+    panels.openProject(null, { teamId: btn.dataset.team });
     draw();
   } else if (el('[data-action="undo"]')) {
     undo.trigger();

@@ -61,6 +61,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
           <input type="range" data-zoom-range min="2" max="60" step="1" value="${Math.round(axis.dayWidth)}" aria-label="Largeur d'un jour">
         </div>
         <button class="btn" type="button" data-action="refresh">Actualiser</button>
+        <button class="btn" type="button" data-action="add-team">+ Team</button>
         <button class="btn" type="button" data-action="settings">Réglages</button>
         <button class="btn pri" type="button" data-action="print">Imprimer / PDF</button>
       </div>

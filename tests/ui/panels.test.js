@@ -47,6 +47,7 @@ function setup(ctx = context()) {
     updateProject: vi.fn(async () => ({})),
     createProject: vi.fn(async () => ({})),
     createTeam: vi.fn(async () => ({})),
+    createTeam: vi.fn(async () => ({})),
   };
   const onMutate = vi.fn((call) => call(api));
   const onWrite = vi.fn((call) => call(api));
@@ -250,13 +251,32 @@ describe('création', () => {
     expect(t.onWrite.mock.calls[0][1]).toMatch(/créée/);
   });
 
-  it('ouvre un panneau de projet vide et le crée', async () => {
+  it('ouvre un panneau de projet vide, préchoisit la team demandée et le crée', async () => {
     const t = setup();
-    t.panels.openProject(null);
+    t.panels.openProject(null, { teamId: 't-web' });
+    expect(t.body.querySelector('[data-field="pteam"]').value).toBe('t-web');
     t.body.querySelector('[data-field="pname"]').value = 'Nouveau projet';
     t.body.querySelector('[data-action="create-project"]').click();
     await flush();
-    expect(t.api.createProject).toHaveBeenCalledWith({ teamIds: [], name: 'Nouveau projet' });
+    expect(t.api.createProject).toHaveBeenCalledWith({ teamIds: ['t-web'], name: 'Nouveau projet' });
+  });
+
+  it('ouvre un panneau de team vide et la crée, clé en majuscules', async () => {
+    const t = setup();
+    t.panels.openTeam();
+    t.body.querySelector('[data-field="tkey"]').value = 'new';
+    t.body.querySelector('[data-field="tname"]').value = 'Nouvelle team';
+    t.body.querySelector('[data-action="create-team"]').click();
+    await flush();
+    expect(t.api.createTeam).toHaveBeenCalledWith({ key: 'NEW', name: 'Nouvelle team' });
+  });
+
+  it('refuse de créer une team sans clé ou sans nom', () => {
+    const t = setup();
+    t.panels.openTeam();
+    t.body.querySelector('[data-action="create-team"]').click();
+    expect(t.api.createTeam).not.toHaveBeenCalled();
+    expect(t.body.querySelector('[data-error]').hidden).toBe(false);
   });
 });
 

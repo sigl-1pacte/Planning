@@ -52,6 +52,19 @@ describe('board', () => {
       .toEqual(['Réalisation POC v1', 'Sans projet']);
   });
 
+  it('propose d’ajouter une tâche par bloc et un projet par team', () => {
+    const d = draw();
+    const teamBtn = d.leftRows.querySelector('.r.tb [data-action="add-project"]');
+    expect(teamBtn.dataset.team).toBe('t-iot');
+    const projectBtn = [...d.leftRows.querySelectorAll('.r.p [data-action="add-task"]')]
+      .find((b) => b.closest('.r.p').querySelector('.pn').textContent === 'Réalisation POC v1');
+    expect(projectBtn.dataset.team).toBe('t-iot');
+    expect(projectBtn.dataset.project).toBe('p-poc1');
+    const noProjectBtn = [...d.leftRows.querySelectorAll('.r.p [data-action="add-task"]')]
+      .find((b) => b.closest('.r.p').querySelector('.pn').textContent === 'Sans projet');
+    expect(noProjectBtn.dataset.project).toBe('');
+  });
+
   it('coupe les barres aux week-ends et affiche durée et heures', () => {
     const d = draw();
     const r = d.row(d.rightRows, 'i-11');

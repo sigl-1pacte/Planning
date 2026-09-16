@@ -174,7 +174,8 @@ export function renderGroups(sink, { view, axis, holidays, load, users, collapse
   for (const group of view.groups) {
     const [teamLeft, teamRight] = rowPair('r tb');
     teamLeft.innerHTML = `<a href="#/team/${encodeURIComponent(group.team.key)}">${esc(group.team.name)}</a>
-      <span class="pm">${esc(group.team.key)}</span>`;
+      <span class="pm">${esc(group.team.key)}</span>
+      <button class="addb" type="button" data-action="add-project" data-team="${esc(group.team.id)}">+ projet</button>`;
     sink.push(teamLeft, teamRight, 30);
 
     const blocks = group.projects.map((p) => ({
@@ -190,7 +191,7 @@ export function renderGroups(sink, { view, axis, holidays, load, users, collapse
 
     for (const block of blocks) {
       const open = !collapsed.has(block.key);
-      renderProjectRow(sink, block, open, axis);
+      renderProjectRow(sink, block, open, axis, group.team.id);
       if (!open) continue;
       for (const { issue, depth, parentId } of orderIssues(block.issues)) {
         colorOf[issue.id] = block.project.color;
@@ -208,7 +209,7 @@ export function renderGroups(sink, { view, axis, holidays, load, users, collapse
   return { rowY, colorOf };
 }
 
-function renderProjectRow(sink, { key, project, issues }, open, axis) {
+function renderProjectRow(sink, { key, project, issues }, open, axis, teamId) {
   const points = issues.reduce((s, i) => s + (i.estimate ?? 0), 0);
   const done = issues.filter((i) => i.status === 'done').reduce((s, i) => s + (i.estimate ?? 0), 0);
   const pct = points ? Math.round((done / points) * 100) : 0;
@@ -218,7 +219,8 @@ function renderProjectRow(sink, { key, project, issues }, open, axis) {
     <span class="sw" style="background:${color}"></span>
     <span class="pn" title="${esc(project.name)}">${esc(project.name)}</span>
     <span class="pbar" title="${pct} % des points terminés"><i style="width:${pct}%;background:${color}"></i></span>
-    <span class="pm">${issues.length} tâches · ${points} pts · ${pct} %</span>`;
+    <span class="pm">${issues.length} tâches · ${points} pts · ${pct} %</span>
+    <button class="addb" type="button" data-action="add-task" data-team="${esc(teamId)}" data-project="${esc(project.id ?? '')}">+ tâche</button>`;
   if (project.startDate && project.targetDate) {
     const start = xOf(axis, project.startDate);
     const band = positioned('pband', start, Math.max(2, xOf(axis, project.targetDate) + axis.dayWidth - start));

@@ -53,7 +53,8 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     drawer.setAttribute('aria-hidden', 'false');
     if (current.kind === 'issue') drawIssue(current.id, current.seed);
     else if (current.kind === 'person') drawPerson(current.id);
-    else if (current.kind === 'proj') drawProj(current.id);
+    else if (current.kind === 'proj') drawProj(current.id, current.seed);
+    else if (current.kind === 'team') drawNewTeam();
     else drawSettings();
   }
 
@@ -225,21 +226,42 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     });
   }
 
-  function drawNewProject() {
+  function drawNewProject({ teamId } = {}) {
+    const { domain } = ctx;
     title.textContent = 'Nouveau projet';
     body.innerHTML = `
       <div class="fg"><label for="f-pname">Nom du projet</label><input id="f-pname" data-field="pname"></div>
+      <div class="fg"><label for="f-pteam">Team</label>
+        <select id="f-pteam" data-field="pteam">
+          ${domain.teams.map((t) => `<option value="${esc(t.id)}"${t.id === teamId ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}
+        </select></div>
       ${errorSlot}
       <div class="actions"><button class="btn pri" type="button" data-action="create-project">Créer le projet</button></div>`;
     body.querySelector('[data-action="create-project"]').addEventListener('click', () => {
       const value = body.querySelector('[data-field="pname"]').value.trim();
       if (!value) return showError(body, 'Le nom est obligatoire.');
-      onWrite((api) => api.createProject({ teamIds: [], name: value }), `Projet « ${value} » créé`, null);
+      const team = body.querySelector('[data-field="pteam"]').value;
+      onWrite((api) => api.createProject({ teamIds: [team], name: value }), `Projet « ${value} » créé`, null);
     });
   }
 
-  function drawProj(projectId) {
-    if (projectId === null) return drawNewProject();
+  function drawNewTeam() {
+    title.textContent = 'Nouvelle team';
+    body.innerHTML = `
+      <div class="fg"><label for="f-tkey">Clé (ex. IOT)</label><input id="f-tkey" data-field="tkey" maxlength="5" style="text-transform:uppercase"></div>
+      <div class="fg"><label for="f-tname">Nom</label><input id="f-tname" data-field="tname"></div>
+      ${errorSlot}
+      <div class="actions"><button class="btn pri" type="button" data-action="create-team">Créer la team</button></div>`;
+    body.querySelector('[data-action="create-team"]').addEventListener('click', () => {
+      const key = body.querySelector('[data-field="tkey"]').value.trim().toUpperCase();
+      const name = body.querySelector('[data-field="tname"]').value.trim();
+      if (!key || !name) return showError(body, 'La clé et le nom sont obligatoires.');
+      onWrite((api) => api.createTeam({ key, name }), `Team « ${name} » créée`, null);
+    });
+  }
+
+  function drawProj(projectId, seed) {
+    if (projectId === null) return drawNewProject(seed ?? {});
     const { domain } = ctx;
     const project = domain.projects.find((p) => p.id === projectId);
     if (!project) {
@@ -435,9 +457,10 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
 
   return {
     openIssue: (id, seed) => open({ kind: 'issue', id, seed }),
-    openProject: (id) => open({ kind: 'proj', id }),
+    openProject: (id, seed) => open({ kind: 'proj', id, seed }),
     openPerson: (id) => open({ kind: 'person', id }),
     openSettings: () => open({ kind: 'settings' }),
+    openTeam: () => open({ kind: 'team' }),
     close,
     update,
     selectedIssueId: () => (current?.kind === 'issue' ? current.id : null),

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
 import {
-  createRowSink, renderAxis, renderGrid, renderMilestones, renderGroups, renderDependencies,
+  createRowSink, renderAxis, renderGrid, renderMilestones, renderGroups, renderDependencies, renderIssueBar,
 } from '../../src/ui/render/board.js';
 import { createAxis } from '../../src/ui/render/layout.js';
 import { buildView } from '../../src/ui/view.js';
@@ -95,6 +95,23 @@ describe('board', () => {
     // i-11 : 16/09 (index 2) → 25/09 (index 11), dayWidth 10px.
     expect(left.style.left).toBe('17px'); // xOf(start) - 3
     expect(right.style.left).toBe('117px'); // xOf(end) + dayWidth - 3
+  });
+
+  it('renderIssueBar reconstruit une barre en place (utilisé pendant l’aperçu de redimensionnement)', () => {
+    const d = draw();
+    const r = d.row(d.rightRows, 'i-11');
+    const axis = createAxis({ from: '2026-09-14', to: '2026-11-08' }, 10);
+    renderIssueBar(r, { id: 'i-11', start: '2026-09-16', end: '2026-09-30', status: 'doing' }, {
+      color: 'rgb(13, 114, 120)', status: 'doing', axis, holidays: new Set(),
+    });
+    const bars = r.querySelectorAll('.bar');
+    // La barre s'étend maintenant jusqu'au 30/09 : plus de tronçons ouvrés
+    // qu'avant, et les anciens éléments (bars/gaps/poignées) ont bien été
+    // retirés plutôt que de s'accumuler.
+    expect(bars.length).toBeGreaterThan(1);
+    expect(r.querySelectorAll('.rsz-l')).toHaveLength(1);
+    expect(r.querySelectorAll('.rsz-r')).toHaveLength(1);
+    expect(r.querySelector('.rsz-r').style.left).toBe('167px'); // xOf('2026-09-30')=16*10 + dayWidth - 3
   });
 
   it('couvre aussi les extrémités qui tombent un jour chômé, pas seulement l’entre-deux', () => {

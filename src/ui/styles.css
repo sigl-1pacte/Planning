@@ -262,8 +262,14 @@ th:first-child,td:first-child{padding-left:0}
 .recorow span{flex:1}
 .recorow .btn{flex:0 0 auto}
 
-.tip{position:fixed;z-index:90;background:var(--ink);color:#E6EDF2;padding:9px 11px;border-radius:4px;
-  font-size:11px;max-width:320px;pointer-events:none;opacity:0;transition:opacity .1s;
+/* Pendant un glisser-déposer (tâche, bord, jalon) : ancrée en haut au centre
+   de l'écran plutôt que suivre le curseur, sous l'entête (top:70px). Le fond
+   est translucide (rgba, pas opacity) précisément pour que le texte, lui,
+   reste totalement lisible — c'est le double opacity (montré/caché) sur
+   l'élément qui gère l'apparition/disparition en fondu. */
+.tip{position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:95;
+  background:rgba(16,29,40,.82);color:#E6EDF2;padding:9px 14px;border-radius:4px;
+  font-size:11px;max-width:320px;text-align:center;pointer-events:none;opacity:0;transition:opacity .12s;
   box-shadow:0 8px 22px rgba(8,18,26,.3);line-height:1.45}
 .tip b{color:#fff}.tip s{color:#93A8B8;text-decoration:none}
 

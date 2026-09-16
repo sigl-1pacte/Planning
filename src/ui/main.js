@@ -14,6 +14,7 @@ import { createUndo } from './undo.js';
 import { dayDeltaFromPixels, shiftedDates, transitiveDependents } from './dragReschedule.js';
 import { resolveConflicts } from './conflictResolution.js';
 import { renderLoadChart } from './render/loadChart.js';
+import { renderIssueBar } from './render/board.js';
 
 const api = createApi();
 const root = document.getElementById('app');
@@ -32,16 +33,15 @@ let resizeDrag = null;
 let suppressNextClick = false;
 const dragTip = document.getElementById('tip');
 
-// Petite bulle qui suit le curseur pendant un glisser-déposer (tâche, bord de
-// tâche ou jalon) : date(s) visées et delta en jours. #tip existe déjà dans
-// index.html (transition d'opacité déjà en place, cf. styles.css) mais
-// n'était utilisé nulle part ; on lui donne enfin un rôle.
+// Petite bulle ancrée en haut au centre de l'écran pendant un glisser-déposer
+// (tâche, bord de tâche ou jalon) : date(s) visées et delta en jours. #tip
+// existe déjà dans index.html (transition d'opacité déjà en place, cf.
+// styles.css, position ancrée plutôt que suivant le curseur) mais n'était
+// utilisé nulle part ; on lui donne enfin un rôle.
 const deltaLabel = (n) => (n === 0 ? '' : ` (${n > 0 ? '+' : ''}${n} j)`);
-function showDragTip(html, x, y) {
+function showDragTip(html) {
   if (!dragTip) return;
   dragTip.innerHTML = html;
-  dragTip.style.left = `${x + 16}px`;
-  dragTip.style.top = `${y + 16}px`;
   dragTip.style.opacity = '1';
 }
 function hideDragTip() {
@@ -274,10 +274,25 @@ root.addEventListener('pointerdown', (event) => {
     const domain = controller.state.snapshot?.domain;
     const issue = row && domain?.issues.find((i) => i.id === row.dataset.t);
     if (!issue?.start || !issue.end) return;
+    // Couleur/statut lus sur la barre déjà rendue plutôt que recalculés :
+    // main.js n'a pas accès à la couleur de projet ni à issueStatus(), et
+    // cet aperçu n'a besoin que de reproduire ce qui est déjà à l'écran.
+    const sampleBar = row.querySelector('.bar');
+    const isBlocked = sampleBar?.classList.contains('block') ?? false;
+    // Glisser la fin peut créer un conflit chez les dépendantes : prévisualisées
+    // en mouvement, comme pour le déplacement complet de la barre.
+    const rightRows = [...root.querySelectorAll('[data-right] .r.tk')];
+    const rowById = new Map(rightRows.map((el) => [el.dataset.t, el]));
+    const affectedRows = handle.dataset.edge === 'end'
+      ? transitiveDependents(domain.issues, issue.id).map((id) => rowById.get(id)).filter(Boolean) : [];
     resizeDrag = {
       pointerId: event.pointerId, row, issueId: issue.id, identifier: issue.identifier, edge: handle.dataset.edge,
+      issueStatus: issue.status, barColor: sampleBar?.style.backgroundColor || '', isBlocked,
+      holidays: new Set(controller.state.planning.holidays.map((h) => h.day)),
       origStart: issue.start, origEnd: issue.end, startX: event.clientX, dayWidth: lastAxis.dayWidth, dayDelta: 0,
+      affectedRows,
     };
+    for (const r of affectedRows) r.classList.add('drag-affected');
     handle.setPointerCapture(event.pointerId);
     root.classList.add('dragging');
     event.preventDefault();
@@ -309,7 +324,7 @@ root.addEventListener('pointermove', (event) => {
   if (milestoneDrag && event.pointerId === milestoneDrag.pointerId) {
     const dayDelta = dayDeltaFromPixels(event.clientX - milestoneDrag.startX, milestoneDrag.dayWidth);
     const newDate = addDays(milestoneDrag.origDate, dayDelta);
-    showDragTip(`<b>${esc(milestoneDrag.name)}</b><br>${shortDay(newDate)}${deltaLabel(dayDelta)}`, event.clientX, event.clientY);
+    showDragTip(`<b>${esc(milestoneDrag.name)}</b><br>${shortDay(newDate)}${deltaLabel(dayDelta)}`);
     if (dayDelta === milestoneDrag.dayDelta) return;
     milestoneDrag.dayDelta = dayDelta;
     const tx = `translateX(${dayDelta * milestoneDrag.dayWidth}px)`;
@@ -320,16 +335,31 @@ root.addEventListener('pointermove', (event) => {
   }
   if (resizeDrag && event.pointerId === resizeDrag.pointerId) {
     const dayDelta = dayDeltaFromPixels(event.clientX - resizeDrag.startX, resizeDrag.dayWidth);
-    const newDate = addDays(resizeDrag.edge === 'start' ? resizeDrag.origStart : resizeDrag.origEnd, dayDelta);
+    const newStart = resizeDrag.edge === 'start' ? addDays(resizeDrag.origStart, dayDelta) : resizeDrag.origStart;
+    const newEnd = resizeDrag.edge === 'end' ? addDays(resizeDrag.origEnd, dayDelta) : resizeDrag.origEnd;
     const fieldLabel = resizeDrag.edge === 'start' ? 'Début' : 'Échéance';
-    showDragTip(`<b>${esc(resizeDrag.identifier)}</b><br>${fieldLabel} : ${shortDay(newDate)}${deltaLabel(dayDelta)}`, event.clientX, event.clientY);
+    const shownDate = resizeDrag.edge === 'start' ? newStart : newEnd;
+    showDragTip(`<b>${esc(resizeDrag.identifier)}</b><br>${fieldLabel} : ${shortDay(shownDate)}${deltaLabel(dayDelta)}`);
+    if (dayDelta === resizeDrag.dayDelta) return;
     resizeDrag.dayDelta = dayDelta;
+    if (newStart > newEnd) return; // aperçu invalide (bord glissé au-delà de l'autre) : on garde le dernier rendu valide
+    // Le corps de la barre s'étire/rétrécit réellement (pas une simple
+    // translation) : on redécoupe les tronçons ouvrés en direct avec les
+    // vraies nouvelles dates, plutôt qu'une approximation.
+    renderIssueBar(
+      resizeDrag.row, { id: resizeDrag.issueId, start: newStart, end: newEnd, status: resizeDrag.issueStatus },
+      { color: resizeDrag.barColor, status: resizeDrag.isBlocked ? 'blocked' : resizeDrag.issueStatus, axis: lastAxis, holidays: resizeDrag.holidays },
+    );
+    if (resizeDrag.edge === 'end' && resizeDrag.affectedRows.length) {
+      const tx = `translateX(${dayDelta * resizeDrag.dayWidth}px)`;
+      for (const r of resizeDrag.affectedRows) r.querySelectorAll('.bar, .gp, .bl').forEach((el) => { el.style.transform = tx; });
+    }
     return;
   }
   if (!drag || event.pointerId !== drag.pointerId) return;
   const dayDelta = dayDeltaFromPixels(event.clientX - drag.startX, drag.dayWidth);
   const { start, end } = shiftedDates(drag.origStart, drag.origEnd, dayDelta);
-  showDragTip(`<b>${esc(drag.identifier)}</b><br>${shortDay(start)} → ${shortDay(end)}${deltaLabel(dayDelta)}`, event.clientX, event.clientY);
+  showDragTip(`<b>${esc(drag.identifier)}</b><br>${shortDay(start)} → ${shortDay(end)}${deltaLabel(dayDelta)}`);
   if (dayDelta === drag.dayDelta) return;
   drag.dayDelta = dayDelta;
   const tx = `translateX(${dayDelta * drag.dayWidth}px)`;
@@ -431,6 +461,7 @@ function endResizeDrag(commit) {
   if (!resizeDrag) return;
   root.classList.remove('dragging');
   hideDragTip();
+  for (const r of resizeDrag.affectedRows) r.classList.remove('drag-affected');
   const { issueId, identifier, edge, origStart, origEnd, dayDelta } = resizeDrag;
   resizeDrag = null;
   if (dayDelta === 0) return;

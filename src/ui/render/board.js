@@ -252,29 +252,13 @@ function teamSummary(issue, info, users) {
     .join(' · ');
 }
 
-function renderIssueRow(sink, issue, { color, status, axis, holidays, load, users, selected, depth = 0, parentId = null }) {
-  const [left, right] = rowPair(`r tk${issue.status === 'canceled' ? ' cx' : ''}${selected ? ' sel' : ''}${depth > 0 ? ' sub' : ''}`);
-  left.dataset.t = issue.id;
-  right.dataset.t = issue.id;
-  if (parentId) {
-    // Contour de sous-issue : cliquer la zone vide de la ligne ouvre l'issue
-    // parente ; les éléments internes (badge équipe, barre) gardent leur
-    // propre data-open vers la sous-issue elle-même (le plus proche l'emporte).
-    left.dataset.open = parentId;
-    right.dataset.open = parentId;
-  }
-  const info = load.issues[issue.id];
-  const warn = issue.unresolvedMentions.length > 0 || issue.contributorsSource === 'none';
-  const noEstimate = issue.estimate === null;
-
-  left.innerHTML = `<span class="pill" style="background:${STATUS[status].color}">${STATUS[status].label}</span>
-    <span class="id"${depth > 0 ? ` style="padding-left:${depth * 14}px"` : ''}>${esc(issue.identifier)}</span>
-    <span class="nmw" title="${esc(issue.title)}">${esc(issue.title)}</span>
-    <span class="flag" title="${warn ? 'Contributeurs à vérifier' : ''}">${warn ? '!' : ''}</span>
-    <span class="tm" data-open="${esc(issue.id)}" title="Répartition">${teamSummary(issue, info, users)}</span>
-    <span class="pts${noEstimate ? ' none' : ''}" title="${noEstimate ? 'Sans estimation' : 'Points'}">${noEstimate ? '—' : issue.estimate}</span>
-    <span class="dt">${shortDay(issue.start)}</span><span class="dt">${shortDay(issue.end)}</span>`;
-
+// Construit (ou reconstruit, en pleine mise à jour live pendant un
+// redimensionnement de bord — voir main.js) les barres, pointillés de
+// week-end et poignées d'une issue dans le panneau de droite. Exportée pour
+// être rejouée telle quelle pendant le glisser-déposer, plutôt que de
+// dupliquer cette logique de découpage en tronçons ouvrés dans main.js.
+export function renderIssueBar(right, issue, { color, status, axis, holidays }) {
+  right.querySelectorAll('.bar, .gp, .rsz').forEach((el) => el.remove());
   const barColor = status === 'blocked' ? STATUS.blocked.color : color;
   const addGap = (left, width) => {
     if (width <= 0) return;
@@ -319,6 +303,32 @@ function renderIssueRow(sink, issue, { color, status, axis, holidays, load, user
   handleRight.dataset.resize = issue.id;
   handleRight.dataset.edge = 'end';
   right.appendChild(handleRight);
+}
+
+function renderIssueRow(sink, issue, { color, status, axis, holidays, load, users, selected, depth = 0, parentId = null }) {
+  const [left, right] = rowPair(`r tk${issue.status === 'canceled' ? ' cx' : ''}${selected ? ' sel' : ''}${depth > 0 ? ' sub' : ''}`);
+  left.dataset.t = issue.id;
+  right.dataset.t = issue.id;
+  if (parentId) {
+    // Contour de sous-issue : cliquer la zone vide de la ligne ouvre l'issue
+    // parente ; les éléments internes (badge équipe, barre) gardent leur
+    // propre data-open vers la sous-issue elle-même (le plus proche l'emporte).
+    left.dataset.open = parentId;
+    right.dataset.open = parentId;
+  }
+  const info = load.issues[issue.id];
+  const warn = issue.unresolvedMentions.length > 0 || issue.contributorsSource === 'none';
+  const noEstimate = issue.estimate === null;
+
+  left.innerHTML = `<span class="pill" style="background:${STATUS[status].color}">${STATUS[status].label}</span>
+    <span class="id"${depth > 0 ? ` style="padding-left:${depth * 14}px"` : ''}>${esc(issue.identifier)}</span>
+    <span class="nmw" title="${esc(issue.title)}">${esc(issue.title)}</span>
+    <span class="flag" title="${warn ? 'Contributeurs à vérifier' : ''}">${warn ? '!' : ''}</span>
+    <span class="tm" data-open="${esc(issue.id)}" title="Répartition">${teamSummary(issue, info, users)}</span>
+    <span class="pts${noEstimate ? ' none' : ''}" title="${noEstimate ? 'Sans estimation' : 'Points'}">${noEstimate ? '—' : issue.estimate}</span>
+    <span class="dt">${shortDay(issue.start)}</span><span class="dt">${shortDay(issue.end)}</span>`;
+
+  renderIssueBar(right, issue, { color, status, axis, holidays });
 
   const label = document.createElement('div');
   label.className = 'bl';

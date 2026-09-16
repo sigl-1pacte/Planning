@@ -1,9 +1,9 @@
 import { esc, initials, personColor, fr1, shortDay, longDay, ddmmyyyy } from './render/format.js';
 import { defaultWeeklyHours } from '../shared/load.js';
 
-// [Hypothèse] Le barème d'estimation Linear de cette équipe plafonne à 8
+// [Hypothèse] Le barème d'estimation Linear de cette équipe plafonne à 21
 // points (Fibonacci tronqué) ; à ajuster si le barème change côté Linear.
-const FIB = [1, 2, 3, 5, 8];
+const FIB = [1, 2, 3, 5, 8, 13, 21];
 
 const ro = (label, value) => `<div class="ro"><span>${label}</span><span>${esc(value)}</span></div>`;
 const errorSlot = '<p class="warn" data-error hidden></p>';

@@ -545,17 +545,29 @@ function applyRecommendation(reco) {
   });
 }
 
+// La recherche de recommandations (shared/recommendations.js) simule chaque
+// candidat sur toutes les semaines en surcharge : sur un périmètre réel, ça
+// peut prendre plusieurs centaines de ms, assez pour geler l'affichage si on
+// la lance avant que la popup ait eu la moindre chance de se peindre. On
+// affiche donc d'abord un état "Calcul…", puis on reporte le calcul lourd
+// après la prochaine peinture (setTimeout 0) pour que la popup soit déjà
+// visible pendant qu'elle tourne.
 function refreshLoadChart() {
   const chart = document.querySelector('.chart-overlay [data-chart]');
   if (!chart || !lastLoad || !lastAxis) return;
-  renderLoadChart(chart, {
-    domain: controller.state.snapshot.domain, planning: controller.state.planning,
-    load: lastLoad, people: lastPeople,
-    users: controller.state.snapshot.domain.users,
-    ceiling: controller.state.planning.settings.loadCeilingPct,
-    teamScoped: lastTeamId !== null, teamId: lastTeamId, range: lastAxis,
-    onApply: applyRecommendation,
-  });
+  chart.innerHTML = '<p class="hint">Calcul des recommandations…</p>';
+  setTimeout(() => {
+    const stillThere = document.querySelector('.chart-overlay [data-chart]');
+    if (!stillThere) return;
+    renderLoadChart(stillThere, {
+      domain: controller.state.snapshot.domain, planning: controller.state.planning,
+      load: lastLoad, people: lastPeople,
+      users: controller.state.snapshot.domain.users,
+      ceiling: controller.state.planning.settings.loadCeilingPct,
+      teamScoped: lastTeamId !== null, teamId: lastTeamId,
+      onApply: applyRecommendation,
+    });
+  }, 0);
 }
 
 function openLoadChart() {

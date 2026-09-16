@@ -1,5 +1,5 @@
-import { addDays, daysBetween, isWorkingDay } from './calendar.js';
-import { computeLoad } from './load.js';
+import { addDays, daysBetween, isWorkingDay, workingDays, mondayOf } from './calendar.js';
+import { shareWeights } from './load.js';
 
 const FAR_FUTURE = '9999-12-31';
 
@@ -108,6 +108,80 @@ function patchCapacity(planning, userId, weekStart, hours) {
   return { ...planning, weeklyCapacities };
 }
 
+function normalizeShares(points) {
+  const total = Object.values(points).reduce((a, b) => a + b, 0);
+  const out = {};
+  for (const [id, v] of Object.entries(points)) out[id] = total > 0 ? v / total : 0;
+  return out;
+}
+
+function adjustWeekHours(rows, weekStart, delta) {
+  const idx = rows.findIndex((w) => w.weekStart === weekStart);
+  if (idx < 0) return;
+  const w = rows[idx];
+  const hours = Math.max(0, w.hours + delta);
+  const pct = w.capacity > 0 ? (hours / w.capacity) * 100 : (hours > 0.01 ? Infinity : 0);
+  rows[idx] = { ...w, hours, pct };
+}
+
+// Recalcule l'effet d'un candidat sur `load` sans jamais rappeler
+// computeLoad sur tout le domaine : chaque candidat ne change qu'une seule
+// issue (dates et/ou parts), donc on retire sa contribution jour par jour
+// aux semaines qu'elle occupait, puis on ajoute sa nouvelle contribution aux
+// semaines qu'elle occupe désormais — le reste de `load` (toutes les autres
+// issues, tous les autres jours) ne bouge pas et n'est pas recalculé. Sur un
+// périmètre réel (des dizaines d'issues, plusieurs mois), recalculer tout le
+// domaine à chaque candidat évalué le rendait totalement impraticable
+// (plusieurs dizaines de secondes) ; ceci reste exact — même formule que
+// computeLoad — mais ne touche que ce qui change vraiment.
+function simulateIssueLoad(load, issueId, issueTeamId, teamId, holidays, hoursPerPoint, newStart, newEnd, newEstimate, newShareFractions) {
+  const counted = teamId === null || issueTeamId === teamId;
+  const oldInfo = load.issues[issueId];
+  const newDays = workingDays(newStart, newEnd, holidays);
+  const newHours = (newEstimate ?? 0) * hoursPerPoint;
+  const affected = new Set([...(oldInfo ? Object.keys(oldInfo.perPerson) : []), ...Object.keys(newShareFractions)]);
+
+  const people = { ...load.people };
+  for (const uid of affected) {
+    if (load.people[uid]) people[uid] = load.people[uid].map((w) => ({ ...w }));
+  }
+  if (counted && oldInfo) {
+    for (const [uid, info] of Object.entries(oldInfo.perPerson)) {
+      if (!people[uid]) continue;
+      const perDay = oldInfo.days.length ? info.hours / oldInfo.days.length : 0;
+      for (const d of oldInfo.days) adjustWeekHours(people[uid], mondayOf(d), -perDay);
+    }
+  }
+  const newPerPerson = {};
+  for (const [uid, share] of Object.entries(newShareFractions)) {
+    const personHours = newHours * share;
+    newPerPerson[uid] = { hours: personHours, ratePct: null };
+    if (counted && people[uid]) {
+      const perDay = newDays.length ? personHours / newDays.length : 0;
+      for (const d of newDays) adjustWeekHours(people[uid], mondayOf(d), perDay);
+    }
+  }
+  return {
+    ...load,
+    people,
+    issues: { ...load.issues, [issueId]: { hours: newHours, days: newDays, shares: newShareFractions, perPerson: newPerPerson } },
+  };
+}
+
+function simulateCapacityLoad(load, userId, weekStart, newWeekly, holidays) {
+  if (!load.people[userId]) return load;
+  const rows = load.people[userId].map((w) => ({ ...w }));
+  const idx = rows.findIndex((w) => w.weekStart === weekStart);
+  if (idx >= 0) {
+    const daysInWeek = workingDaysInWeek(weekStart, holidays);
+    const capacity = (newWeekly / 5) * daysInWeek;
+    const w = rows[idx];
+    const pct = capacity > 0 ? (w.hours / capacity) * 100 : (w.hours > 0.01 ? Infinity : 0);
+    rows[idx] = { ...w, capacity, pct, unavailable: capacity === 0 && w.hours > 0.01 };
+  }
+  return { ...load, people: { ...load.people, [userId]: rows } };
+}
+
 // Poids appliqué au gain mesuré (en heures) de chaque type d'action, pour
 // préférer les leviers les moins intrusifs à gain égal : étaler une tâche
 // (elle garde son volume, juste plus étalé) coûte moins cher qu'un transfert
@@ -117,7 +191,7 @@ function patchCapacity(planning, userId, weekStart, hours) {
 const PENALTY = { stretch: 0, rebalance: 1, move: 2 };
 const MAX_HORIZON_DAYS = 180;
 
-function nonCapacityCandidates(domain, planning, teamId, load, latest, weekStart, userName) {
+function nonCapacityCandidates(domain, planning, teamId, load, latest, weekStart, userName, holidays, hoursPerPoint) {
   const issues = activeIssues(domain, teamId, load, weekStart);
   const out = [];
 
@@ -128,6 +202,7 @@ function nonCapacityCandidates(domain, planning, teamId, load, latest, weekStart
     // étalée sur plusieurs siècles, et ça évite de simuler une charge sur
     // une plage de dates absurdement longue à chaque candidat.
     const slack = bound ? Math.min(daysBetween(issue.end, bound), MAX_HORIZON_DAYS) : 0;
+    const currentFractions = shareWeights(issue, planning.contributions);
 
     if (slack > 0) {
       // Étaler : repousser seulement l'échéance (le début ne bouge pas), ce
@@ -141,6 +216,7 @@ function nonCapacityCandidates(domain, planning, teamId, load, latest, weekStart
           kind: 'stretch',
           summary: `Étaler ${issue.identifier} (${issue.title}) jusqu'au ${newEnd} au lieu du ${issue.end} — même volume, réparti sur plus de jours.`,
           simulate: (d, p) => [patchIssue(d, issue.id, { end: newEnd }), p],
+          simulateLoad: (l) => simulateIssueLoad(l, issue.id, issue.teamId, teamId, holidays, hoursPerPoint, issue.start, newEnd, issue.estimate, currentFractions),
           apply: (api) => api.updateIssue(issue.id, { end: newEnd }),
         });
       }
@@ -155,6 +231,7 @@ function nonCapacityCandidates(domain, planning, teamId, load, latest, weekStart
           kind: 'move',
           summary: `Décaler ${issue.identifier} (${issue.title}) du ${newStart} au ${newEnd} (+${shift} j) pour sortir entièrement de la semaine surchargée.`,
           simulate: (d, p) => [patchIssue(d, issue.id, { start: newStart, end: newEnd }), p],
+          simulateLoad: (l) => simulateIssueLoad(l, issue.id, issue.teamId, teamId, holidays, hoursPerPoint, newStart, newEnd, issue.estimate, currentFractions),
           apply: (api) => api.reschedule(issue.id, { start: newStart, end: newEnd }),
         });
       }
@@ -168,11 +245,13 @@ function nonCapacityCandidates(domain, planning, teamId, load, latest, weekStart
           for (const delta of [10, 20, 30]) {
             if (shares[fromId] - delta <= 0) continue;
             const next = { ...shares, [fromId]: shares[fromId] - delta, [toId]: shares[toId] + delta };
+            const nextFractions = normalizeShares(next);
             out.push({
               kind: 'rebalance',
               summary: `Transférer ${delta} points de part de ${userName(fromId)} vers ${userName(toId)} sur ${issue.identifier} (${issue.title}).`,
               userNote: { fromId, toId, issueId: issue.id, issueIdentifier: issue.identifier, delta },
               simulate: (d, p) => [d, patchShares(p, issue.id, next)],
+              simulateLoad: (l) => simulateIssueLoad(l, issue.id, issue.teamId, teamId, holidays, hoursPerPoint, issue.start, issue.end, issue.estimate, nextFractions),
               apply: (api) => api.setContributions(issue.id, Object.entries(next).map(([linearUserId, share]) => ({ linearUserId, share }))),
             });
           }
@@ -204,6 +283,7 @@ function capacityCandidates(load, holidays, weekStart, ceiling, userName) {
       kind: 'capacity',
       summary: `Augmenter la capacité de ${userName(userId)} à ${neededWeekly} h pour la semaine du ${weekStart} (n'allège la charge de personne d'autre).`,
       simulate: (d, p) => [d, patchCapacity(p, userId, weekStart, neededWeekly)],
+      simulateLoad: (l) => simulateCapacityLoad(l, userId, weekStart, neededWeekly, holidays),
       apply: (api) => api.setCapacity(userId, weekStart, neededWeekly),
     });
   }
@@ -223,24 +303,26 @@ function overloadedWeekStarts(load, ceiling) {
     }));
 }
 
-function bestOf(candidates, base, simDomain, simPlanning, range, teamId, ceiling, penalized) {
+function bestOf(candidates, base, simDomain, simPlanning, load, ceiling, penalized) {
   let best = null;
   let bestNet = 0;
   for (const candidate of candidates) {
-    const [patchedDomain, patchedPlanning] = candidate.simulate(simDomain, simPlanning);
-    const patchedLoad = computeLoad(patchedDomain, patchedPlanning, { range, teamId });
+    const patchedLoad = candidate.simulateLoad(load);
     const gain = base - overloadHours(patchedLoad, ceiling);
     const net = penalized ? gain - PENALTY[candidate.kind] * 0.05 : gain;
     if (net > bestNet + 1e-6) {
       bestNet = net;
+      const [patchedDomain, patchedPlanning] = candidate.simulate(simDomain, simPlanning);
       best = { candidate, patchedDomain, patchedPlanning, patchedLoad, gain };
     }
   }
   return best;
 }
 
-// Recherche gloutonne : à chaque étape, mesure (par simulation réelle —
-// recalcul complet de computeLoad, pas une estimation) l'effet de chaque
+// Recherche gloutonne : à chaque étape, mesure (par simulation réelle et
+// incrémentale de la charge — mêmes formules que computeLoad, mais qui ne
+// recalcule que l'issue qui change plutôt que tout le domaine, sans quoi
+// c'est totalement impraticable sur un périmètre réel) l'effet de chaque
 // action candidate sur le total d'heures en surcharge. Étaler, décaler et
 // rééquilibrer sont toujours essayés en premier (pondérés entre eux par
 // PENALTY, du moins au plus intrusif) ; l'ajout de capacité n'est considéré
@@ -252,8 +334,9 @@ function bestOf(candidates, base, simDomain, simPlanning, range, teamId, ceiling
 // n'est pas une recherche exhaustive (l'espace des décalages possibles est
 // bien trop grand pour ça), mais chaque étape est un choix mesuré sur les
 // vraies données plutôt qu'une heuristique non vérifiée.
-export function buildRecommendations(domain, planning, load0, ceiling, { teamId = null, range, max = 6 } = {}) {
+export function buildRecommendations(domain, planning, load0, ceiling, { teamId = null, max = 6 } = {}) {
   const holidays = new Set(planning.holidays.map((h) => h.day));
+  const hoursPerPoint = planning.settings.hoursPerPoint;
   const userName = (id) => domain.users.find((u) => u.id === id)?.name ?? id;
   let simDomain = domain;
   let simPlanning = planning;
@@ -269,12 +352,12 @@ export function buildRecommendations(domain, planning, load0, ceiling, { teamId 
     const latest = latestEndDates(issuesWithSlack);
     const weeks = overloadedWeekStarts(load, ceiling);
 
-    const soft = weeks.flatMap((weekStart) => nonCapacityCandidates(simDomain, simPlanning, teamId, load, latest, weekStart, userName)
+    const soft = weeks.flatMap((weekStart) => nonCapacityCandidates(simDomain, simPlanning, teamId, load, latest, weekStart, userName, holidays, hoursPerPoint)
       .filter((c) => !c.userNote || !usedIssues.has(`${c.kind}:${c.userNote.issueId}:${c.userNote.fromId}`)));
-    let best = bestOf(soft, base, simDomain, simPlanning, range, teamId, ceiling, true);
+    let best = bestOf(soft, base, simDomain, simPlanning, load, ceiling, true);
     if (!best) {
       const hard = weeks.flatMap((weekStart) => capacityCandidates(load, holidays, weekStart, ceiling, userName));
-      best = bestOf(hard, base, simDomain, simPlanning, range, teamId, ceiling, false);
+      best = bestOf(hard, base, simDomain, simPlanning, load, ceiling, false);
     }
     if (!best) break;
 

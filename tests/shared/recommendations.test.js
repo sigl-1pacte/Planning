@@ -119,4 +119,38 @@ describe('buildRecommendations', () => {
     const result = buildRecommendations(domain, planning({ contributions }), load, 80, { teamId: null, range: RANGE });
     expect(result.recommendations.some((r) => r.kind === 'rebalance')).toBe(true);
   });
+
+  it('reste rapide sur un périmètre de taille réelle (simulation incrémentale, pas un recalcul complet par candidat)', () => {
+    // Régression : un premier jet recalculait tout le domaine (computeLoad)
+    // pour chaque candidat évalué, ce qui prenait ~18 s sur 80 issues / 10
+    // personnes / 3 mois — assez pour geler l'onglet. Le budget ci-dessous
+    // (2 s, marge large) garde une alerte si ça régresse un jour.
+    const addDaysStr = (iso, n) => {
+      const d = new Date(`${iso}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10);
+    };
+    const users = Array.from({ length: 10 }, (_, i) => ({ id: `u${i}`, name: `User ${i}` }));
+    const projects = Array.from({ length: 5 }, (_, i) => ({
+      id: `p${i}`, name: `Proj ${i}`, targetDate: addDaysStr('2026-09-14', 60 + i * 10), teamIds: ['t1'], milestones: [],
+    }));
+    const issues = [];
+    for (let i = 0; i < 80; i++) {
+      const start = addDaysStr('2026-09-14', (i % 8) * 5);
+      const end = addDaysStr(start, 3 + (i % 5));
+      issues.push(issue({
+        id: `i${i}`, start, end, estimate: 3 + (i % 8), status: i % 10 === 0 ? 'done' : 'todo',
+        projectId: `p${i % 5}`, blockedBy: i > 0 && i % 4 === 0 ? [`i${i - 1}`] : [],
+        contributorIds: [users[i % 10].id, users[(i + 1) % 10].id],
+      }));
+    }
+    const domain = domainFor(issues, users, projects);
+    const range = { from: '2026-09-14', to: '2026-12-14' };
+    const load = computeLoad(domain, planning(), { range, teamId: null });
+    const start = performance.now();
+    const result = buildRecommendations(domain, planning(), load, 80, { teamId: null });
+    expect(performance.now() - start).toBeLessThan(2000);
+    expect(result.overloadBefore).toBeGreaterThan(0);
+    expect(result.recommendations.length).toBeGreaterThan(0);
+  });
 });

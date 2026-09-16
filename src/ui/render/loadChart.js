@@ -53,9 +53,9 @@ const KIND_LABEL = { stretch: 'Étaler', move: 'Décaler', rebalance: 'Rééquil
 // l'effet de chaque action candidate sur la charge — pas une heuristique
 // non vérifiée — et est déjà classée du levier le moins intrusif (étaler
 // une tâche) au plus lourd (ajouter de la capacité, en dernier recours).
-export function renderLoadChart(container, { domain, planning, load, people, users, ceiling, teamScoped, teamId, range, onApply }) {
+export function renderLoadChart(container, { domain, planning, load, people, users, ceiling, teamScoped, teamId, onApply }) {
   const { recommendations, overloadBefore, overloadAfter, stillOverloaded } = buildRecommendations(
-    domain, planning, load, ceiling, { teamId, range },
+    domain, planning, load, ceiling, { teamId },
   );
   container._recommendations = recommendations;
 

@@ -256,7 +256,10 @@ root.addEventListener('pointermove', (event) => {
 // mesure du raisonnable : une échelle uniforme (jamais d'agrandissement, et
 // jamais en dessous de 40 % pour rester lisible) calculée à partir de la
 // hauteur/largeur imprimables réelles de la page — cohérent avec @page dans
-// styles.css (A3 paysage, marges de 8 mm). Un très gros planning restera sur
+// styles.css (A4 portrait, marges de 8 mm ; un mauvais accord entre ce
+// calcul et la taille réelle de sortie fait paraître le résultat trop petit
+// avec beaucoup de blanc, la mise à l'échelle du navigateur/pilote
+// d'impression s'ajoutant à celle-ci). Un très gros planning restera sur
 // plusieurs pages plutôt que de devenir illisible : c'est le compromis
 // « raisonnable » plutôt qu'un ajustement garanti en toute circonstance.
 //
@@ -267,7 +270,7 @@ root.addEventListener('pointermove', (event) => {
 // reflow réellement l'élément à la taille réduite, ce qui est indispensable
 // ici. Si zoom n'a aucun effet sur un navigateur donné, l'impression reste
 // simplement sur plusieurs pages comme avant — aucune régression possible.
-const PRINT_PAGE_MM = { width: 420, height: 297, margin: 8 };
+const PRINT_PAGE_MM = { width: 210, height: 297, margin: 8 };
 const MIN_PRINT_SCALE = 0.4;
 
 function fitSheetToOnePage() {

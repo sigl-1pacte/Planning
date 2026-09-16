@@ -4,7 +4,7 @@ import { computeLoad } from '../shared/load.js';
 import { daysBetween } from '../shared/calendar.js';
 import { createAxis, dayWidthFor } from './render/layout.js';
 import {
-  createRowSink, renderAxis, renderGrid, renderMilestones, renderGroups, renderDependencies,
+  createRowSink, renderAxis, renderGrid, renderGroups, renderDependencies,
 } from './render/board.js';
 import { renderLoadRows } from './render/loadRows.js';
 import { summarize, renderFacts, renderPeopleTable, renderProjectsTable, renderLegend } from './render/tables.js';
@@ -108,8 +108,6 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
   const left = root.querySelector('[data-left]');
   const right = root.querySelector('[data-right]');
   const sink = createRowSink(left, right);
-  const projects = [...new Map(view.groups.flatMap((g) => g.projects.map((p) => [p.project.id, p.project]))).values()];
-  renderMilestones(sink, right, projects, axis);
   const { rowY, colorOf } = renderGroups(sink, {
     view, axis, holidays, load, users: domain.users, collapsed: prefs.collapsed, selectedIssueId,
   });

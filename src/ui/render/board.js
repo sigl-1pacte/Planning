@@ -76,33 +76,28 @@ export function renderGrid(gridEl, axis, holidays, todayIso, height) {
   if (x !== null) gridEl.appendChild(positioned('td', x));
 }
 
-export function renderMilestones(sink, rightRows, projects, axis) {
-  const [left, right] = rowPair('r jr');
-  left.textContent = 'Jalons';
-  for (const project of projects) {
-    for (const milestone of project.milestones) {
-      if (!milestone.date) continue;
-      const x = todayX(axis, milestone.date);
-      if (x === null) continue;
-      const line = positioned('jl', x);
-      line.style.color = project.color;
-      line.dataset.milestone = milestone.id;
-      rightRows.appendChild(line);
-      const diamond = positioned('jd', x);
-      diamond.style.color = project.color;
-      diamond.dataset.milestone = milestone.id;
-      diamond.title = `${milestone.name} · ${shortDay(milestone.date)} — cliquer ou glisser pour déplacer`;
-      const label = document.createElement('div');
-      label.className = 'jt';
-      label.style.color = project.color;
-      label.dataset.milestone = milestone.id;
-      label.textContent = `${milestone.name} · ${shortDay(milestone.date)}`;
-      if (x < axis.width - 180) label.style.left = px(x + 10);
-      else label.style.right = px(axis.width - x + 10);
-      right.append(diamond, label);
-    }
+function renderProjectMilestones(right, project, axis) {
+  for (const milestone of project.milestones ?? []) {
+    if (!milestone.date) continue;
+    const x = todayX(axis, milestone.date);
+    if (x === null) continue;
+    const line = positioned('jl', x);
+    line.style.color = project.color;
+    line.dataset.milestone = milestone.id;
+    right.appendChild(line);
+    const diamond = positioned('jd', x);
+    diamond.style.color = project.color;
+    diamond.dataset.milestone = milestone.id;
+    diamond.title = `${milestone.name} · ${shortDay(milestone.date)} — cliquer ou glisser pour déplacer`;
+    const label = document.createElement('div');
+    label.className = 'jt';
+    label.style.color = project.color;
+    label.dataset.milestone = milestone.id;
+    label.textContent = `${milestone.name} · ${shortDay(milestone.date)}`;
+    if (x < axis.width - 180) label.style.left = px(x + 10);
+    else label.style.right = px(axis.width - x + 10);
+    right.append(diamond, label);
   }
-  sink.push(left, right, 28);
 }
 
 const byStart = (a, b) => (a.start === b.start ? (a.id < b.id ? -1 : 1) : a.start < b.start ? -1 : 1);
@@ -234,6 +229,7 @@ function renderProjectRow(sink, { key, project, issues }, open, axis, teamId) {
     band.style.backgroundColor = project.color;
     right.appendChild(band);
   }
+  renderProjectMilestones(right, project, axis);
   sink.push(left, right, 28);
 }
 

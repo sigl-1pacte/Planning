@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
 import {
-  createRowSink, renderAxis, renderGrid, renderMilestones, renderGroups, renderDependencies, renderIssueBar,
+  createRowSink, renderAxis, renderGrid, renderGroups, renderDependencies, renderIssueBar,
 } from '../../src/ui/render/board.js';
 import { createAxis } from '../../src/ui/render/layout.js';
 import { buildView } from '../../src/ui/view.js';
@@ -26,7 +26,6 @@ function draw({ collapsed = new Set(), mutate } = {}) {
   const leftRows = document.createElement('div');
   const rightRows = document.createElement('div');
   const sink = createRowSink(leftRows, rightRows);
-  renderMilestones(sink, rightRows, domain.projects, axis);
   const { rowY, colorOf } = renderGroups(sink, {
     view, axis, holidays, load, users: domain.users, collapsed, selectedIssueId: null,
   });
@@ -45,8 +44,8 @@ describe('board', () => {
     const d = draw();
     expect(d.leftRows.querySelectorAll('.r.tk')).toHaveLength(3);
     expect(d.rightRows.querySelectorAll('.r.tk')).toHaveLength(3);
-    expect(d.rowY).toEqual({ 'i-11': 98, 'i-12': 122, 'i-20': 204 });
-    expect(d.sink.top).toBe(246);
+    expect(d.rowY).toEqual({ 'i-11': 70, 'i-12': 94, 'i-20': 176 });
+    expect(d.sink.top).toBe(218);
     expect(d.leftRows.querySelector('.r.tb a').getAttribute('href')).toBe('#/team/IOT');
     expect([...d.leftRows.querySelectorAll('.r.p .pn')].map((e) => e.textContent))
       .toEqual(['Réalisation POC v1', 'Sans projet']);
@@ -188,7 +187,7 @@ describe('board', () => {
 
   it('dessine grille, jours non ouvrés, débuts de mois et ligne du jour', () => {
     const d = draw();
-    expect(d.grid.style.height).toBe('246px');
+    expect(d.grid.style.height).toBe('218px');
     expect(d.grid.querySelectorAll('.o')).toHaveLength(16);
     expect(d.grid.querySelectorAll('.m')).toHaveLength(2);
     expect(d.grid.querySelector('.td').style.left).toBe('35px');

@@ -78,6 +78,23 @@ describe('board', () => {
     expect(r.querySelector('.bl').textContent).toBe('8 j · 40 h');
   });
 
+  it('couvre aussi les extrémités qui tombent un jour chômé, pas seulement l’entre-deux', () => {
+    // barSegments ne couvre que les jours ouvrés : une tâche qui commence ou
+    // finit un samedi/dimanche n'a aucun tronçon travaillé à cet endroit, et
+    // sans ce correctif ces bouts n'étaient couverts par rien du tout (ni
+    // barre ni pointillé), pas juste transparents.
+    const d = draw({ mutate: (raw) => {
+      raw.issues[0].description = 'Starting date: 19/09/2026'; // samedi
+      raw.issues[0].dueDate = '2026-09-27'; // dimanche
+    } });
+    const r = d.row(d.rightRows, 'i-11');
+    expect(r.querySelectorAll('.bar')).toHaveLength(1);
+    const gaps = [...r.querySelectorAll('.gp')];
+    expect(gaps).toHaveLength(2);
+    expect([gaps[0].style.left, gaps[0].style.width]).toEqual(['50px', '20px']);
+    expect([gaps[1].style.left, gaps[1].style.width]).toEqual(['120px', '20px']);
+  });
+
   it('résume statut, équipe et taux d’affectation', () => {
     const d = draw();
     const l = d.row(d.leftRows, 'i-11');

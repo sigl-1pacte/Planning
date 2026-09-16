@@ -268,20 +268,37 @@ function renderIssueRow(sink, issue, { color, status, axis, holidays, load, user
     <span class="pts${noEstimate ? ' none' : ''}" title="${noEstimate ? 'Sans estimation' : 'Points'}">${noEstimate ? '—' : issue.estimate}</span>
     <span class="dt">${shortDay(issue.start)}</span><span class="dt">${shortDay(issue.end)}</span>`;
 
+  const barColor = status === 'blocked' ? STATUS.blocked.color : color;
+  const addGap = (left, width) => {
+    if (width <= 0) return;
+    const gap = positioned('gp', left, width);
+    gap.style.backgroundColor = barColor;
+    right.appendChild(gap);
+  };
+
   const segments = barSegments(axis, issue.start, issue.end, holidays);
   segments.forEach((segment, k) => {
     const bar = positioned(`bar ${status === 'blocked' ? 'block' : issue.status}`, segment.left, segment.width);
-    bar.style.backgroundColor = status === 'blocked' ? STATUS.blocked.color : color;
+    bar.style.backgroundColor = barColor;
     bar.dataset.open = issue.id;
     right.appendChild(bar);
     const next = segments[k + 1];
-    if (next) {
-      const gapLeft = segment.left + segment.width;
-      const gap = positioned('gp', gapLeft, next.left - gapLeft);
-      gap.style.backgroundColor = color;
-      right.appendChild(gap);
-    }
+    if (next) addGap(segment.left + segment.width, next.left - (segment.left + segment.width));
   });
+  // Une tâche qui commence ou finit un jour chômé n'a aucun tronçon travaillé
+  // à cet endroit : barSegments ne couvre que les jours ouvrés, donc ces
+  // extrémités n'étaient couvertes par aucun élément (ni barre ni pointillé),
+  // pas juste transparentes — l'extrémité disparaissait complètement.
+  const startX = xOf(axis, issue.start);
+  const endX = xOf(axis, issue.end) + axis.dayWidth;
+  if (segments.length) {
+    const first = segments[0];
+    const last = segments[segments.length - 1];
+    addGap(startX, first.left - startX);
+    addGap(last.left + last.width, endX - (last.left + last.width));
+  } else {
+    addGap(startX, endX - startX);
+  }
 
   const label = document.createElement('div');
   label.className = 'bl';

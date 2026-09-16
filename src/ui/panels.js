@@ -118,7 +118,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         <input id="f-title" data-field="title" value="${esc(issue.title)}"></div>
       <div class="fg"><label for="f-state">Statut</label>
         <select id="f-state" data-field="state">
-          ${domain.workflowStates.filter((s) => s.teamId === issue.teamId)
+          ${(domain.workflowStates ?? []).filter((s) => s.teamId === issue.teamId)
             .map((s) => `<option value="${esc(s.id)}"${s.id === issue.stateId ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}
         </select></div>
       <div class="fg"><label for="f-assignee">Responsable</label>

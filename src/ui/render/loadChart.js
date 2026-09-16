@@ -11,7 +11,7 @@ const PAD = { l: 46, r: 12, t: 10, b: 22 };
 // plafond de charge en pointillés. C'est la seule vue qui montre d'un coup
 // d'œil où la charge dépasse la disponibilité, ce que le tableau par
 // personne (en dessous) ne montre que ligne par ligne.
-function buildChartSvg(load, people, ceiling) {
+export function buildChartSvg(load, people, ceiling) {
   const weeks = load.weeks ?? [];
   if (!weeks.length || !people.length) return '';
   const hoursByWeek = weeks.map((w) => people.reduce((s, p) => s + (load.people[p.id]?.find((r) => r.weekStart === w)?.hours ?? 0), 0));

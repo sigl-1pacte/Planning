@@ -274,7 +274,16 @@ th:first-child,td:first-child{padding-left:0}
 .undo-toast .btn{background:#fff;color:var(--ink);border:0}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.print-only{display:none}
 @media print{
+  .print-only{display:block}
+  .slide-chart,.page-slide{break-before:page}
+  .slide-chart h2{font-size:18px;margin:0 0 14px}
+  .slide-chart svg{width:100%;height:auto;max-height:70vh}
+  .cols.page-slide{padding-top:4mm}
+  .cols.page-slide .blk{margin-bottom:22px}
+  .cols.page-slide h3{font-size:15px}
+  .cols.page-slide table{font-size:12px}
   @page{size:A4 landscape;margin:10mm}
   html,body{background:#fff}
   .rail,.tip,.drw,.addb,.tw,.overlay,.banner,.undo-toast,.rsz,.jd{display:none!important}

@@ -7,6 +7,7 @@ import {
   createRowSink, renderAxis, renderGrid, renderGroups, renderDependencies,
 } from './render/board.js';
 import { renderLoadRows } from './render/loadRows.js';
+import { buildChartSvg } from './render/loadChart.js';
 import { summarize, renderFacts, renderPeopleTable, renderProjectsTable, renderLegend } from './render/tables.js';
 import { renderUnplannedTab } from './render/unplannedTab.js';
 import { esc, longDay } from './render/format.js';
@@ -85,7 +86,11 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
       </div>
       <div class="lg"></div>
       <section class="unp"></section>
-      <div class="cols">
+      <section class="slide-chart print-only">
+        <h2>Charge vs disponibilité ${esc(team ? `— ${team.name}` : '— toutes les teams')}</h2>
+        ${buildChartSvg(load, view.people, planning.settings.loadCeilingPct) || ''}
+      </section>
+      <div class="cols page-slide">
         <div class="blk"><h3>Répartition par personne</h3><div class="tbl"><table>
           <thead><tr><th>Personne</th><th class="r">Points</th><th class="r">Heures</th><th class="r">Sem. actives</th><th class="r">Heures / sem.</th><th class="r">Taux moyen</th><th class="r">Pic</th></tr></thead>
           <tbody data-people></tbody></table></div></div>

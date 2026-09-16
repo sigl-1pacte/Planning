@@ -36,6 +36,12 @@ describe('renderApp', () => {
     expect(root.querySelector('[data-zoom="all"]').classList.contains('on')).toBe(true);
   });
 
+  it('prépare des diapositives dédiées (charge, stats) pour l’impression, invisibles à l’écran', () => {
+    const { root } = draw();
+    expect(root.querySelector('.slide-chart svg')).not.toBeNull();
+    expect(root.querySelector('.cols.page-slide')).not.toBeNull();
+  });
+
   it('bascule sur l’onglet des tâches non planifiées', () => {
     const onPlan = () => {};
     const root = document.createElement('div');

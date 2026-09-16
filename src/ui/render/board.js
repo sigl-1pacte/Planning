@@ -11,6 +11,7 @@ const px = (n) => `${n}px`;
 export function createRowSink(leftRows, rightRows) {
   const sink = {
     top: 0,
+    rightRows,
     push(left, right, height) {
       leftRows.appendChild(left);
       rightRows.appendChild(right);
@@ -81,10 +82,6 @@ function renderProjectMilestones(right, project, axis) {
     if (!milestone.date) continue;
     const x = todayX(axis, milestone.date);
     if (x === null) continue;
-    const line = positioned('jl', x);
-    line.style.color = project.color;
-    line.dataset.milestone = milestone.id;
-    right.appendChild(line);
     const diamond = positioned('jd', x);
     diamond.style.color = project.color;
     diamond.dataset.milestone = milestone.id;
@@ -97,6 +94,26 @@ function renderProjectMilestones(right, project, axis) {
     if (x < axis.width - 180) label.style.left = px(x + 10);
     else label.style.right = px(axis.width - x + 10);
     right.append(diamond, label);
+  }
+}
+
+// Le repère (diamant + étiquette) vit dans la ligne du projet, mais le trait
+// pointillé qui le prolonge doit couvrir tout le bloc du projet (ses tâches
+// en dessous), pas seulement la hauteur de cette ligne-là — sinon on ne voit
+// plus, d'un coup d'œil, quelles tâches sont avant ou après le jalon. Posé
+// séparément dans le conteneur du plateau entier, sur la plage verticale
+// [top, top+height) occupée par le bloc.
+function renderProjectMilestoneLines(rightRows, project, axis, top, height) {
+  for (const milestone of project.milestones ?? []) {
+    if (!milestone.date) continue;
+    const x = todayX(axis, milestone.date);
+    if (x === null) continue;
+    const line = positioned('jl', x);
+    line.style.top = px(top);
+    line.style.height = px(height);
+    line.style.color = project.color;
+    line.dataset.milestone = milestone.id;
+    rightRows.appendChild(line);
   }
 }
 
@@ -189,20 +206,23 @@ export function renderGroups(sink, { view, axis, holidays, load, users, collapse
     }
 
     for (const block of blocks) {
+      const blockTop = sink.top;
       const open = !collapsed.has(block.key);
       renderProjectRow(sink, block, open, axis, group.team.id);
-      if (!open) continue;
-      for (const { issue, depth, parentId } of orderIssues(block.issues)) {
-        colorOf[issue.id] = block.project.color;
-        renderIssueRow(sink, issue, {
-          color: block.project.color,
-          status: issueStatus(issue, blocked),
-          axis, holidays, load, users,
-          selected: issue.id === selectedIssueId,
-          depth, parentId,
-        });
-        rowY[issue.id] = sink.top - 12;
+      if (open) {
+        for (const { issue, depth, parentId } of orderIssues(block.issues)) {
+          colorOf[issue.id] = block.project.color;
+          renderIssueRow(sink, issue, {
+            color: block.project.color,
+            status: issueStatus(issue, blocked),
+            axis, holidays, load, users,
+            selected: issue.id === selectedIssueId,
+            depth, parentId,
+          });
+          rowY[issue.id] = sink.top - 12;
+        }
       }
+      renderProjectMilestoneLines(sink.rightRows, block.project, axis, blockTop, sink.top - blockTop);
     }
   }
   const [addLeft, addRight] = rowPair('r tb add');

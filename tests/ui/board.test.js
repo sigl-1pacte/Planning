@@ -161,6 +161,10 @@ describe('board', () => {
     expect(diamonds[0].dataset.milestone).toBe('m-1');
     expect(d.rightRows.querySelector('.jl').dataset.milestone).toBe('m-1');
     expect(d.rightRows.querySelector('.jt').dataset.milestone).toBe('m-1');
+    // Le trait pointillé couvre tout le bloc du projet (sa ligne de titre et
+    // ses tâches en dessous), pas seulement la ligne de titre elle-même.
+    const line = d.rightRows.querySelector('.jl');
+    expect(parseFloat(line.style.height)).toBeGreaterThan(28);
   });
 
   it('relie les dépendances et signale un conflit en rouge pointillé', () => {

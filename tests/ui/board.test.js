@@ -85,6 +85,18 @@ describe('board', () => {
     expect(r.querySelector('.bl').textContent).toBe('8 j · 40 h');
   });
 
+  it('pose une poignée de redimensionnement à chaque vraie extrémité de la barre', () => {
+    const d = draw();
+    const r = d.row(d.rightRows, 'i-11');
+    const left = r.querySelector('.rsz-l');
+    const right = r.querySelector('.rsz-r');
+    expect(left.dataset.edge).toBe('start');
+    expect(right.dataset.edge).toBe('end');
+    // i-11 : 16/09 (index 2) → 25/09 (index 11), dayWidth 10px.
+    expect(left.style.left).toBe('17px'); // xOf(start) - 3
+    expect(right.style.left).toBe('117px'); // xOf(end) + dayWidth - 3
+  });
+
   it('couvre aussi les extrémités qui tombent un jour chômé, pas seulement l’entre-deux', () => {
     // barSegments ne couvre que les jours ouvrés : une tâche qui commence ou
     // finit un samedi/dimanche n'a aucun tronçon travaillé à cet endroit, et

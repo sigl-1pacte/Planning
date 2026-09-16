@@ -99,6 +99,8 @@ const issuePatchBody = {
     assigneeId: { type: ['string', 'null'] },
     estimate: { type: ['number', 'null'], minimum: 0 },
     stateId: { type: 'string', minLength: 1 },
+    start: { type: 'string' },
+    end: { type: 'string' },
   },
 };
 
@@ -264,7 +266,22 @@ export function buildApp({ db, store, validateKey, linear, staticDir = null, log
   }));
 
   app.put('/api/issues/:issueId', { schema: { body: issuePatchBody } }, async (req) => {
-    await linear.updateIssue(req.linearKey, req.params.issueId, req.body);
+    // start/end ici ne passent PAS par la cascade (contrairement à
+    // POST .../reschedule) : glisser un bord de barre ne modifie que cette
+    // date-là, sans décaler les dépendantes. start vit dans la description
+    // (comme ailleurs) ; end est directement le champ natif dueDate.
+    const patch = { ...req.body };
+    if ('start' in patch) {
+      const current = store.current();
+      const issue = current?.domain.issues.find((i) => i.id === req.params.issueId);
+      patch.description = setStartingDate(issue?.rawDescription ?? null, patch.start);
+      delete patch.start;
+    }
+    if ('end' in patch) {
+      patch.dueDate = patch.end;
+      delete patch.end;
+    }
+    await linear.updateIssue(req.linearKey, req.params.issueId, patch);
     const snap = await store.forceRefresh(req.linearKey);
     return { domain: snap.domain };
   });

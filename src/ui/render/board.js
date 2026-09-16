@@ -307,6 +307,19 @@ function renderIssueRow(sink, issue, { color, status, axis, holidays, load, user
     addGap(startX, endX - startX);
   }
 
+  // Poignées de redimensionnement aux deux vraies extrémités de l'issue
+  // (pas à chaque bout de segment coupé par un week-end) : glisser l'une
+  // d'elles ne change que cette date-là (pas de cascade côté début ; côté
+  // fin, les dépendantes en conflit sont réglées après coup).
+  const handleLeft = positioned('rsz rsz-l', startX - 3, 6);
+  handleLeft.dataset.resize = issue.id;
+  handleLeft.dataset.edge = 'start';
+  right.appendChild(handleLeft);
+  const handleRight = positioned('rsz rsz-r', endX - 3, 6);
+  handleRight.dataset.resize = issue.id;
+  handleRight.dataset.edge = 'end';
+  right.appendChild(handleRight);
+
   const label = document.createElement('div');
   label.className = 'bl';
   const barEnd = xOf(axis, issue.end) + axis.dayWidth;

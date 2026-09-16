@@ -137,6 +137,8 @@ svg.dep{position:absolute;left:0;top:0;overflow:visible;z-index:3;pointer-events
 .addb:hover{color:var(--ink);background:#EAF0F4}
 
 .bar{position:absolute;height:12px;top:6px;border-radius:2px;cursor:grab;touch-action:none}
+.rsz{position:absolute;top:6px;height:12px;width:6px;cursor:ew-resize;touch-action:none;z-index:3}
+.rsz:hover{background:rgba(16,29,40,.28);border-radius:2px}
 .dragging .bar{cursor:grabbing}
 .dragging .bar,.dragging .gp,.dragging .bl{transition:none}
 .dragging .drag-affected .bar{outline:2px dashed var(--doing);outline-offset:1px}

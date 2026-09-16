@@ -196,6 +196,15 @@ describe('écriture', () => {
     expect(res.json().domain.issues).toHaveLength(4);
   });
 
+  it('modifie le début (sans cascade) via la description, et l\'échéance via dueDate natif', async () => {
+    const res = await call('PUT', '/api/issues/i-11', { start: '2026-09-18', end: '2026-09-27' });
+    expect(res.statusCode).toBe(200);
+    expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-11', {
+      description: 'Starting date: 18/09/2026\nContributors: @sacha @louis',
+      dueDate: '2026-09-27',
+    });
+  });
+
   it('modifie le statut d\'une issue', async () => {
     const res = await call('PUT', '/api/issues/i-11', { stateId: 'st-iot-completed' });
     expect(res.statusCode).toBe(200);

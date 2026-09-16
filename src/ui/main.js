@@ -8,7 +8,7 @@ import { loadPrefs, savePrefs } from './prefs.js';
 import { parseRoute } from './router.js';
 import { renderApp, renderLoadError } from './app.js';
 import { scrollLeftForToday } from './render/layout.js';
-import { shortDay } from './render/format.js';
+import { shortDay, esc } from './render/format.js';
 import { todayISO, addDays } from '../shared/calendar.js';
 import { createUndo } from './undo.js';
 import { dayDeltaFromPixels, shiftedDates, transitiveDependents } from './dragReschedule.js';
@@ -28,7 +28,25 @@ let lastLoad = null;
 let lastPeople = null;
 let drag = null;
 let milestoneDrag = null;
+let resizeDrag = null;
 let suppressNextClick = false;
+const dragTip = document.getElementById('tip');
+
+// Petite bulle qui suit le curseur pendant un glisser-déposer (tâche, bord de
+// tâche ou jalon) : date(s) visées et delta en jours. #tip existe déjà dans
+// index.html (transition d'opacité déjà en place, cf. styles.css) mais
+// n'était utilisé nulle part ; on lui donne enfin un rôle.
+const deltaLabel = (n) => (n === 0 ? '' : ` (${n > 0 ? '+' : ''}${n} j)`);
+function showDragTip(html, x, y) {
+  if (!dragTip) return;
+  dragTip.innerHTML = html;
+  dragTip.style.left = `${x + 16}px`;
+  dragTip.style.top = `${y + 16}px`;
+  dragTip.style.opacity = '1';
+}
+function hideDragTip() {
+  if (dragTip) dragTip.style.opacity = '0';
+}
 
 if (!location.hash && prefs.lastRoute !== '#/') location.hash = prefs.lastRoute;
 
@@ -250,6 +268,21 @@ root.addEventListener('pointerdown', (event) => {
     event.preventDefault();
     return;
   }
+  const handle = event.target.closest('.rsz');
+  if (handle && lastAxis) {
+    const row = handle.closest('.r.tk');
+    const domain = controller.state.snapshot?.domain;
+    const issue = row && domain?.issues.find((i) => i.id === row.dataset.t);
+    if (!issue?.start || !issue.end) return;
+    resizeDrag = {
+      pointerId: event.pointerId, row, issueId: issue.id, identifier: issue.identifier, edge: handle.dataset.edge,
+      origStart: issue.start, origEnd: issue.end, startX: event.clientX, dayWidth: lastAxis.dayWidth, dayDelta: 0,
+    };
+    handle.setPointerCapture(event.pointerId);
+    root.classList.add('dragging');
+    event.preventDefault();
+    return;
+  }
   const bar = event.target.closest('.bar');
   if (!bar || !lastAxis) return;
   const row = bar.closest('.r.tk');
@@ -275,16 +308,28 @@ root.addEventListener('pointerdown', (event) => {
 root.addEventListener('pointermove', (event) => {
   if (milestoneDrag && event.pointerId === milestoneDrag.pointerId) {
     const dayDelta = dayDeltaFromPixels(event.clientX - milestoneDrag.startX, milestoneDrag.dayWidth);
+    const newDate = addDays(milestoneDrag.origDate, dayDelta);
+    showDragTip(`<b>${esc(milestoneDrag.name)}</b><br>${shortDay(newDate)}${deltaLabel(dayDelta)}`, event.clientX, event.clientY);
     if (dayDelta === milestoneDrag.dayDelta) return;
     milestoneDrag.dayDelta = dayDelta;
     const tx = `translateX(${dayDelta * milestoneDrag.dayWidth}px)`;
     for (const p of milestoneDrag.parts) p.style.transform = tx;
     const label = milestoneDrag.parts.find((p) => p.classList.contains('jt'));
-    if (label) label.textContent = `${milestoneDrag.name} · ${shortDay(addDays(milestoneDrag.origDate, dayDelta))}`;
+    if (label) label.textContent = `${milestoneDrag.name} · ${shortDay(newDate)}`;
+    return;
+  }
+  if (resizeDrag && event.pointerId === resizeDrag.pointerId) {
+    const dayDelta = dayDeltaFromPixels(event.clientX - resizeDrag.startX, resizeDrag.dayWidth);
+    const newDate = addDays(resizeDrag.edge === 'start' ? resizeDrag.origStart : resizeDrag.origEnd, dayDelta);
+    const fieldLabel = resizeDrag.edge === 'start' ? 'Début' : 'Échéance';
+    showDragTip(`<b>${esc(resizeDrag.identifier)}</b><br>${fieldLabel} : ${shortDay(newDate)}${deltaLabel(dayDelta)}`, event.clientX, event.clientY);
+    resizeDrag.dayDelta = dayDelta;
     return;
   }
   if (!drag || event.pointerId !== drag.pointerId) return;
   const dayDelta = dayDeltaFromPixels(event.clientX - drag.startX, drag.dayWidth);
+  const { start, end } = shiftedDates(drag.origStart, drag.origEnd, dayDelta);
+  showDragTip(`<b>${esc(drag.identifier)}</b><br>${shortDay(start)} → ${shortDay(end)}${deltaLabel(dayDelta)}`, event.clientX, event.clientY);
   if (dayDelta === drag.dayDelta) return;
   drag.dayDelta = dayDelta;
   const tx = `translateX(${dayDelta * drag.dayWidth}px)`;
@@ -292,10 +337,7 @@ root.addEventListener('pointermove', (event) => {
     r.querySelectorAll('.bar, .gp, .bl').forEach((el) => { el.style.transform = tx; });
   }
   const label = drag.row.querySelector('.bl');
-  if (label) {
-    const { start, end } = shiftedDates(drag.origStart, drag.origEnd, dayDelta);
-    label.textContent = dayDelta === 0 ? label.textContent : `${shortDay(start)} → ${shortDay(end)}`;
-  }
+  if (label) label.textContent = dayDelta === 0 ? label.textContent : `${shortDay(start)} → ${shortDay(end)}`;
 });
 
 // Réduit la feuille imprimée pour qu'elle tienne sur une seule page dans la
@@ -335,6 +377,7 @@ function fitSheetToOnePage() {
 function endDrag(commit) {
   if (!drag) return;
   root.classList.remove('dragging');
+  hideDragTip();
   for (const r of drag.affectedRows) r.classList.remove('drag-affected');
   const { issueId, identifier, origStart, origEnd, dayDelta } = drag;
   drag = null;
@@ -359,6 +402,7 @@ function endDrag(commit) {
 function endMilestoneDrag(commit) {
   if (!milestoneDrag) return;
   root.classList.remove('dragging');
+  hideDragTip();
   const { milestoneId, name, origDate, dayDelta } = milestoneDrag;
   milestoneDrag = null;
   if (dayDelta === 0) return;
@@ -377,8 +421,40 @@ function endMilestoneDrag(commit) {
   });
 }
 
-root.addEventListener('pointerup', () => { endDrag(true); endMilestoneDrag(true); });
-root.addEventListener('pointercancel', () => { endDrag(false); endMilestoneDrag(false); });
+// Glisser un bord de barre ne modifie que cette date-là (pas de cascade sur
+// le début, contrairement au déplacement complet de la barre) — sauf sur le
+// bord de fin : les dépendantes ne bougent pas automatiquement avec ce
+// mode-là, donc un conflit qu'il crée est résolu juste après, via la même
+// mécanique que le bouton « Résoudre les conflits » (sa propre annulation
+// indépendante, plutôt qu'une seule annulation combinée plus fragile).
+function endResizeDrag(commit) {
+  if (!resizeDrag) return;
+  root.classList.remove('dragging');
+  hideDragTip();
+  const { issueId, identifier, edge, origStart, origEnd, dayDelta } = resizeDrag;
+  resizeDrag = null;
+  if (dayDelta === 0) return;
+  if (!commit) { draw(); return; }
+  suppressNextClick = true;
+  setTimeout(() => { suppressNextClick = false; }, 0);
+  const field = edge === 'start' ? 'start' : 'end';
+  const newValue = addDays(edge === 'start' ? origStart : origEnd, dayDelta);
+  const origValue = edge === 'start' ? origStart : origEnd;
+  controller.mutate(async (api) => {
+    await applyWriteResult(api, await api.updateIssue(issueId, { [field]: newValue }));
+    undo.arm(`${identifier} : ${edge === 'start' ? 'début' : 'échéance'} modifié`, async (api2) => {
+      await applyWriteResult(api2, await api2.updateIssue(issueId, { [field]: origValue }));
+      draw();
+    });
+    draw();
+    return controller.state.planning;
+  }).then(() => {
+    if (edge === 'end') resolveConflictsInScope();
+  });
+}
+
+root.addEventListener('pointerup', () => { endDrag(true); endMilestoneDrag(true); endResizeDrag(true); });
+root.addEventListener('pointercancel', () => { endDrag(false); endMilestoneDrag(false); endResizeDrag(false); });
 
 root.addEventListener('change', (event) => {
   if (!event.target.matches('[data-zoom-range]')) return;

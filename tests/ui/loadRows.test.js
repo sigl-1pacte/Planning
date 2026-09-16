@@ -39,7 +39,6 @@ describe('renderLoadRows', () => {
   it('ajoute un bandeau puis une ligne par personne', () => {
     const d = draw();
     expect(d.left.querySelector('.r.band').textContent).toContain('Charge prévisionnelle par personne');
-    expect(d.right.querySelector('[data-action="load-chart"]')).not.toBeNull();
     expect([...d.left.querySelectorAll('.r.ld .who b')].map((e) => e.textContent)).toEqual(['Louis', 'Sacha']);
     expect(d.sink.top).toBe(30 + 34 * 2);
   });

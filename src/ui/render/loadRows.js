@@ -16,7 +16,6 @@ export function renderLoadRows(sink, { people, load, planning, axis, users, team
   const [bandLeft, bandRight] = rowPair('r band');
   bandLeft.innerHTML = `<span>Charge prévisionnelle ${teamScoped ? 'de la team' : 'par personne'}</span>
     <span class="n">heures de la semaine · taux d'occupation</span>`;
-  bandRight.innerHTML = '<button class="lcbtn" type="button" data-action="load-chart" title="Recommandations de charge et disponibilité">Reco</button>';
   sink.push(bandLeft, bandRight, 30);
 
   const ceiling = planning.settings.loadCeilingPct;

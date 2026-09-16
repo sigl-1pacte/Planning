@@ -90,17 +90,7 @@ svg.dep{position:absolute;left:0;top:0;overflow:visible;z-index:3;pointer-events
 .pl .r.tb a:hover{text-decoration:underline}
 .r.p{height:28px;background:#F2F5F7;border-bottom:1px solid var(--line);border-top:1px solid var(--line)}
 .r.band{height:30px;background:var(--ink);border:0}
-/* position:sticky (pas absolute) : .pr défile horizontalement (overflow-x:auto)
-   sur toute la largeur de la frise, donc un bouton en position absolute dans
-   la ligne de bandeau défilait avec le reste et sortait de l'écran dès qu'on
-   scrollait — sticky le garde ancré au bord droit du panneau visible. */
-.lcbtn{position:sticky;display:inline-block;top:3px;right:6px;height:24px;line-height:22px;
-  padding:0 9px;background:#1E303D;border:1px solid #35495B;border-radius:3px;color:#C9D7E0;
-  font-size:10.5px;font-weight:500;cursor:pointer;white-space:nowrap}
-.lcbtn:hover{background:#2A404F;color:#fff}
 .r.ld{height:34px}
-.r.jr{height:28px;background:#FAFCFD;border-bottom:1px solid var(--line)}
-.pl .r.jr{font-size:10px;color:var(--ink3)}
 .pl .r.tk:hover,.pl .r.tk.hi{background:#F3F8FA}
 .pr .r.tk:hover,.pr .r.tk.hi{background:rgba(224,235,241,.5)}
 .r.sel{box-shadow:inset 3px 0 0 var(--ink)}
@@ -261,6 +251,11 @@ th:first-child,td:first-child{padding-left:0}
   border-bottom:1px solid var(--line2);font-size:11.5px;line-height:1.5}
 .recorow span{flex:1}
 .recorow .btn{flex:0 0 auto}
+.recorow .kind{display:inline-block;background:#EDF2F5;color:var(--ink2);border-radius:3px;
+  padding:1px 6px;font-weight:600;font-size:10px;margin-right:4px}
+.chartwrap{background:#FAFCFD;border:1px solid var(--line);border-radius:4px;padding:8px 4px 0}
+.chsvg{width:100%;height:auto;display:block}
+.hint.warn{color:#8A4B0A}
 
 /* Pendant un glisser-déposer (tâche, bord, jalon) : ancrée en haut au centre
    de l'écran plutôt que suivre le curseur, sous l'entête (top:70px). Le fond

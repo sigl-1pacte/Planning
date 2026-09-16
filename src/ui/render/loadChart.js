@@ -1,34 +1,78 @@
-import { esc, ddmmyyyy, initials, personColor } from './format.js';
+import { esc, initials, personColor } from './format.js';
 import { personStats } from '../../shared/load.js';
-import { suggestReschedules, suggestContributorSwaps } from '../../shared/recommendations.js';
+import { buildRecommendations } from '../../shared/recommendations.js';
 
-// Popup « Charge vs disponibilité » : mène avec des recommandations
-// concrètes (ce qui apporte une vraie valeur au-delà du tableau de charge
-// déjà affiché sur le planning), suivies d'un résumé par personne. Les
-// suggestions de replanification respectent la marge réelle de chaque
-// tâche (chemin critique via shared/recommendations.js : jamais au prix
-// d'un dépassement d'échéance de projet ou d'une dépendante).
-export function renderLoadChart(container, { domain, load, people, users, ceiling, teamScoped, teamId }) {
-  const reschedules = suggestReschedules(domain, load, ceiling, { teamId });
-  const swaps = suggestContributorSwaps(domain, load, ceiling, { teamId });
+const CHART_W = 760;
+const CHART_H = 220;
+const PAD = { l: 46, r: 12, t: 10, b: 22 };
+
+// Graphe agrégé charge (heures réellement posées) vs disponibilité (heures
+// de capacité), semaine par semaine, sur le périmètre affiché — plus le
+// plafond de charge en pointillés. C'est la seule vue qui montre d'un coup
+// d'œil où la charge dépasse la disponibilité, ce que le tableau par
+// personne (en dessous) ne montre que ligne par ligne.
+function buildChartSvg(load, people, ceiling) {
+  const weeks = load.weeks ?? [];
+  if (!weeks.length || !people.length) return '';
+  const hoursByWeek = weeks.map((w) => people.reduce((s, p) => s + (load.people[p.id]?.find((r) => r.weekStart === w)?.hours ?? 0), 0));
+  const capByWeek = weeks.map((w) => people.reduce((s, p) => s + (load.people[p.id]?.find((r) => r.weekStart === w)?.capacity ?? 0), 0));
+  const max = Math.max(1, ...hoursByWeek, ...capByWeek);
+  const innerW = CHART_W - PAD.l - PAD.r;
+  const innerH = CHART_H - PAD.t - PAD.b;
+  const x = (i) => PAD.l + (weeks.length > 1 ? (i / (weeks.length - 1)) * innerW : innerW / 2);
+  const y = (v) => PAD.t + innerH - (v / max) * innerH;
+  const path = (values) => values.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const ceilingValues = capByWeek.map((c) => (c * ceiling) / 100);
+  const areaOver = weeks.map((_, i) => (hoursByWeek[i] > ceilingValues[i] ? y(hoursByWeek[i]) : y(ceilingValues[i])));
+  const ticks = weeks.map((w, i) => `<text x="${x(i).toFixed(1)}" y="${CHART_H - 4}" font-size="9" text-anchor="middle" fill="var(--ink3)">${esc(w.slice(5))}</text>`).join('');
+  const gridY = [0, 0.5, 1].map((f) => {
+    const val = max * f;
+    return `<line x1="${PAD.l}" x2="${CHART_W - PAD.r}" y1="${y(val).toFixed(1)}" y2="${y(val).toFixed(1)}" stroke="var(--line)" stroke-width="1"/>
+      <text x="${PAD.l - 6}" y="${(y(val) + 3).toFixed(1)}" font-size="9" text-anchor="end" fill="var(--ink3)">${Math.round(val)}</text>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${CHART_W} ${CHART_H}" class="chsvg">
+    ${gridY}
+    <path d="${path(capByWeek)}" fill="none" stroke="#8CA1B2" stroke-width="1.6"/>
+    <path d="${path(ceilingValues)} " fill="none" stroke="#B9700A" stroke-width="1.2" stroke-dasharray="3 3"/>
+    <path d="${path(hoursByWeek)}" fill="none" stroke="#2E5F8A" stroke-width="2"/>
+    ${ticks}
+    <g font-size="10">
+      <circle cx="${CHART_W - 220}" cy="10" r="4" fill="#2E5F8A"/><text x="${CHART_W - 212}" y="13">Charge posée</text>
+      <circle cx="${CHART_W - 130}" cy="10" r="4" fill="#8CA1B2"/><text x="${CHART_W - 122}" y="13">Disponibilité</text>
+      <circle cx="${CHART_W - 40}" cy="10" r="4" fill="#B9700A"/><text x="${CHART_W - 32}" y="13">Plafond</text>
+    </g>
+  </svg>`;
+}
+
+const KIND_LABEL = { stretch: 'Étaler', move: 'Décaler', rebalance: 'Rééquilibrer', capacity: 'Capacité' };
+
+// Popup « Charge vs disponibilité » : le graphe d'abord (vue d'ensemble),
+// puis des recommandations concrètes et actionnables. Chacune vient d'une
+// recherche gloutonne (shared/recommendations.js) qui simule réellement
+// l'effet de chaque action candidate sur la charge — pas une heuristique
+// non vérifiée — et est déjà classée du levier le moins intrusif (étaler
+// une tâche) au plus lourd (ajouter de la capacité, en dernier recours).
+export function renderLoadChart(container, { domain, planning, load, people, users, ceiling, teamScoped, teamId, range, onApply }) {
+  const { recommendations, overloadBefore, overloadAfter, stillOverloaded } = buildRecommendations(
+    domain, planning, load, ceiling, { teamId, range },
+  );
+  container._recommendations = recommendations;
+
+  const status = overloadBefore <= 0.01
+    ? '<p class="hint">Rien à signaler : personne ne dépasse le plafond de charge sur ce périmètre.</p>'
+    : recommendations.length
+      ? `<p class="hint">${Math.round(overloadBefore)} h en surcharge au total sur le périmètre affiché.${stillOverloaded ? ` En appliquant tout ce qui suit, il en resterait ${Math.round(overloadAfter)} h qu'aucune action mesurée ne réduit plus (marges épuisées).` : ' Ces actions suffisent à repasser sous le plafond partout.'}</p>`
+      : `<p class="hint warn">${Math.round(overloadBefore)} h en surcharge, mais aucune marge disponible (échéances de projet ou dépendantes) pour la résorber sans capacité supplémentaire ni retard réel.</p>`;
 
   container.innerHTML = `
-    <h3>Recommandations ${teamScoped ? 'pour la team' : 'sur le périmètre affiché'}</h3>
-    ${!reschedules.length && !swaps.length
-      ? '<p class="hint">Rien à signaler : personne ne dépasse le plafond de charge sur ce périmètre.</p>' : ''}
-    ${reschedules.map((r) => `<div class="recorow">
-      <span><b>${esc(r.identifier)}</b> · ${esc(r.title)} — la semaine du ${esc(ddmmyyyy(r.weekStart))} est en
-        surcharge ; ${esc(r.identifier)} a ${r.slackDays} j de marge avant sa propre échéance (ou celle qu'impose
-        une tâche qui en dépend). Décaler du ${esc(ddmmyyyy(r.currentStart))} au ${esc(ddmmyyyy(r.suggestedStart))}
-        désengorge cette semaine sans retard réel.</span>
-      <button class="btn" type="button" data-action="apply-reschedule"
-        data-issue="${esc(r.issueId)}" data-start="${esc(r.suggestedStart)}" data-end="${esc(r.suggestedEnd)}">Appliquer</button>
-    </div>`).join('')}
-    ${swaps.map((s) => `<div class="recorow">
-      <span><b>${esc(s.identifier)}</b> · ${esc(s.title)} — ${esc(s.fromName)} est en surcharge la semaine du
-        ${esc(ddmmyyyy(s.weekStart))} ; ${esc(s.toName)}, aussi contributeur·rice de cette tâche, a de la marge
-        cette semaine-là. Transférer une part de charge de ${esc(s.fromName)} vers ${esc(s.toName)} sur cette
-        tâche (à ajuster dans son panneau, répartition des contributeurs).</span>
+    <h3>Charge vs disponibilité ${teamScoped ? 'de la team' : 'sur le périmètre affiché'}</h3>
+    <div class="chartwrap">${buildChartSvg(load, people, ceiling) || '<p class="hint">Pas assez de données pour tracer le graphe.</p>'}</div>
+    <h3>Recommandations</h3>
+    ${status}
+    ${recommendations.map((r) => `<div class="recorow">
+      <span><span class="kind">${esc(KIND_LABEL[r.kind])}</span> ${esc(r.summary)} <b>(−${r.gainHours} h de surcharge)</b></span>
+      <button class="btn" type="button" data-action="apply-reco" data-reco="${r.id}">Appliquer</button>
     </div>`).join('')}
     <h3>Par personne</h3>
     <div class="tbl"><table>
@@ -43,4 +87,13 @@ export function renderLoadChart(container, { domain, load, people, users, ceilin
         </tr>`;
       }).join('')}</tbody>
     </table></div>`;
+
+  container.querySelectorAll('[data-action="apply-reco"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const reco = recommendations.find((r) => r.id === btn.dataset.reco);
+      if (!reco) return;
+      btn.disabled = true;
+      onApply(reco);
+    });
+  });
 }

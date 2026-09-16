@@ -531,14 +531,25 @@ function closeLoadChart() {
 // sans ça, la popup restait ouverte sur des chiffres périmés dès qu'une
 // disponibilité changeait ailleurs (réglages d'une personne, replanification…)
 // pendant qu'elle était affichée.
+function applyRecommendation(reco) {
+  controller.mutate(async (api) => {
+    await applyWriteResult(api, await reco.apply(api));
+    draw();
+    refreshLoadChart();
+    return controller.state.planning;
+  });
+}
+
 function refreshLoadChart() {
   const chart = document.querySelector('.chart-overlay [data-chart]');
-  if (!chart || !lastLoad) return;
+  if (!chart || !lastLoad || !lastAxis) return;
   renderLoadChart(chart, {
-    domain: controller.state.snapshot.domain, load: lastLoad, people: lastPeople,
+    domain: controller.state.snapshot.domain, planning: controller.state.planning,
+    load: lastLoad, people: lastPeople,
     users: controller.state.snapshot.domain.users,
     ceiling: controller.state.planning.settings.loadCeilingPct,
-    teamScoped: lastTeamId !== null, teamId: lastTeamId,
+    teamScoped: lastTeamId !== null, teamId: lastTeamId, range: lastAxis,
+    onApply: applyRecommendation,
   });
 }
 
@@ -554,20 +565,7 @@ function openLoadChart() {
   // popup doit survivre à un rafraîchissement de fond, donc sa propre
   // gestion de clic, indépendante du délégué de #app.
   overlay.addEventListener('click', (event) => {
-    if (event.target === overlay || event.target.closest('[data-action="close-chart"]')) {
-      closeLoadChart();
-      return;
-    }
-    const applyBtn = event.target.closest('[data-action="apply-reschedule"]');
-    if (!applyBtn) return;
-    const { issue, start, end } = applyBtn.dataset;
-    applyBtn.disabled = true;
-    controller.mutate(async (api) => {
-      await applyWriteResult(api, await api.reschedule(issue, { start, end }));
-      draw();
-      refreshLoadChart();
-      return controller.state.planning;
-    });
+    if (event.target === overlay || event.target.closest('[data-action="close-chart"]')) closeLoadChart();
   });
   document.body.appendChild(overlay);
   refreshLoadChart();

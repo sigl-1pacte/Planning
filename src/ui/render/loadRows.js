@@ -15,7 +15,8 @@ const pctText = (pct) => (Number.isFinite(pct) ? `${Math.round(pct)} %` : '∞')
 export function renderLoadRows(sink, { people, load, planning, axis, users, teamScoped }) {
   const [bandLeft, bandRight] = rowPair('r band');
   bandLeft.innerHTML = `<span>Charge prévisionnelle ${teamScoped ? 'de la team' : 'par personne'}</span>
-    <span class="n">heures de la semaine · taux d'occupation</span>`;
+    <span class="n">heures de la semaine · taux d'occupation</span>
+    <button class="btn" type="button" data-action="load-chart" title="Charge vs disponibilité, en graphique">📊 Graphique</button>`;
   sink.push(bandLeft, bandRight, 30);
 
   const ceiling = planning.settings.loadCeilingPct;

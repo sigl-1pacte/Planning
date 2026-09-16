@@ -13,6 +13,7 @@ import { todayISO } from '../shared/calendar.js';
 import { createUndo } from './undo.js';
 import { dayDeltaFromPixels, shiftedDates, transitiveDependents } from './dragReschedule.js';
 import { resolveConflicts } from './conflictResolution.js';
+import { renderLoadChart } from './render/loadChart.js';
 
 const api = createApi();
 const root = document.getElementById('app');
@@ -23,6 +24,8 @@ let printOverride = null;
 const undo = createUndo();
 let lastAxis = null;
 let lastTeamId = null;
+let lastLoad = null;
+let lastPeople = null;
 let drag = null;
 let suppressNextClick = false;
 
@@ -107,6 +110,8 @@ function draw() {
   });
   lastAxis = result.axis;
   lastTeamId = result.view.teamId;
+  lastLoad = result.load;
+  lastPeople = result.view.people;
   const pane = root.querySelector('.pr');
   pane.scrollLeft = recenter ? scrollLeftForToday(result.axis, today, pane.clientWidth) : previousScroll;
   recenter = false;
@@ -176,6 +181,8 @@ root.addEventListener('click', (event) => {
     undo.trigger();
   } else if (el('[data-action="resolve-conflicts"]')) {
     resolveConflictsInScope();
+  } else if (el('[data-action="load-chart"]')) {
+    openLoadChart();
   }
 });
 
@@ -338,9 +345,39 @@ window.addEventListener('resize', () => {
 
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
+    closeLoadChart();
     panels.close();
     draw();
   }
 });
+
+// Popup « Charge vs disponibilité », ouvert depuis le bouton du bandeau de
+// charge — construit à la volée (pas de squelette statique dans index.html)
+// à partir des mêmes données déjà calculées pour l'affichage courant
+// (team affichée ou workspace entier).
+function closeLoadChart() {
+  document.querySelector('.chart-overlay')?.remove();
+}
+
+function openLoadChart() {
+  if (document.querySelector('.chart-overlay') || !lastLoad) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay chart-overlay';
+  const box = document.createElement('div');
+  box.className = 'chartbox';
+  box.innerHTML = '<button class="x" type="button" data-action="close-chart" aria-label="Fermer">×</button><div data-chart></div>';
+  overlay.appendChild(box);
+  // En dehors de #app (qui est intégralement remplacé à chaque draw()) : la
+  // popup doit survivre à un rafraîchissement de fond, donc sa propre
+  // gestion de clic, indépendante du délégué de #app.
+  overlay.addEventListener('click', (event) => {
+    if (event.target === overlay || event.target.closest('[data-action="close-chart"]')) closeLoadChart();
+  });
+  document.body.appendChild(overlay);
+  renderLoadChart(box.querySelector('[data-chart]'), {
+    load: lastLoad, people: lastPeople, users: controller.state.snapshot.domain.users,
+    ceiling: controller.state.planning.settings.loadCeilingPct, teamScoped: lastTeamId !== null,
+  });
+}
 
 controller.start();

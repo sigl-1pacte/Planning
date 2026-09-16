@@ -184,9 +184,9 @@ root.addEventListener('click', (event) => {
     draw();
   } else if (el('[data-action="print"]')) {
     if (printOverride) return;
-    printOverride = { zoom: 'all', collapsed: [] };
+    printOverride = { zoom: 'month', collapsed: [] };
     draw();
-    fitSheetToOnePage();
+    fitSheetToPageWidth();
     const restore = () => {
       const sheet = root.querySelector('.sheet');
       if (sheet) sheet.style.zoom = '';
@@ -392,19 +392,24 @@ root.addEventListener('pointermove', (event) => {
 // reflow réellement l'élément à la taille réduite, ce qui est indispensable
 // ici. Si zoom n'a aucun effet sur un navigateur donné, l'impression reste
 // simplement sur plusieurs pages comme avant — aucune régression possible.
-const PRINT_PAGE_MM = { width: 210, height: 297, margin: 8 };
-const MIN_PRINT_SCALE = 0.4;
+// Page A4 paysage (bien plus adaptée à un planning large qu'un portrait) :
+// on ne réduit que la largeur pour qu'elle tienne sur une page, jamais la
+// hauteur — la lecture papier n'a pas besoin d'une seule page, elle a besoin
+// de texte lisible. Le zoom d'écran est fixé à 'mois' avant l'impression
+// (voir data-action="print") pour partir d'une densité déjà raisonnable :
+// ce réglage ne fait qu'ajuster la marge qu'il reste à rattraper.
+const PRINT_PAGE_MM = { width: 297, margin: 10 };
+const MIN_PRINT_SCALE = 0.72;
 
-function fitSheetToOnePage() {
+function fitSheetToPageWidth() {
   const sheet = root.querySelector('.sheet');
   if (!sheet) return;
   sheet.style.zoom = '';
   const pxPerMm = 96 / 25.4;
   const maxWidth = (PRINT_PAGE_MM.width - 2 * PRINT_PAGE_MM.margin) * pxPerMm;
-  const maxHeight = (PRINT_PAGE_MM.height - 2 * PRINT_PAGE_MM.margin) * pxPerMm;
   const rect = sheet.getBoundingClientRect();
-  if (!rect.width || !rect.height) return;
-  const scale = Math.max(MIN_PRINT_SCALE, Math.min(1, maxWidth / rect.width, maxHeight / rect.height));
+  if (!rect.width) return;
+  const scale = Math.max(MIN_PRINT_SCALE, Math.min(1, maxWidth / rect.width));
   if (scale < 1) sheet.style.zoom = String(scale);
 }
 

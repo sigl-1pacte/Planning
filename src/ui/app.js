@@ -48,7 +48,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
 
   root.innerHTML = `
     <div class="rail"><div class="in">
-      <div><h1>Planning — ${esc(team ? team.name : 'toutes les teams')}</h1>
+      <div><h1>1PACTE Planning Dashboard — ${esc(team ? team.name : 'toutes les teams')}</h1>
         <div class="sb">${longDay(axis.from)} → ${longDay(axis.to)}</div></div>
       <nav class="nav">
         <a href="#/" class="${route.view === 'global' ? 'on' : ''}">Vue globale</a>

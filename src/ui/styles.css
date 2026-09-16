@@ -275,11 +275,17 @@ th:first-child,td:first-child{padding-left:0}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{
-  @page{size:A4 portrait;margin:8mm}
+  @page{size:A4 landscape;margin:10mm}
   html,body{background:#fff}
-  .rail,.tip,.drw,.addb,.tw,.overlay,.banner,.undo-toast{display:none!important}
+  .rail,.tip,.drw,.addb,.tw,.overlay,.banner,.undo-toast,.rsz,.jd{display:none!important}
   .sheet{width:auto;max-width:none;margin:0;padding:0;box-shadow:none}
   .pr{overflow:visible!important}
   .cols,.lg,.unp{break-inside:avoid}
+  /* Lecture papier statique : pas besoin de coller au pixel près à l'écran,
+     mais du texte lisible sans zoomer un PDF sur un vidéoprojecteur. */
+  .pl .id,.pr .bl,.pl .nmw,.r.p .pn{font-size:12px}
+  .pl .pill{font-size:10px}
+  h1{font-size:19px}
+  .sheet h2{font-size:16px}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }

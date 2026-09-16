@@ -57,7 +57,7 @@ describe('renderApp', () => {
   it('restreint la page à une team', () => {
     const { root } = draw({ route: { view: 'team', teamKey: 'IOT' } });
     expect(root.querySelector('.nav a.on').textContent).toBe('IOT');
-    expect(root.querySelector('h1').textContent).toBe('Planning — IoT');
+    expect(root.querySelector('h1').textContent).toBe('1PACTE Planning Dashboard — IoT');
     expect(root.querySelector('.r.band').textContent).toContain('de la team');
   });
 

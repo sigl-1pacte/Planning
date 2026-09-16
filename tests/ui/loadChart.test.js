@@ -23,14 +23,15 @@ function draw(teamScoped = false, teamId = null) {
 }
 
 describe('renderLoadChart', () => {
-  it('dessine une barre par semaine avec disponibilité et charge', () => {
+  it('dessine un point par semaine sur une ligne continue, avec l’aire de disponibilité', () => {
     const container = draw();
-    const bars = container.querySelectorAll('.lcbar');
-    expect(bars.length).toBeGreaterThan(0);
-    const first = bars[0];
-    expect(first.querySelector('.lccap')).not.toBeNull();
-    expect(first.querySelector('.lcload')).not.toBeNull();
-    expect(first.title).toMatch(/h chargées.*h disponibles/);
+    const svg = container.querySelector('.lcsvg');
+    expect(svg).not.toBeNull();
+    expect(svg.querySelector('polygon')).not.toBeNull();
+    expect(svg.querySelector('path')).not.toBeNull();
+    const dots = svg.querySelectorAll('circle');
+    expect(dots.length).toBeGreaterThan(0);
+    expect(dots[0].querySelector('title').textContent).toMatch(/h chargées.*h disponibles/);
   });
 
   it('résume chaque personne (total, pic, moyenne)', () => {
@@ -51,7 +52,7 @@ describe('renderLoadChart', () => {
     const axis = createAxis({ from: '2026-09-14', to: '2026-09-21' }, 10);
     const load = computeLoad(domain, planning, { range: axis, teamId: null });
     renderLoadChart(container, { load, people: [], users: domain.users, ceiling: 80, teamScoped: false });
-    expect(container.querySelectorAll('.lcbar')).toHaveLength(0);
+    expect(container.querySelectorAll('.lcsvg')).toHaveLength(0);
     expect(container.querySelectorAll('tbody tr')).toHaveLength(0);
   });
 });

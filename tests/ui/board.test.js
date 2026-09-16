@@ -64,6 +64,15 @@ describe('board', () => {
     expect(noProjectBtn.dataset.project).toBe('');
   });
 
+  it('la ligne d’un vrai projet ouvre son panneau, pas celle de "Sans projet"', () => {
+    const d = draw();
+    const rows = [...d.leftRows.querySelectorAll('.r.p')];
+    const real = rows.find((r) => r.querySelector('.pn').textContent === 'Réalisation POC v1');
+    const none = rows.find((r) => r.querySelector('.pn').textContent === 'Sans projet');
+    expect(real.dataset.openProject).toBe('p-poc1');
+    expect(none.dataset.openProject).toBeUndefined();
+  });
+
   it('propose d’ajouter une team, à la toute fin de la liste', () => {
     const d = draw();
     const rows = [...d.leftRows.children];

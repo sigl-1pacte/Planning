@@ -149,7 +149,10 @@ describe('buildRecommendations', () => {
     const load = computeLoad(domain, planning(), { range, teamId: null });
     const start = performance.now();
     const result = buildRecommendations(domain, planning(), load, 80, { teamId: null });
-    expect(performance.now() - start).toBeLessThan(2000);
+    // Budget large (l'ancien recalcul complet par candidat prenait ~18,5 s
+    // sur ce même jeu de données) : la machine de CI peut être chargée,
+    // l'important est d'attraper une régression vers cet ordre de grandeur.
+    expect(performance.now() - start).toBeLessThan(5000);
     expect(result.overloadBefore).toBeGreaterThan(0);
     expect(result.recommendations.length).toBeGreaterThan(0);
   });

@@ -23,7 +23,11 @@ export function buildChartSvg(load, people, ceiling) {
   const y = (v) => PAD.t + innerH - (v / max) * innerH;
   const path = (values) => values.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
   const ceilingValues = capByWeek.map((c) => (c * ceiling) / 100);
-  const areaOver = weeks.map((_, i) => (hoursByWeek[i] > ceilingValues[i] ? y(hoursByWeek[i]) : y(ceilingValues[i])));
+  // Points rouges sur les semaines où la charge posée dépasse le plafond :
+  // le repère le plus direct pour voir "où ça déborde" sans faire le calcul
+  // mentalement à partir des trois courbes.
+  const overDots = weeks.map((_, i) => (hoursByWeek[i] > ceilingValues[i]
+    ? `<circle cx="${x(i).toFixed(1)}" cy="${y(hoursByWeek[i]).toFixed(1)}" r="3.2" fill="#B23A3A"/>` : '')).join('');
   const ticks = weeks.map((w, i) => `<text x="${x(i).toFixed(1)}" y="${CHART_H - 4}" font-size="9" text-anchor="middle" fill="var(--ink3)">${esc(w.slice(5))}</text>`).join('');
   const gridY = [0, 0.5, 1].map((f) => {
     const val = max * f;
@@ -31,11 +35,12 @@ export function buildChartSvg(load, people, ceiling) {
       <text x="${PAD.l - 6}" y="${(y(val) + 3).toFixed(1)}" font-size="9" text-anchor="end" fill="var(--ink3)">${Math.round(val)}</text>`;
   }).join('');
 
-  return `<svg viewBox="0 0 ${CHART_W} ${CHART_H}" class="chsvg">
+  return `<svg viewBox="0 0 ${CHART_W} ${CHART_H}" width="${CHART_W}" height="${CHART_H}" class="chsvg">
     ${gridY}
     <path d="${path(capByWeek)}" fill="none" stroke="#8CA1B2" stroke-width="1.6"/>
     <path d="${path(ceilingValues)} " fill="none" stroke="#B9700A" stroke-width="1.2" stroke-dasharray="3 3"/>
     <path d="${path(hoursByWeek)}" fill="none" stroke="#2E5F8A" stroke-width="2"/>
+    ${overDots}
     ${ticks}
     <g font-size="10">
       <circle cx="${CHART_W - 220}" cy="10" r="4" fill="#2E5F8A"/><text x="${CHART_W - 212}" y="13">Charge posée</text>

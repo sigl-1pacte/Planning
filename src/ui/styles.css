@@ -90,6 +90,8 @@ svg.dep{position:absolute;left:0;top:0;overflow:visible;z-index:3;pointer-events
 .pl .r.tb a{color:inherit;text-decoration:none}
 .pl .r.tb a:hover{text-decoration:underline}
 .r.p{height:28px;background:#F2F5F7;border-bottom:1px solid var(--line);border-top:1px solid var(--line)}
+.pl .r.p[data-open-project]{cursor:pointer}
+.pl .r.p[data-open-project]:hover .pn{text-decoration:underline}
 .r.band{height:30px;background:var(--ink);border:0}
 .r.ld{height:34px}
 .pl .r.tk:hover,.pl .r.tk.hi{background:#F3F8FA}

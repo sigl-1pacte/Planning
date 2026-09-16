@@ -204,6 +204,9 @@ root.addEventListener('click', (event) => {
     const btn = el('[data-action="add-project"]');
     panels.openProject(null, { teamId: btn.dataset.team });
     draw();
+  } else if (el('[data-open-project]')) {
+    panels.openProject(el('[data-open-project]').dataset.openProject);
+    draw();
   } else if (el('[data-action="undo"]')) {
     undo.trigger();
   } else if (el('[data-action="resolve-conflicts"]')) {

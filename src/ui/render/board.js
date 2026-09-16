@@ -237,9 +237,10 @@ function renderProjectRow(sink, { key, project, issues }, open, axis, teamId) {
   const pct = points ? Math.round((done / points) * 100) : 0;
   const color = esc(project.color);
   const [left, right] = rowPair(`r p${open ? ' op' : ''}`);
+  if (project.id) { left.dataset.openProject = project.id; right.dataset.openProject = project.id; }
   left.innerHTML = `<span class="tw" data-tog="${esc(key)}">${CARET}</span>
     <span class="sw" style="background:${color}"></span>
-    <span class="pn" title="${esc(project.name)}">${esc(project.name)}</span>
+    <span class="pn" title="${project.id ? `Cliquer pour modifier ${esc(project.name)}` : esc(project.name)}">${esc(project.name)}</span>
     <span class="pbar" title="${pct} % des points terminés"><i style="width:${pct}%;background:${color}"></i></span>
     <span class="pm">${issues.length} tâches · ${points} pts · ${pct} %</span>
     <button class="addb" type="button" data-action="add-task" data-team="${esc(teamId)}" data-project="${esc(project.id ?? '')}">+ tâche</button>`;

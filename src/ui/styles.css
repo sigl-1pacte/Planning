@@ -82,6 +82,7 @@ button,select,input{font-family:inherit;font-size:inherit;color:inherit}
 svg.dep{position:absolute;left:0;top:0;overflow:visible;z-index:3;pointer-events:none}
 
 .r{height:24px;position:relative;border-bottom:1px solid var(--line2)}
+.r.tk{transition:background .1s}
 .pl .r{display:flex;align-items:center;gap:6px;padding:0 10px 0 12px}
 .r.tb{height:30px;background:#E4EBF0;border-top:2px solid var(--ink);border-bottom:1px solid var(--line)}
 .r.tb.add{background:transparent;border-top:1px dashed var(--line);border-bottom:0}
@@ -231,7 +232,11 @@ th:first-child,td:first-child{padding-left:0}
 .soon{background:#EEF3F6;border-left:3px solid var(--ink3);padding:7px 9px;font-size:10.5px;color:var(--ink2);margin-bottom:12px}
 
 /* écran de clé */
-.overlay{position:fixed;inset:0;z-index:100;background:rgba(16,29,40,.62);display:flex;align-items:center;justify-content:center;padding:16px}
+@keyframes overlayIn{from{opacity:0}to{opacity:1}}
+@keyframes boxIn{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}
+.overlay{position:fixed;inset:0;z-index:100;background:rgba(16,29,40,.62);display:flex;align-items:center;justify-content:center;padding:16px;
+  animation:overlayIn .14s ease}
+.overlay>*{animation:boxIn .16s ease}
 .keybox{background:#fff;width:440px;max-width:100%;padding:22px 24px;border-radius:4px;box-shadow:0 12px 40px rgba(8,18,26,.35)}
 .keybox h2{margin:0 0 6px;font-size:18px}
 .keybox label{display:block;font-size:10.5px;color:var(--ink3);margin:10px 0 4px}
@@ -268,12 +273,13 @@ th:first-child,td:first-child{padding-left:0}
   box-shadow:0 8px 22px rgba(8,18,26,.3);line-height:1.55}
 .tip b{color:#fff}.tip s{color:#93A8B8;text-decoration:none}
 
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
 .undo-toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:80;
   background:var(--ink);color:#fff;padding:10px 14px;border-radius:4px;display:flex;gap:12px;
-  align-items:center;box-shadow:0 8px 22px rgba(8,18,26,.3);font-size:12px}
+  align-items:center;box-shadow:0 8px 22px rgba(8,18,26,.3);font-size:12px;animation:toastIn .18s ease}
 .undo-toast .btn{background:#fff;color:var(--ink);border:0}
 
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 .print-only{display:none}
 @media print{
   .print-only{display:block}

@@ -283,18 +283,20 @@ root.addEventListener('pointerdown', (event) => {
     // cet aperçu n'a besoin que de reproduire ce qui est déjà à l'écran.
     const sampleBar = row.querySelector('.bar');
     const isBlocked = sampleBar?.classList.contains('block') ?? false;
-    // Glisser la fin peut créer un conflit chez les dépendantes : prévisualisées
-    // en mouvement, comme pour le déplacement complet de la barre.
+    // Glisser la fin déplace aussi les dépendantes transitives, du même
+    // delta, qu'on raccourcisse (elles se rapprochent) ou qu'on allonge
+    // (elles reculent) — prévisualisées en mouvement, comme pour le
+    // déplacement complet de la barre.
     const rightRows = [...root.querySelectorAll('[data-right] .r.tk')];
     const rowById = new Map(rightRows.map((el) => [el.dataset.t, el]));
-    const affectedRows = handle.dataset.edge === 'end'
-      ? transitiveDependents(domain.issues, issue.id).map((id) => rowById.get(id)).filter(Boolean) : [];
+    const affectedIds = handle.dataset.edge === 'end' ? transitiveDependents(domain.issues, issue.id) : [];
+    const affectedRows = affectedIds.map((id) => rowById.get(id)).filter(Boolean);
     resizeDrag = {
       pointerId: event.pointerId, row, issueId: issue.id, identifier: issue.identifier, edge: handle.dataset.edge,
       issueStatus: issue.status, barColor: sampleBar?.style.backgroundColor || '', isBlocked,
       holidays: new Set(controller.state.planning.holidays.map((h) => h.day)),
       origStart: issue.start, origEnd: issue.end, startX: event.clientX, dayWidth: lastAxis.dayWidth, dayDelta: 0,
-      affectedRows,
+      affectedIds, affectedRows,
     };
     for (const r of affectedRows) r.classList.add('drag-affected');
     handle.setPointerCapture(event.pointerId);
@@ -460,18 +462,21 @@ function endMilestoneDrag(commit) {
   });
 }
 
-// Glisser un bord de barre ne modifie que cette date-là (pas de cascade sur
-// le début, contrairement au déplacement complet de la barre) — sauf sur le
-// bord de fin : les dépendantes ne bougent pas automatiquement avec ce
-// mode-là, donc un conflit qu'il crée est résolu juste après, via la même
-// mécanique que le bouton « Résoudre les conflits » (sa propre annulation
+// Glisser un bord de barre ne modifie que cette date-là pour l'issue
+// elle-même (pas de cascade côté serveur, contrairement au déplacement
+// complet de la barre) — mais sur le bord de fin, les dépendantes
+// transitives sont explicitement décalées du même delta ici (raccourcir
+// les rapproche, allonger les repousse), pour rejouer côté serveur ce que
+// l'aperçu montrait déjà pendant le glisser. resolveConflictsInScope()
+// tourne quand même après coup, en filet de sécurité pour un conflit que
+// ce décalage uniforme n'aurait pas suffi à résoudre (sa propre annulation
 // indépendante, plutôt qu'une seule annulation combinée plus fragile).
 function endResizeDrag(commit) {
   if (!resizeDrag) return;
   root.classList.remove('dragging');
   hideDragTip();
   for (const r of resizeDrag.affectedRows) r.classList.remove('drag-affected');
-  const { issueId, identifier, edge, origStart, origEnd, dayDelta } = resizeDrag;
+  const { issueId, identifier, edge, origStart, origEnd, dayDelta, affectedIds } = resizeDrag;
   resizeDrag = null;
   if (dayDelta === 0) return;
   if (!commit) { draw(); return; }
@@ -480,10 +485,20 @@ function endResizeDrag(commit) {
   const field = edge === 'start' ? 'start' : 'end';
   const newValue = addDays(edge === 'start' ? origStart : origEnd, dayDelta);
   const origValue = edge === 'start' ? origStart : origEnd;
+  const domain = controller.state.snapshot.domain;
+  const shifts = edge === 'end' ? affectedIds
+    .map((id) => domain.issues.find((i) => i.id === id))
+    .filter((dep) => dep?.start && dep.end)
+    .map((dep) => ({
+      id: dep.id, origStart: dep.start, origEnd: dep.end,
+      newStart: addDays(dep.start, dayDelta), newEnd: addDays(dep.end, dayDelta),
+    })) : [];
   controller.mutate(async (api) => {
     await applyWriteResult(api, await api.updateIssue(issueId, { [field]: newValue }));
+    for (const s of shifts) await applyWriteResult(api, await api.updateIssue(s.id, { start: s.newStart, end: s.newEnd }));
     undo.arm(`${identifier} : ${edge === 'start' ? 'début' : 'échéance'} modifié`, async (api2) => {
       await applyWriteResult(api2, await api2.updateIssue(issueId, { [field]: origValue }));
+      for (const s of shifts) await applyWriteResult(api2, await api2.updateIssue(s.id, { start: s.origStart, end: s.origEnd }));
       draw();
     });
     draw();

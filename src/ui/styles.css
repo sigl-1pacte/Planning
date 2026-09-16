@@ -145,7 +145,8 @@ svg.dep{position:absolute;left:0;top:0;overflow:visible;z-index:3;pointer-events
 
 .jl{position:absolute;top:0;bottom:0;width:0;border-left:1.5px dashed currentColor;opacity:.5;z-index:2}
 .jd{position:absolute;top:8px;width:11px;height:11px;margin-left:-5.5px;transform:rotate(45deg);
-  background:#fff;border:2px solid currentColor;z-index:4}
+  background:#fff;border:2px solid currentColor;z-index:4;cursor:grab;touch-action:none}
+.dragging .jd{cursor:grabbing}
 .jt{position:absolute;top:7px;font-size:10px;font-weight:600;white-space:nowrap;z-index:4}
 
 .ini{width:26px;flex:0 0 26px;color:#fff;text-align:center;font-size:9.5px;font-weight:600;border-radius:3px;padding:2px 0}

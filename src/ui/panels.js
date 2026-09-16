@@ -55,6 +55,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     else if (current.kind === 'person') drawPerson(current.id);
     else if (current.kind === 'proj') drawProj(current.id, current.seed);
     else if (current.kind === 'team') drawNewTeam();
+    else if (current.kind === 'milestone') drawMilestone(current.id);
     else drawSettings();
   }
 
@@ -264,6 +265,36 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     });
   }
 
+  function drawMilestone(milestoneId) {
+    const { domain } = ctx;
+    let project = null;
+    let milestone = null;
+    for (const p of domain.projects) {
+      const m = p.milestones.find((mm) => mm.id === milestoneId);
+      if (m) { project = p; milestone = m; break; }
+    }
+    if (!milestone) {
+      title.textContent = 'Jalon introuvable';
+      body.innerHTML = '<p class="warn">Ce jalon ne figure plus dans l\'instantané Linear.</p>';
+      return;
+    }
+    title.textContent = milestone.name;
+    body.innerHTML = `
+      ${ro('Projet', project.name)}
+      <div class="fg"><label for="f-mdate">Date</label><div class="dfield">
+        <input id="f-mdate" type="date" data-field="mdate" value="${milestone.date ?? ''}">
+        <span class="dovl">${milestone.date ? ddmmyyyy(milestone.date) : ''}</span></div></div>`;
+    body.querySelector('[data-field="mdate"]').addEventListener('change', (e) => {
+      const value = e.target.value;
+      if (!value) return;
+      onWrite(
+        (api) => api.updateMilestone(milestoneId, value),
+        `Jalon « ${milestone.name} » déplacé`,
+        (api) => api.updateMilestone(milestoneId, milestone.date),
+      );
+    });
+  }
+
   function drawProj(projectId, seed) {
     if (projectId === null) return drawNewProject(seed ?? {});
     const { domain } = ctx;
@@ -465,6 +496,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     openPerson: (id) => open({ kind: 'person', id }),
     openSettings: () => open({ kind: 'settings' }),
     openTeam: () => open({ kind: 'team' }),
+    openMilestone: (id) => open({ kind: 'milestone', id }),
     close,
     update,
     selectedIssueId: () => (current?.kind === 'issue' ? current.id : null),

@@ -9,7 +9,7 @@ import { parseRoute } from './router.js';
 import { renderApp, renderLoadError } from './app.js';
 import { scrollLeftForToday } from './render/layout.js';
 import { shortDay } from './render/format.js';
-import { todayISO } from '../shared/calendar.js';
+import { todayISO, addDays } from '../shared/calendar.js';
 import { createUndo } from './undo.js';
 import { dayDeltaFromPixels, shiftedDates, transitiveDependents } from './dragReschedule.js';
 import { resolveConflicts } from './conflictResolution.js';
@@ -27,6 +27,7 @@ let lastTeamId = null;
 let lastLoad = null;
 let lastPeople = null;
 let drag = null;
+let milestoneDrag = null;
 let suppressNextClick = false;
 
 if (!location.hash && prefs.lastRoute !== '#/') location.hash = prefs.lastRoute;
@@ -145,6 +146,9 @@ root.addEventListener('click', (event) => {
     draw();
   } else if (el('[data-person]')) {
     panels.openPerson(el('[data-person]').dataset.person);
+  } else if (el('[data-milestone]')) {
+    panels.openMilestone(el('[data-milestone]').dataset.milestone);
+    draw();
   } else if (el('[data-zoom]')) {
     recenter = true;
     setPrefs({ zoom: el('[data-zoom]').dataset.zoom, dayWidth: null });
@@ -225,6 +229,26 @@ function resolveConflictsInScope() {
 // panneau) reprend la main.
 root.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
+  const diamond = event.target.closest('.jd');
+  if (diamond && lastAxis) {
+    const domain = controller.state.snapshot?.domain;
+    let project = null;
+    let milestone = null;
+    for (const p of domain?.projects ?? []) {
+      const m = p.milestones.find((mm) => mm.id === diamond.dataset.milestone);
+      if (m) { project = p; milestone = m; break; }
+    }
+    if (!milestone) return;
+    const parts = [...root.querySelectorAll(`[data-milestone="${milestone.id}"]`)];
+    milestoneDrag = {
+      pointerId: event.pointerId, parts, milestoneId: milestone.id, name: milestone.name,
+      origDate: milestone.date, startX: event.clientX, dayWidth: lastAxis.dayWidth, dayDelta: 0,
+    };
+    diamond.setPointerCapture(event.pointerId);
+    root.classList.add('dragging');
+    event.preventDefault();
+    return;
+  }
   const bar = event.target.closest('.bar');
   if (!bar || !lastAxis) return;
   const row = bar.closest('.r.tk');
@@ -248,6 +272,16 @@ root.addEventListener('pointerdown', (event) => {
 });
 
 root.addEventListener('pointermove', (event) => {
+  if (milestoneDrag && event.pointerId === milestoneDrag.pointerId) {
+    const dayDelta = dayDeltaFromPixels(event.clientX - milestoneDrag.startX, milestoneDrag.dayWidth);
+    if (dayDelta === milestoneDrag.dayDelta) return;
+    milestoneDrag.dayDelta = dayDelta;
+    const tx = `translateX(${dayDelta * milestoneDrag.dayWidth}px)`;
+    for (const p of milestoneDrag.parts) p.style.transform = tx;
+    const label = milestoneDrag.parts.find((p) => p.classList.contains('jt'));
+    if (label) label.textContent = `${milestoneDrag.name} · ${shortDay(addDays(milestoneDrag.origDate, dayDelta))}`;
+    return;
+  }
   if (!drag || event.pointerId !== drag.pointerId) return;
   const dayDelta = dayDeltaFromPixels(event.clientX - drag.startX, drag.dayWidth);
   if (dayDelta === drag.dayDelta) return;
@@ -321,8 +355,29 @@ function endDrag(commit) {
   });
 }
 
-root.addEventListener('pointerup', () => endDrag(true));
-root.addEventListener('pointercancel', () => endDrag(false));
+function endMilestoneDrag(commit) {
+  if (!milestoneDrag) return;
+  root.classList.remove('dragging');
+  const { milestoneId, name, origDate, dayDelta } = milestoneDrag;
+  milestoneDrag = null;
+  if (dayDelta === 0) return;
+  if (!commit) { draw(); return; }
+  suppressNextClick = true;
+  setTimeout(() => { suppressNextClick = false; }, 0);
+  const newDate = addDays(origDate, dayDelta);
+  controller.mutate(async (api) => {
+    await applyWriteResult(api, await api.updateMilestone(milestoneId, newDate));
+    undo.arm(`Jalon « ${name} » déplacé`, async (api2) => {
+      await applyWriteResult(api2, await api2.updateMilestone(milestoneId, origDate));
+      draw();
+    });
+    draw();
+    return controller.state.planning;
+  });
+}
+
+root.addEventListener('pointerup', () => { endDrag(true); endMilestoneDrag(true); });
+root.addEventListener('pointercancel', () => { endDrag(false); endMilestoneDrag(false); });
 
 root.addEventListener('change', (event) => {
   if (!event.target.matches('[data-zoom-range]')) return;

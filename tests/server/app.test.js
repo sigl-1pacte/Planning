@@ -37,6 +37,7 @@ beforeEach(async () => {
     updateProject: vi.fn(async () => ({})),
     createProject: vi.fn(async () => ({ id: 'p-new' })),
     createTeam: vi.fn(async () => ({})),
+    updateMilestone: vi.fn(async () => ({})),
     addComment: vi.fn(async () => {}),
     subscribeToIssue: vi.fn(async () => {}),
   };
@@ -289,5 +290,11 @@ describe('écriture', () => {
     const created = await call('POST', '/api/projects', { teamIds: ['t-iot'], name: 'X' });
     expect(created.json().projectId).toBe('p-new');
     expect((await call('POST', '/api/teams', { key: 'NEW', name: 'Nouvelle team' })).statusCode).toBe(200);
+  });
+
+  it('modifie la date d\'un jalon', async () => {
+    const res = await call('PUT', '/api/milestones/m-1', { targetDate: '2026-11-12' });
+    expect(res.statusCode).toBe(200);
+    expect(linear.updateMilestone).toHaveBeenCalledWith('good', 'm-1', { targetDate: '2026-11-12' });
   });
 });

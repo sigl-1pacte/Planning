@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   MUTATIONS, updateIssue, createIssue, issueBlockers, addBlocker, removeBlocker,
-  updateProject, createProject, createTeam, addComment, subscribeToIssue,
+  updateProject, createProject, createTeam, addComment, subscribeToIssue, updateMilestone,
 } from '../../../src/server/linear/mutations.js';
 import { fakeFetch, jsonResponse } from '../../helpers/fakeFetch.js';
 
@@ -75,5 +75,17 @@ describe('mutations', () => {
   it('signale un refus d\'abonnement', async () => {
     const f = fakeFetch([jsonResponse({ data: { issueSubscribe: { success: false } } })]);
     await expect(subscribeToIssue('k', 'i1', 'u1', { fetchImpl: f })).rejects.toThrow('Linear a refusé l\'abonnement');
+  });
+
+  it('modifie la date d\'un jalon', async () => {
+    const f = fakeFetch([jsonResponse({ data: { projectMilestoneUpdate: { success: true, projectMilestone: { id: 'm1', name: 'X', targetDate: '2026-11-05' } } } })]);
+    const milestone = await updateMilestone('k', 'm1', { targetDate: '2026-11-05' }, { fetchImpl: f });
+    expect(milestone.targetDate).toBe('2026-11-05');
+    expect(f.calls[0].body.variables).toEqual({ id: 'm1', input: { targetDate: '2026-11-05' } });
+  });
+
+  it('signale un refus de modification de jalon', async () => {
+    const f = fakeFetch([jsonResponse({ data: { projectMilestoneUpdate: { success: false, projectMilestone: null } } })]);
+    await expect(updateMilestone('k', 'm1', { targetDate: '2026-11-05' }, { fetchImpl: f })).rejects.toThrow('Linear a refusé la modification du jalon');
   });
 });

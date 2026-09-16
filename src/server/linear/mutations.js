@@ -44,9 +44,13 @@ const ISSUE_SUBSCRIBE = `mutation IssueSubscribe($id: String!, $userId: String) 
   issueSubscribe(id: $id, userId: $userId) { success }
 }`;
 
+const MILESTONE_UPDATE = `mutation ProjectMilestoneUpdate($id: String!, $input: ProjectMilestoneUpdateInput!) {
+  projectMilestoneUpdate(id: $id, input: $input) { success projectMilestone { id name targetDate } }
+}`;
+
 export const MUTATIONS = [
   ISSUE_UPDATE, ISSUE_CREATE, ISSUE_RELATION_CREATE, ISSUE_RELATION_DELETE,
-  PROJECT_UPDATE, PROJECT_CREATE, TEAM_CREATE, COMMENT_CREATE, ISSUE_SUBSCRIBE,
+  PROJECT_UPDATE, PROJECT_CREATE, TEAM_CREATE, COMMENT_CREATE, ISSUE_SUBSCRIBE, MILESTONE_UPDATE,
 ];
 
 export async function updateIssue(key, issueId, input, opts) {
@@ -109,4 +113,10 @@ export async function addComment(key, issueId, body, opts) {
 export async function subscribeToIssue(key, issueId, userId, opts) {
   const data = await gql(key, ISSUE_SUBSCRIBE, { id: issueId, userId }, opts);
   if (!data.issueSubscribe.success) throw new Error('Linear a refusé l\'abonnement');
+}
+
+export async function updateMilestone(key, milestoneId, input, opts) {
+  const data = await gql(key, MILESTONE_UPDATE, { id: milestoneId, input }, opts);
+  if (!data.projectMilestoneUpdate.success) throw new Error('Linear a refusé la modification du jalon');
+  return data.projectMilestoneUpdate.projectMilestone;
 }

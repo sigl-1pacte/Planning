@@ -86,12 +86,16 @@ export function renderMilestones(sink, rightRows, projects, axis) {
       if (x === null) continue;
       const line = positioned('jl', x);
       line.style.color = project.color;
+      line.dataset.milestone = milestone.id;
       rightRows.appendChild(line);
       const diamond = positioned('jd', x);
       diamond.style.color = project.color;
+      diamond.dataset.milestone = milestone.id;
+      diamond.title = `${milestone.name} · ${shortDay(milestone.date)} — cliquer ou glisser pour déplacer`;
       const label = document.createElement('div');
       label.className = 'jt';
       label.style.color = project.color;
+      label.dataset.milestone = milestone.id;
       label.textContent = `${milestone.name} · ${shortDay(milestone.date)}`;
       if (x < axis.width - 180) label.style.left = px(x + 10);
       else label.style.right = px(axis.width - x + 10);

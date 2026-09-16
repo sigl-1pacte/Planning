@@ -12,7 +12,7 @@ import {
 } from './linear/queries.js';
 import {
   updateIssue, createIssue, issueBlockers, addBlocker, removeBlocker,
-  updateProject, createProject, createTeam, addComment, subscribeToIssue,
+  updateProject, createProject, createTeam, addComment, subscribeToIssue, updateMilestone,
 } from './linear/mutations.js';
 
 const { DATABASE_URL, PORT = '3000', LOG_LEVEL = 'info' } = process.env;
@@ -64,7 +64,7 @@ const app = buildApp({
   validateKey: createKeyValidator({ fetchViewer: (key) => fetchViewer(key) }),
   linear: {
     updateIssue, createIssue, issueBlockers, addBlocker, removeBlocker,
-    updateProject, createProject, createTeam, addComment, subscribeToIssue,
+    updateProject, createProject, createTeam, addComment, subscribeToIssue, updateMilestone,
   },
   staticDir: existsSync(staticPath) ? staticPath : null,
   logger: { level: LOG_LEVEL, redact: ['req.headers["x-linear-key"]'] },

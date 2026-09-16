@@ -47,7 +47,7 @@ function setup(ctx = context()) {
     updateProject: vi.fn(async () => ({})),
     createProject: vi.fn(async () => ({})),
     createTeam: vi.fn(async () => ({})),
-    createTeam: vi.fn(async () => ({})),
+    updateMilestone: vi.fn(async () => ({})),
   };
   const onMutate = vi.fn((call) => call(api));
   const onWrite = vi.fn((call) => call(api));
@@ -278,6 +278,22 @@ describe('création', () => {
     t.body.querySelector('[data-action="create-team"]').click();
     expect(t.api.createTeam).not.toHaveBeenCalled();
     expect(t.body.querySelector('[data-error]').hidden).toBe(false);
+  });
+
+  it('ouvre un panneau de jalon et modifie sa date', async () => {
+    const t = setup();
+    t.panels.openMilestone('m-1');
+    expect(t.title.textContent).toBe('Objet construit');
+    expect(t.body.querySelector('[data-field="mdate"]').value).toBe('2026-11-05');
+    change(t.body.querySelector('[data-field="mdate"]'), '2026-11-12');
+    await flush();
+    expect(t.api.updateMilestone).toHaveBeenCalledWith('m-1', '2026-11-12');
+  });
+
+  it('signale un jalon disparu', () => {
+    const t = setup();
+    t.panels.openMilestone('m-inconnu');
+    expect(t.body.textContent).toContain('ne figure plus');
   });
 });
 

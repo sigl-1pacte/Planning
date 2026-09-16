@@ -147,6 +147,13 @@ const projectPatchBody = {
   },
 };
 
+const milestoneBody = {
+  type: 'object',
+  required: ['targetDate'],
+  additionalProperties: false,
+  properties: { targetDate: { type: 'string' } },
+};
+
 const projectCreateBody = {
   type: 'object',
   required: ['teamIds', 'name'],
@@ -344,6 +351,12 @@ export function buildApp({ db, store, validateKey, linear, staticDir = null, log
 
   app.put('/api/projects/:projectId', { schema: { body: projectPatchBody } }, async (req) => {
     await linear.updateProject(req.linearKey, req.params.projectId, req.body);
+    const snap = await store.forceRefresh(req.linearKey);
+    return { domain: snap.domain };
+  });
+
+  app.put('/api/milestones/:milestoneId', { schema: { body: milestoneBody } }, async (req) => {
+    await linear.updateMilestone(req.linearKey, req.params.milestoneId, { targetDate: req.body.targetDate });
     const snap = await store.forceRefresh(req.linearKey);
     return { domain: snap.domain };
   });

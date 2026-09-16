@@ -123,6 +123,9 @@ describe('board', () => {
     expect(diamonds[0].style.left).toBe('525px');
     expect(d.rightRows.querySelector('.jt').textContent).toBe('Objet construit · 5/11');
     expect(d.rightRows.querySelectorAll('.jl')).toHaveLength(1);
+    expect(diamonds[0].dataset.milestone).toBe('m-1');
+    expect(d.rightRows.querySelector('.jl').dataset.milestone).toBe('m-1');
+    expect(d.rightRows.querySelector('.jt').dataset.milestone).toBe('m-1');
   });
 
   it('relie les dépendances et signale un conflit en rouge pointillé', () => {

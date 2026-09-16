@@ -130,6 +130,7 @@ function draw() {
   } else if (toast) {
     toast.remove();
   }
+  refreshLoadChart();
 }
 
 root.addEventListener('click', (event) => {
@@ -414,6 +415,22 @@ function closeLoadChart() {
   document.querySelector('.chart-overlay')?.remove();
 }
 
+// Rejoue le rendu avec les données les plus fraîches (lastLoad/lastPeople,
+// recalculées à chaque draw()) plutôt qu'un instantané figé à l'ouverture :
+// sans ça, la popup restait ouverte sur des chiffres périmés dès qu'une
+// disponibilité changeait ailleurs (réglages d'une personne, replanification…)
+// pendant qu'elle était affichée.
+function refreshLoadChart() {
+  const chart = document.querySelector('.chart-overlay [data-chart]');
+  if (!chart || !lastLoad) return;
+  renderLoadChart(chart, {
+    domain: controller.state.snapshot.domain, load: lastLoad, people: lastPeople,
+    users: controller.state.snapshot.domain.users,
+    ceiling: controller.state.planning.settings.loadCeilingPct,
+    teamScoped: lastTeamId !== null, teamId: lastTeamId,
+  });
+}
+
 function openLoadChart() {
   if (document.querySelector('.chart-overlay') || !lastLoad) return;
   const overlay = document.createElement('div');
@@ -426,13 +443,23 @@ function openLoadChart() {
   // popup doit survivre à un rafraîchissement de fond, donc sa propre
   // gestion de clic, indépendante du délégué de #app.
   overlay.addEventListener('click', (event) => {
-    if (event.target === overlay || event.target.closest('[data-action="close-chart"]')) closeLoadChart();
+    if (event.target === overlay || event.target.closest('[data-action="close-chart"]')) {
+      closeLoadChart();
+      return;
+    }
+    const applyBtn = event.target.closest('[data-action="apply-reschedule"]');
+    if (!applyBtn) return;
+    const { issue, start, end } = applyBtn.dataset;
+    applyBtn.disabled = true;
+    controller.mutate(async (api) => {
+      await applyWriteResult(api, await api.reschedule(issue, { start, end }));
+      draw();
+      refreshLoadChart();
+      return controller.state.planning;
+    });
   });
   document.body.appendChild(overlay);
-  renderLoadChart(box.querySelector('[data-chart]'), {
-    load: lastLoad, people: lastPeople, users: controller.state.snapshot.domain.users,
-    ceiling: controller.state.planning.settings.loadCeilingPct, teamScoped: lastTeamId !== null,
-  });
+  refreshLoadChart();
 }
 
 controller.start();

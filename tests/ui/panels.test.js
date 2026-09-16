@@ -84,8 +84,8 @@ describe('panneau de tâche', () => {
     // suit la locale du navigateur (souvent pas DD/MM/YYYY en anglais).
     expect(t.body.querySelector('[data-field="start"]').nextElementSibling.textContent).toBe('16/09/2026');
     expect(t.body.querySelector('[data-field="end"]').nextElementSibling.textContent).toBe('25/09/2026');
-    const depsSelected = [...t.body.querySelector('[data-field="deps"]').selectedOptions].map((o) => o.value);
-    expect(depsSelected).toEqual([]);
+    const depsChecked = [...t.body.querySelectorAll('[data-field="deps"] input:checked')].map((i) => i.value);
+    expect(depsChecked).toEqual([]);
     const contribChecked = [...t.body.querySelectorAll('[data-field="contributors"] input:checked')].map((i) => i.value);
     expect(contribChecked).toEqual(['u-louis', 'u-sacha']);
     expect(t.body.querySelector('.soon')).toBeNull();
@@ -216,11 +216,12 @@ describe('champs éditables', () => {
   it('modifie les dépendances', async () => {
     const t = setup();
     t.panels.openIssue('i-12');
-    const select = t.body.querySelector('[data-field="deps"]');
-    [...select.options].forEach((o) => { o.selected = o.value === 'i-20'; });
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    const box = [...t.body.querySelectorAll('[data-field="deps"] input')].find((i) => i.value === 'i-20');
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
     await flush();
-    expect(t.api.setDependencies).toHaveBeenCalledWith('i-12', ['i-20']);
+    // i-12 dépend déjà de i-11 (fixture) : cocher i-20 en plus doit garder i-11.
+    expect(t.api.setDependencies).toHaveBeenCalledWith('i-12', ['i-11', 'i-20']);
   });
 
   it('affiche la team et le projet de la tâche', () => {

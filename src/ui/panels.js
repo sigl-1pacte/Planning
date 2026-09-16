@@ -142,10 +142,13 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       </div>
       ${issue.unplannedReason ? `<p class="hint">${esc(issue.unplannedReason)}</p>` : ''}
       <div class="actions"><button class="btn pri" type="button" data-action="reschedule">Replanifier</button></div>
-      <div class="fg"><label for="f-deps">Bloquée par</label>
-        <select id="f-deps" data-field="deps" multiple size="6">
-          ${otherIssues.map((x) => `<option value="${esc(x.id)}"${issue.blockedBy.includes(x.id) ? ' selected' : ''}>${esc(x.identifier)} · ${esc(x.title)}</option>`).join('')}
-        </select></div>
+      <div class="fg"><label>Bloquée par</label>
+        <div class="chklist" data-field="deps">
+          ${otherIssues.map((x) => `<label class="chkrow">
+            <input type="checkbox" value="${esc(x.id)}"${issue.blockedBy.includes(x.id) ? ' checked' : ''}>
+            <span>${esc(x.identifier)} · ${esc(x.title)}</span>
+          </label>`).join('')}
+        </div></div>
       <div class="fg"><label>Contributeurs</label>
         <div class="chklist" data-field="contributors">
           ${domain.users.map((u) => `<label class="chkrow">
@@ -187,7 +190,8 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       );
     });
     body.querySelector('[data-field="deps"]').addEventListener('change', (e) => {
-      const blockedBy = [...e.target.selectedOptions].map((o) => o.value);
+      if (e.target.type !== 'checkbox') return;
+      const blockedBy = [...body.querySelectorAll('[data-field="deps"] input:checked')].map((i) => i.value);
       onWrite((api) => api.setDependencies(issue.id, blockedBy), `Dépendances de ${issue.identifier} modifiées`, (api) => api.setDependencies(issue.id, issue.blockedBy));
     });
     body.querySelector('[data-field="contributors"]').addEventListener('change', (e) => {

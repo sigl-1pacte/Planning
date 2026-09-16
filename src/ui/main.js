@@ -577,14 +577,22 @@ function refreshLoadChart() {
   setTimeout(() => {
     const stillThere = document.querySelector('.chart-overlay [data-chart]');
     if (!stillThere) return;
-    renderLoadChart(stillThere, {
-      domain: controller.state.snapshot.domain, planning: controller.state.planning,
-      load: lastLoad, people: lastPeople,
-      users: controller.state.snapshot.domain.users,
-      ceiling: controller.state.planning.settings.loadCeilingPct,
-      teamScoped: lastTeamId !== null, teamId: lastTeamId,
-      onApply: applyRecommendation,
-    });
+    try {
+      renderLoadChart(stillThere, {
+        domain: controller.state.snapshot.domain, planning: controller.state.planning,
+        load: lastLoad, people: lastPeople,
+        users: controller.state.snapshot.domain.users,
+        ceiling: controller.state.planning.settings.loadCeilingPct,
+        teamScoped: lastTeamId !== null, teamId: lastTeamId,
+        onApply: applyRecommendation,
+      });
+    } catch (err) {
+      // Ne jamais rester bloqué sur "Calcul…" en silence : si quoi que ce
+      // soit casse ici (donnée Linear inattendue...), on le montre plutôt
+      // que de laisser la popup indéfiniment vide sans explication.
+      console.error('Échec du calcul des recommandations :', err);
+      stillThere.innerHTML = `<p class="hint warn">Le calcul des recommandations a échoué : ${esc(err.message)}. Voir la console pour le détail.</p>`;
+    }
   }, 0);
 }
 

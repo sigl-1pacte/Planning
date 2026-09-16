@@ -191,7 +191,7 @@ export function renderGroups(sink, { view, axis, holidays, load, users, collapse
     const [teamLeft, teamRight] = rowPair('r tb');
     teamLeft.innerHTML = `<a href="#/team/${encodeURIComponent(group.team.key)}">${esc(group.team.name)}</a>
       <span class="pm">${esc(group.team.key)}</span>
-      <button class="addb" type="button" data-action="add-project" data-team="${esc(group.team.id)}">+ projet</button>`;
+      <button class="addb" type="button" data-action="add-project" data-team="${esc(group.team.id)}">Ajouter un projet</button>`;
     sink.push(teamLeft, teamRight, 30);
 
     const blocks = group.projects.map((p) => ({
@@ -226,7 +226,7 @@ export function renderGroups(sink, { view, axis, holidays, load, users, collapse
     }
   }
   const [addLeft, addRight] = rowPair('r tb add');
-  addLeft.innerHTML = '<button class="addb" type="button" data-action="add-team">+ team</button>';
+  addLeft.innerHTML = '<button class="addb" type="button" data-action="add-team">Ajouter une team</button>';
   sink.push(addLeft, addRight, 30);
   return { rowY, colorOf };
 }
@@ -243,7 +243,7 @@ function renderProjectRow(sink, { key, project, issues }, open, axis, teamId) {
     <span class="pn" title="${project.id ? `Cliquer pour modifier ${esc(project.name)}` : esc(project.name)}">${esc(project.name)}</span>
     <span class="pbar" title="${pct} % des points terminés"><i style="width:${pct}%;background:${color}"></i></span>
     <span class="pm">${issues.length} tâches · ${points} pts · ${pct} %</span>
-    <button class="addb" type="button" data-action="add-task" data-team="${esc(teamId)}" data-project="${esc(project.id ?? '')}">+ tâche</button>`;
+    <button class="addb" type="button" data-action="add-task" data-team="${esc(teamId)}" data-project="${esc(project.id ?? '')}">Ajouter une tâche</button>`;
   if (project.startDate && project.targetDate) {
     const start = xOf(axis, project.startDate);
     const band = positioned('pband', start, Math.max(2, xOf(axis, project.targetDate) + axis.dayWidth - start));

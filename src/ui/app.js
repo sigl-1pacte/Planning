@@ -98,7 +98,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
           <thead><tr><th>Projet</th><th>Période</th><th class="r">Tâches</th><th class="r">Points</th><th class="r">Heures</th><th class="r">Terminé</th><th>Jalons</th></tr></thead>
           <tbody data-projects></tbody></table></div></div>
       </div>
-      <div class="ft"><span>Planning connecté à Linear · lecture seule</span><span>Édition du ${longDay(today)}</span></div>
+      <div class="ft"><span>Planning connecté à Linear · lecture et écriture</span><span>Édition du ${longDay(today)}</span></div>
     </section>`;
 
   if (route.tab === 'unplanned') {

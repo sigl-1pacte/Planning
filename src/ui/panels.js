@@ -310,14 +310,49 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       <div class="fg"><label for="f-pname">Nom du projet</label>
         <input id="f-pname" data-field="pname" value="${esc(project.name)}"></div>
       ${ro('Teams', teamNames.join(', ') || 'aucune')}
-      ${ro('Début', project.startDate ? longDay(project.startDate) : '—')}
-      ${ro('Échéance', project.targetDate ? longDay(project.targetDate) : '—')}
+      <div class="f2">
+        <div class="fg"><label for="f-pstart">Début</label><div class="dfield">
+          <input id="f-pstart" type="date" data-field="pstart" value="${project.startDate ?? ''}">
+          <span class="dovl">${project.startDate ? ddmmyyyy(project.startDate) : ''}</span></div></div>
+        <div class="fg"><label for="f-ptarget">Échéance</label><div class="dfield">
+          <input id="f-ptarget" type="date" data-field="ptarget" value="${project.targetDate ?? ''}">
+          <span class="dovl">${project.targetDate ? ddmmyyyy(project.targetDate) : ''}</span></div></div>
+      </div>
+      <div class="fg"><label for="f-pcolor">Couleur</label>
+        <input id="f-pcolor" type="color" data-field="pcolor" value="${esc(project.color)}"></div>
       ${project.milestones.length ? `<div class="sec">Jalons</div>${project.milestones.map((m) => ro(m.name, m.date ? longDay(m.date) : '—')).join('')}` : ''}`;
     body.querySelector('[data-field="pname"]').addEventListener('blur', (e) => {
       const value = e.target.value.trim();
       if (value && value !== project.name) {
         onWrite((api) => api.updateProject(project.id, { name: value }), `Nom du projet ${project.name} modifié`, (api) => api.updateProject(project.id, { name: project.name }));
       }
+    });
+    body.querySelector('[data-field="pstart"]').addEventListener('change', (e) => {
+      const value = e.target.value;
+      if (!value || value === project.startDate) return;
+      onWrite(
+        (api) => api.updateProject(project.id, { startDate: value }),
+        `Début du projet ${project.name} modifié`,
+        (api) => api.updateProject(project.id, { startDate: project.startDate ?? '' }),
+      );
+    });
+    body.querySelector('[data-field="ptarget"]').addEventListener('change', (e) => {
+      const value = e.target.value;
+      if (!value || value === project.targetDate) return;
+      onWrite(
+        (api) => api.updateProject(project.id, { targetDate: value }),
+        `Échéance du projet ${project.name} modifiée`,
+        (api) => api.updateProject(project.id, { targetDate: project.targetDate ?? '' }),
+      );
+    });
+    body.querySelector('[data-field="pcolor"]').addEventListener('change', (e) => {
+      const value = e.target.value;
+      if (!value || value === project.color) return;
+      onWrite(
+        (api) => api.updateProject(project.id, { color: value }),
+        `Couleur du projet ${project.name} modifiée`,
+        (api) => api.updateProject(project.id, { color: project.color }),
+      );
     });
   }
 

@@ -301,6 +301,12 @@ describe('écriture', () => {
     expect((await call('POST', '/api/teams', { key: 'NEW', name: 'Nouvelle team' })).statusCode).toBe(200);
   });
 
+  it('modifie les dates et la couleur d\'un projet', async () => {
+    const res = await call('PUT', '/api/projects/p-poc1', { startDate: '2026-09-20', targetDate: '2026-11-20', color: '#ff0000' });
+    expect(res.statusCode).toBe(200);
+    expect(linear.updateProject).toHaveBeenCalledWith('good', 'p-poc1', { startDate: '2026-09-20', targetDate: '2026-11-20', color: '#ff0000' });
+  });
+
   it('modifie la date d\'un jalon', async () => {
     const res = await call('PUT', '/api/milestones/m-1', { targetDate: '2026-11-12' });
     expect(res.statusCode).toBe(200);

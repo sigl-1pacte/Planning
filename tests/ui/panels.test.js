@@ -252,6 +252,20 @@ describe('création', () => {
     expect(t.onWrite.mock.calls[0][1]).toMatch(/créée/);
   });
 
+  it('permet de modifier les dates et la couleur d’un projet existant', async () => {
+    const t = setup();
+    t.panels.openProject('p-poc1');
+    change(t.body.querySelector('[data-field="pstart"]'), '2026-09-20');
+    await flush();
+    expect(t.api.updateProject).toHaveBeenCalledWith('p-poc1', { startDate: '2026-09-20' });
+    change(t.body.querySelector('[data-field="ptarget"]'), '2026-11-20');
+    await flush();
+    expect(t.api.updateProject).toHaveBeenCalledWith('p-poc1', { targetDate: '2026-11-20' });
+    change(t.body.querySelector('[data-field="pcolor"]'), '#ff0000');
+    await flush();
+    expect(t.api.updateProject).toHaveBeenCalledWith('p-poc1', { color: '#ff0000' });
+  });
+
   it('ouvre un panneau de projet vide, préchoisit la team demandée et le crée', async () => {
     const t = setup();
     t.panels.openProject(null, { teamId: 't-web' });

@@ -195,6 +195,13 @@ describe('board', () => {
     expect(d.axisEl.querySelector('.mo').firstElementChild.textContent).toBe('septembre 2026');
   });
 
+  it('ouvre son propre panneau depuis n’importe quel point de la ligne', () => {
+    const d = draw();
+    const parentRow = d.row(d.leftRows, 'i-11');
+    expect(parentRow.dataset.open).toBe('i-11');
+    expect(d.row(d.rightRows, 'i-11').dataset.open).toBe('i-11');
+  });
+
   it('imbrique une sous-issue directement sous sa parente, avec un contour cliquable', () => {
     const d = draw();
     const parentRow = d.row(d.leftRows, 'i-11');
@@ -258,9 +265,10 @@ describe('board', () => {
     const idx21 = order.indexOf('i-21');
     const idx20 = order.indexOf('i-20');
     expect(idx20).toBe(idx21 + 1);
-    // Pas de rattachement visuel : ce n'est pas une sous-issue.
+    // Pas de rattachement visuel : ce n'est pas une sous-issue, la ligne
+    // ouvre donc sa propre issue (comme toute ligne racine).
     expect(d.row(d.leftRows, 'i-20').classList.contains('sub')).toBe(false);
-    expect(d.row(d.leftRows, 'i-20').dataset.open).toBeUndefined();
+    expect(d.row(d.leftRows, 'i-20').dataset.open).toBe('i-20');
   });
 
   it(`ne rattache pas une sous-issue dont la parente n'est pas dans le même bloc`, () => {
@@ -268,7 +276,7 @@ describe('board', () => {
     // i-20 est dans un autre projet/équipe : i-12 reste au niveau racine.
     const childRow = d.row(d.leftRows, 'i-12');
     expect(childRow.classList.contains('sub')).toBe(false);
-    expect(childRow.dataset.open).toBeUndefined();
+    expect(childRow.dataset.open).toBe('i-12');
   });
 
   it('échappe les textes venus de Linear', () => {

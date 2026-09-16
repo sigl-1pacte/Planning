@@ -305,6 +305,11 @@ function renderIssueRow(sink, issue, { color, status, axis, holidays, load, user
   const [left, right] = rowPair(`r tk${issue.status === 'canceled' ? ' cx' : ''}${selected ? ' sel' : ''}${depth > 0 ? ' sub' : ''}`);
   left.dataset.t = issue.id;
   right.dataset.t = issue.id;
+  // Toute la ligne ouvre le panneau de l'issue, pas seulement le badge
+  // équipe : le data-open le plus proche l'emporte (closest), donc un
+  // élément interne avec son propre data-open (ex. la barre) prime toujours.
+  left.dataset.open = issue.id;
+  right.dataset.open = issue.id;
   if (parentId) {
     // Contour de sous-issue : cliquer la zone vide de la ligne ouvre l'issue
     // parente ; les éléments internes (badge équipe, barre) gardent leur

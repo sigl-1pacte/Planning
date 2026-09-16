@@ -65,6 +65,10 @@ const controller = createController({ api, render: draw, showKeyScreen: showKey 
 // ET après son annulation, puisque l'annulation est elle-même une écriture.
 async function applyWriteResult(api, result) {
   if (result?.domain) controller.state.snapshot = { ...controller.state.snapshot, domain: result.domain };
+  // Le nouveau domaine (dates, statut, jalons...) est déjà là : on l'affiche
+  // tout de suite plutôt que d'attendre le second aller-retour réseau
+  // (/api/planning) qui ne concerne que les parts/capacités dérivées.
+  draw();
   controller.state.planning = await api.planning();
 }
 

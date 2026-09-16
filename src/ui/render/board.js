@@ -210,6 +210,9 @@ export function renderGroups(sink, { view, axis, holidays, load, users, collapse
       }
     }
   }
+  const [addLeft, addRight] = rowPair('r tb add');
+  addLeft.innerHTML = '<button class="addb" type="button" data-action="add-team">+ team</button>';
+  sink.push(addLeft, addRight, 30);
   return { rowY, colorOf };
 }
 

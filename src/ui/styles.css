@@ -84,6 +84,7 @@ svg.dep{position:absolute;left:0;top:0;overflow:visible;z-index:3;pointer-events
 .r{height:24px;position:relative;border-bottom:1px solid var(--line2)}
 .pl .r{display:flex;align-items:center;gap:6px;padding:0 10px 0 12px}
 .r.tb{height:30px;background:#E4EBF0;border-top:2px solid var(--ink);border-bottom:1px solid var(--line)}
+.r.tb.add{background:transparent;border-top:1px dashed var(--line);border-bottom:0}
 .pl .r.tb{font-family:"IBM Plex Sans Condensed";font-size:14px;font-weight:600}
 .pl .r.tb a{color:inherit;text-decoration:none}
 .pl .r.tb a:hover{text-decoration:underline}

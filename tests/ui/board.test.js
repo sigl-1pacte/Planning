@@ -46,7 +46,7 @@ describe('board', () => {
     expect(d.leftRows.querySelectorAll('.r.tk')).toHaveLength(3);
     expect(d.rightRows.querySelectorAll('.r.tk')).toHaveLength(3);
     expect(d.rowY).toEqual({ 'i-11': 98, 'i-12': 122, 'i-20': 204 });
-    expect(d.sink.top).toBe(216);
+    expect(d.sink.top).toBe(246);
     expect(d.leftRows.querySelector('.r.tb a').getAttribute('href')).toBe('#/team/IOT');
     expect([...d.leftRows.querySelectorAll('.r.p .pn')].map((e) => e.textContent))
       .toEqual(['Réalisation POC v1', 'Sans projet']);
@@ -63,6 +63,13 @@ describe('board', () => {
     const noProjectBtn = [...d.leftRows.querySelectorAll('.r.p [data-action="add-task"]')]
       .find((b) => b.closest('.r.p').querySelector('.pn').textContent === 'Sans projet');
     expect(noProjectBtn.dataset.project).toBe('');
+  });
+
+  it('propose d’ajouter une team, à la toute fin de la liste', () => {
+    const d = draw();
+    const rows = [...d.leftRows.children];
+    const addTeamRow = rows.find((r) => r.querySelector('[data-action="add-team"]'));
+    expect(addTeamRow).toBe(rows[rows.length - 1]);
   });
 
   it('coupe les barres aux week-ends et affiche durée et heures', () => {
@@ -152,7 +159,7 @@ describe('board', () => {
 
   it('dessine grille, jours non ouvrés, débuts de mois et ligne du jour', () => {
     const d = draw();
-    expect(d.grid.style.height).toBe('216px');
+    expect(d.grid.style.height).toBe('246px');
     expect(d.grid.querySelectorAll('.o')).toHaveLength(16);
     expect(d.grid.querySelectorAll('.m')).toHaveLength(2);
     expect(d.grid.querySelector('.td').style.left).toBe('35px');

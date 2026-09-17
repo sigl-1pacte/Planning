@@ -1,5 +1,12 @@
 const KEY_STORAGE = 'planning.linearKey';
 
+// Vide par défaut : le back sert alors les mêmes chemins relatifs /api/...
+// que le front (dev via le proxy Vite, prod si les deux sont sur la même
+// origine). Renseigné (VITE_API_BASE_URL, injecté au build par Vite) quand
+// le back est ailleurs — ex. une Edge Function Supabase, une autre origine
+// que le front déployé sur Vercel. Voir README.md.
+const API_BASE = import.meta.env?.VITE_API_BASE_URL ?? '';
+
 export class AuthError extends Error {}
 
 export class ApiError extends Error {
@@ -17,7 +24,7 @@ export function createApi({ fetchImpl = (...args) => fetch(...args), storage = g
   async function request(method, path, body, key = readKey()) {
     const headers = { 'x-linear-key': key ?? '' };
     if (body !== undefined) headers['content-type'] = 'application/json';
-    const res = await fetchImpl(path, {
+    const res = await fetchImpl(`${API_BASE}${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),

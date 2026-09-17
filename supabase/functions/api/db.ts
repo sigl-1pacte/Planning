@@ -22,6 +22,16 @@ export function createPool(connectionString: string) {
     async transaction<T>(fn: (tx: { query(text: string, params?: unknown[]): Promise<{ rows: unknown[] }> }) => Promise<T>) {
       return sql.begin(async (tx: any) => fn(wrap(tx)));
     },
+    // pg_advisory_lock est lié à la connexion (session) qui l'a posé, pas à
+    // la requête ni à une transaction : le prendre et le relâcher via deux
+    // appels db.query() séparés risque de tomber sur deux connexions
+    // différentes du pool, et l'unlock échoue silencieusement (avertissement
+    // Postgres "you don't own a lock..."). reserve() épingle une connexion
+    // unique pour toute la durée du verrou.
+    async reserve() {
+      const client = await sql.reserve();
+      return { ...wrap(client), release: () => client.release() };
+    },
     end: () => sql.end({ timeout: 5 }),
   };
 }

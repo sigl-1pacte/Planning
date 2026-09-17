@@ -35,9 +35,19 @@ async function sha1(value: string) {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// raw/domain reviennent de Postgres en texte JSON (le pilote, via .unsafe(),
+// ne les parse pas automatiquement en objet malgré la colonne jsonb) : sans
+// ce parse, raw.issues (etc.) est undefined dès le deuxième cycle — le
+// premier passe par hasard puisque raw vient alors directement de Linear
+// (jamais relu depuis la base), pas de la ligne chargée ici.
+function parseJsonColumn(value: unknown) {
+  return typeof value === 'string' ? JSON.parse(value) : value;
+}
+
 async function loadRow(db: any): Promise<Row> {
   const { rows } = await db.query('select * from linear_snapshot where id = $1', ['default']);
-  return rows[0];
+  const row = rows[0] as Row;
+  return { ...row, raw: parseJsonColumn(row.raw), domain: parseJsonColumn(row.domain) };
 }
 
 async function saveRow(db: any, patch: Partial<Row>) {
@@ -119,9 +129,13 @@ export function createSnapshotStore({
     } catch (err: any) {
       await saveRow(db, patch);
       if (err instanceof LinearAuthError) throw err;
-      if (err instanceof LinearRateLimitError) patch.backoff_until = new Date(startedAt + backoffMs).toISOString();
-      patch.last_error = err.message;
-      await saveRow(db, { backoff_until: patch.backoff_until, last_error: patch.last_error });
+      // patch.backoff_until reste absent (pas seulement falsy) hors erreur de
+      // quota : le passer quand même à saveRow enverrait `undefined` comme
+      // paramètre de requête, que le pilote Postgres refuse (UNDEFINED_VALUE)
+      // — c'est ce qui masquait l'erreur d'origine derrière une 500 opaque.
+      const errorPatch: Partial<Row> = { last_error: err.message };
+      if (err instanceof LinearRateLimitError) errorPatch.backoff_until = new Date(startedAt + backoffMs).toISOString();
+      await saveRow(db, errorPatch);
       row = await loadRow(db);
       if (row.domain === null) throw err;
       return;
@@ -138,12 +152,17 @@ export function createSnapshotStore({
   // courant plutôt que d'attendre (pas de canal pour partager une promesse
   // entre invocations séparées, contrairement au process Fastify).
   async function refresh(key: string, forceFull: boolean) {
-    const { rows } = await db.query('select pg_try_advisory_lock($1) as ok', [ADVISORY_LOCK_KEY]);
-    if (!rows[0].ok) return;
+    const conn = await db.reserve();
     try {
-      await cycle(key, forceFull);
+      const { rows } = await conn.query('select pg_try_advisory_lock($1) as ok', [ADVISORY_LOCK_KEY]);
+      if (!rows[0].ok) return;
+      try {
+        await cycle(key, forceFull);
+      } finally {
+        await conn.query('select pg_advisory_unlock($1)', [ADVISORY_LOCK_KEY]);
+      }
     } finally {
-      await db.query('select pg_advisory_unlock($1)', [ADVISORY_LOCK_KEY]);
+      conn.release();
     }
   }
 

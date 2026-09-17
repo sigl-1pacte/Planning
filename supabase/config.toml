@@ -1,0 +1,8 @@
+project_id = "planning"
+
+[functions.api]
+# L'authentification de cette app, c'est la clé Linear personnelle envoyée en
+# en-tête x-linear-key (voir supabase/functions/api/auth.ts) — pas un JWT
+# Supabase. Sans ça, Supabase refuse toute requête sans jeton Supabase valide,
+# ce que le front n'envoie jamais.
+verify_jwt = false

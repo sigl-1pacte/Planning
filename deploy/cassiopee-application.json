@@ -1,0 +1,20 @@
+{
+  "name": "planning-app",
+  "kind": "Deployment",
+  "image": { "repository": "ghcr.io/sigl-1pacte/planning", "tag": "latest", "pull_policy": "Always" },
+  "replicas": 1,
+  "resources": {
+    "requests": { "cpu": "250m", "memory": "256Mi" },
+    "limits": { "cpu": "500m", "memory": "512Mi" }
+  },
+  "env": { "PORT": "8080", "LOG_LEVEL": "info" },
+  "ports": [{ "name": "http", "containerPort": 8080 }],
+  "service": { "port": 80, "target_port": 8080 },
+  "probes": {
+    "readiness": { "enabled": true, "initialDelaySeconds": 10, "periodSeconds": 10, "timeoutSeconds": 5, "failureThreshold": 3, "path": "/api/health", "port": 8080 },
+    "liveness": { "enabled": true, "initialDelaySeconds": 20, "periodSeconds": 20, "timeoutSeconds": 5, "failureThreshold": 3, "path": "/", "port": 8080 },
+    "startup": { "enabled": false, "initialDelaySeconds": 10, "periodSeconds": 10, "timeoutSeconds": 5, "failureThreshold": 3, "path": "/", "port": 8080 }
+  },
+  "securityContext": { "runAsNonRoot": true, "runAsUser": 1000, "fsGroup": 1000, "readOnlyRootFilesystem": false },
+  "restartPolicy": "Always"
+}

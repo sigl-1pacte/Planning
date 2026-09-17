@@ -174,7 +174,12 @@ const teamCreateBody = {
 };
 
 type Vars = { linearKey: string; viewer: unknown };
-const app = new Hono<{ Variables: Vars }>().basePath('/functions/v1/api');
+// Supabase retire le préfixe /functions/v1 avant de transmettre la requête
+// à la fonction, mais garde son propre nom en premier segment du chemin
+// (vérifié en déployant une fonction de diagnostic qui renvoyait req.url) :
+// une requête à .../functions/v1/api/api/health arrive ici en /api/api/health,
+// pas en /functions/v1/api/api/health.
+const app = new Hono<{ Variables: Vars }>().basePath('/api');
 
 app.use('/api/*', cors({
   origin: (Deno.env.get('ALLOWED_ORIGIN') ?? '*').split(',').map((s) => s.trim()),

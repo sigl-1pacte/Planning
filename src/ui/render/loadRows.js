@@ -25,7 +25,7 @@ export function renderLoadRows(sink, { people, load, planning, axis, users, team
     const stats = personStats(weeks);
     const role = planning.people.find((p) => p.linearUserId === user.id)?.role;
     const [left, right] = rowPair('r ld');
-    left.innerHTML = `<span class="ini" style="background:${personColor(user.id, users)}">${esc(initials(user))}</span>
+    left.innerHTML = `<span class="ini" style="background-color:${personColor(user.id, users)}">${esc(initials(user))}</span>
       <span class="who" data-person="${esc(user.id)}"><b>${esc(user.name)}</b><span>${esc(role || 'rôle à préciser')}</span></span>
       <span class="sm">${Math.round(stats.total)} h sur ${stats.activeWeeks} sem.<br>
         <span style="color:${stats.peakPct > ceiling ? '#B9700A' : 'var(--ink3)'}">pic ${pctText(stats.peakPct)} · moy. ${Math.round(stats.avgPct)} %</span></span>`;

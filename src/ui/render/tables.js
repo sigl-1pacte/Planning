@@ -50,7 +50,7 @@ export function renderPeopleTable(tbody, { view, load, planning, domain }) {
     const points = counted.reduce((s, issue) => s + (issue.estimate ?? 0) * (load.issues[issue.id]?.shares[user.id] ?? 0), 0);
     const hot = stats.peakPct > ceiling;
     return `<tr>
-      <td><span class="ini" style="background:${personColor(user.id, domain.users)};display:inline-block;margin-right:8px">${esc(initials(user))}</span>${esc(user.name)}</td>
+      <td><span class="ini" style="background-color:${personColor(user.id, domain.users)};display:inline-block;margin-right:8px">${esc(initials(user))}</span>${esc(user.name)}</td>
       <td class="r">${fr1(points)}</td>
       <td class="r">${Math.round(stats.total)} h</td>
       <td class="r">${stats.activeWeeks}</td>

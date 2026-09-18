@@ -85,7 +85,7 @@ export function renderLoadChart(container, { domain, planning, load, people, use
       <tbody>${people.map((p) => {
         const stats = personStats(load.people[p.id]);
         return `<tr>
-          <td><span class="ini" style="background:${personColor(p.id, users)}">${esc(initials(p))}</span> ${esc(p.name)}</td>
+          <td><span class="ini" style="background-color:${personColor(p.id, users)}">${esc(initials(p))}</span> ${esc(p.name)}</td>
           <td class="r">${Math.round(stats.total)} h</td>
           <td class="r">${Number.isFinite(stats.peakPct) ? `${Math.round(stats.peakPct)} %` : '∞'}</td>
           <td class="r">${Math.round(stats.avgPct)} %</td>

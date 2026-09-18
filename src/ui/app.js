@@ -64,9 +64,15 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
         <button class="btn accent" type="button" data-action="load-chart">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 13.5V2M2 13.5h12"/><path d="M4.5 11 8 7l2 2 3.5-4"/></svg>
           Recommandations</button>
-        <button class="btn" type="button" data-action="refresh">Actualiser</button>
-        <button class="btn" type="button" data-action="settings">Réglages</button>
-        <button class="btn pri" type="button" data-action="print">Imprimer / PDF</button>
+        <button class="btn" type="button" data-action="refresh">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.6-3.66"/><path d="M13 2.5V6h-3.5"/></svg>
+          Actualiser</button>
+        <button class="btn" type="button" data-action="settings">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.6v1.7M8 12.7v1.7M14.4 8h-1.7M3.3 8H1.6M12.4 3.6l-1.2 1.2M4.8 11.2l-1.2 1.2M12.4 12.4l-1.2-1.2M4.8 4.8 3.6 3.6"/></svg>
+          Réglages</button>
+        <button class="btn pri" type="button" data-action="print">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6V2h7v4M4.5 12.5h7V9h-7z"/><rect x="2" y="6" width="12" height="5.5" rx="1"/></svg>
+          Imprimer / PDF</button>
       </div>
     </div></div>
     <section class="sheet">

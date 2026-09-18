@@ -241,7 +241,7 @@ function renderProjectRow(sink, { key, project, issues }, open, axis, teamId) {
   left.innerHTML = `<span class="tw" data-tog="${esc(key)}">${CARET}</span>
     <span class="sw" style="background:${color}"></span>
     <span class="pn" title="${project.id ? `Cliquer pour modifier ${esc(project.name)}` : esc(project.name)}">${esc(project.name)}</span>
-    <span class="pbar" title="${pct} % des points terminés"><i style="width:${pct}%;background:${color}"></i></span>
+    <span class="pbar" title="${pct} % des points terminés"><i style="width:${pct}%;background-color:${color}"></i></span>
     <span class="pm">${issues.length} tâches · ${points} pts · ${pct} %</span>
     <button class="addb" type="button" data-action="add-task" data-team="${esc(teamId)}" data-project="${esc(project.id ?? '')}">Ajouter une tâche</button>`;
   if (project.startDate && project.targetDate) {
@@ -342,7 +342,7 @@ function renderIssueRow(sink, issue, { color, status, axis, holidays, load, user
   const warn = issue.unresolvedMentions.length > 0 || issue.contributorsSource === 'none';
   const noEstimate = issue.estimate === null;
 
-  left.innerHTML = `<span class="pill" style="background:${STATUS[status].color}">${STATUS[status].label}</span>
+  left.innerHTML = `<span class="pill" style="background-color:${STATUS[status].color}">${STATUS[status].label}</span>
     <span class="id"${depth > 0 ? ` style="padding-left:${depth * 14}px"` : ''}>${esc(issue.identifier)}</span>
     <span class="nmw" title="${esc(issue.title)}">${esc(issue.title)}</span>
     <span class="flag" title="${warn ? 'Contributeurs à vérifier' : ''}">${warn ? '!' : ''}</span>

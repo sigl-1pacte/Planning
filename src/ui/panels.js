@@ -95,7 +95,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
           const isLast = uid === lastUid;
           const value = isLast ? lastValue : shareOf(uid);
           return `<div class="cbo">
-            <span class="ci" style="background:${personColor(uid, domain.users)}">${esc(initials(user))}</span>
+            <span class="ci" style="background-color:${personColor(uid, domain.users)}">${esc(initials(user))}</span>
             <span class="cn">${esc(user?.name ?? uid)}</span>
             <input type="number" min="0" step="any" name="${esc(uid)}" value="${value}"
               ${isLast ? 'readonly title="Calculée pour que le total fasse 100 %"' : ''}
@@ -154,7 +154,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         <div class="chklist" data-field="contributors">
           ${domain.users.map((u) => `<label class="chkrow">
             <input type="checkbox" value="${esc(u.id)}"${issue.contributorIds.includes(u.id) ? ' checked' : ''}>
-            <span class="ini" style="background:${personColor(u.id, domain.users)}">${esc(initials(u))}</span>
+            <span class="ini" style="background-color:${personColor(u.id, domain.users)}">${esc(initials(u))}</span>
             <span>${esc(u.name)}</span>
           </label>`).join('')}
         </div></div>

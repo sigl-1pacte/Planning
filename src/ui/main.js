@@ -184,9 +184,9 @@ root.addEventListener('click', (event) => {
     draw();
   } else if (el('[data-action="print"]')) {
     if (printOverride) return;
-    printOverride = { zoom: 'month', collapsed: [] };
+    printOverride = { zoom: 'all', collapsed: [] };
     draw();
-    fitSheetToPageWidth();
+    fitSheetToOnePage();
     const restore = () => {
       const sheet = root.querySelector('.sheet');
       if (sheet) sheet.style.zoom = '';
@@ -379,42 +379,35 @@ root.addEventListener('pointermove', (event) => {
   if (label) label.textContent = dayDelta === 0 ? label.textContent : `${shortDay(start)} → ${shortDay(end)}`;
 });
 
-// Réduit la feuille imprimée pour qu'elle tienne sur une seule page dans la
-// mesure du raisonnable : une échelle uniforme (jamais d'agrandissement, et
-// jamais en dessous de 40 % pour rester lisible) calculée à partir de la
-// hauteur/largeur imprimables réelles de la page — cohérent avec @page dans
-// styles.css (A4 portrait, marges de 8 mm ; un mauvais accord entre ce
-// calcul et la taille réelle de sortie fait paraître le résultat trop petit
-// avec beaucoup de blanc, la mise à l'échelle du navigateur/pilote
-// d'impression s'ajoutant à celle-ci). Un très gros planning restera sur
-// plusieurs pages plutôt que de devenir illisible : c'est le compromis
-// « raisonnable » plutôt qu'un ajustement garanti en toute circonstance.
+// Réduit la feuille (la frise du planning) pour qu'elle tienne sur une seule
+// page A4 paysage : une échelle uniforme calculée à partir de la largeur ET
+// de la hauteur imprimables réelles (cohérent avec @page dans styles.css),
+// jamais d'agrandissement. Le zoom d'écran est fixé à 'tout' avant
+// l'impression (voir data-action="print") pour que toute la plage de dates
+// soit présente avant la mise à l'échelle — indispensable pour tenir sur une
+// seule page : avec un zoom plus étroit, tout ce qui dépasse la largeur de
+// l'écran manquerait purement et simplement à l'impression plutôt que
+// d'être capturé puis réduit.
 //
 // Utilise style.zoom (non standard, mais géré par Chrome/Edge/Safari et par
 // Firefox depuis 2024) plutôt que transform:scale() : un transform ne change
 // que le rendu, pas la place réservée dans la mise en page, donc l'impression
 // découperait quand même les pages à la hauteur d'origine, blanc compris. zoom
 // reflow réellement l'élément à la taille réduite, ce qui est indispensable
-// ici. Si zoom n'a aucun effet sur un navigateur donné, l'impression reste
-// simplement sur plusieurs pages comme avant — aucune régression possible.
-// Page A4 paysage (bien plus adaptée à un planning large qu'un portrait) :
-// on ne réduit que la largeur pour qu'elle tienne sur une page, jamais la
-// hauteur — la lecture papier n'a pas besoin d'une seule page, elle a besoin
-// de texte lisible. Le zoom d'écran est fixé à 'mois' avant l'impression
-// (voir data-action="print") pour partir d'une densité déjà raisonnable :
-// ce réglage ne fait qu'ajuster la marge qu'il reste à rattraper.
-const PRINT_PAGE_MM = { width: 297, margin: 10 };
-const MIN_PRINT_SCALE = 0.72;
+// ici.
+const PRINT_PAGE_MM = { width: 297, height: 210, margin: 10 };
+const MIN_PRINT_SCALE = 0.12;
 
-function fitSheetToPageWidth() {
+function fitSheetToOnePage() {
   const sheet = root.querySelector('.sheet');
   if (!sheet) return;
   sheet.style.zoom = '';
   const pxPerMm = 96 / 25.4;
   const maxWidth = (PRINT_PAGE_MM.width - 2 * PRINT_PAGE_MM.margin) * pxPerMm;
+  const maxHeight = (PRINT_PAGE_MM.height - 2 * PRINT_PAGE_MM.margin) * pxPerMm;
   const rect = sheet.getBoundingClientRect();
-  if (!rect.width) return;
-  const scale = Math.max(MIN_PRINT_SCALE, Math.min(1, maxWidth / rect.width));
+  if (!rect.width || !rect.height) return;
+  const scale = Math.max(MIN_PRINT_SCALE, Math.min(1, maxWidth / rect.width, maxHeight / rect.height));
   if (scale < 1) sheet.style.zoom = String(scale);
 }
 

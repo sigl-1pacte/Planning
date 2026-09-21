@@ -42,12 +42,27 @@ export function renderFacts(el, s) {
     .join('');
 }
 
+// Ligne de total du tableau : les colonnes additives (points, heures) sont
+// sommées ; les autres se calculent sur l'ensemble, pas en additionnant des
+// colonnes qui n'ont pas de sens ainsi — les semaines actives sont les semaines
+// distinctes où au moins une personne travaille (pas la somme par personne),
+// le taux moyen est celui de toutes les semaines-personne actives, le pic le
+// plus haut de tous.
+function totalRow({ people, load, points }) {
+  const all = people.flatMap((u) => load.people[u.id]);
+  const stats = personStats(all);
+  const activeWeeks = new Set(all.filter((w) => w.hours > 0.01).map((w) => w.weekStart)).size;
+  return { points, hours: stats.total, activeWeeks, perWeek: activeWeeks ? stats.total / activeWeeks : 0, avgPct: stats.avgPct, peakPct: stats.peakPct };
+}
+
 export function renderPeopleTable(tbody, { view, load, planning, domain }) {
   const ceiling = planning.settings.loadCeilingPct;
   const counted = plannedOf(view);
-  tbody.innerHTML = view.people.map((user) => {
+  let totalPoints = 0;
+  const rows = view.people.map((user) => {
     const stats = personStats(load.people[user.id]);
     const points = counted.reduce((s, issue) => s + (issue.estimate ?? 0) * (load.issues[issue.id]?.shares[user.id] ?? 0), 0);
+    totalPoints += points;
     const hot = stats.peakPct > ceiling;
     return `<tr>
       <td><span class="ini" style="background-color:${personColor(user.id, domain.users)};display:inline-block;margin-right:8px">${esc(initials(user))}</span>${esc(user.name)}</td>
@@ -58,7 +73,22 @@ export function renderPeopleTable(tbody, { view, load, planning, domain }) {
       <td class="r">${Math.round(stats.avgPct)} %</td>
       <td class="r" style="color:${hot ? '#B9700A' : 'inherit'};font-weight:${hot ? 600 : 400}">${pctText(stats.peakPct)}</td>
     </tr>`;
-  }).join('') || '<tr><td colspan="7">Personne n\'a de charge dans cette vue.</td></tr>';
+  });
+  // Un total n'apporte rien avec une seule personne : il ne redirait que sa ligne.
+  if (rows.length > 1) {
+    const t = totalRow({ people: view.people, load, points: totalPoints });
+    const hot = t.peakPct > ceiling;
+    rows.push(`<tr class="tot">
+      <td>Total</td>
+      <td class="r">${fr1(t.points)}</td>
+      <td class="r">${Math.round(t.hours)} h</td>
+      <td class="r">${t.activeWeeks}</td>
+      <td class="r">${fr1(t.perWeek)} h</td>
+      <td class="r">${Math.round(t.avgPct)} %</td>
+      <td class="r" style="color:${hot ? '#B9700A' : 'inherit'}">${pctText(t.peakPct)}</td>
+    </tr>`);
+  }
+  tbody.innerHTML = rows.join('') || '<tr><td colspan="7">Personne n\'a de charge dans cette vue.</td></tr>';
 }
 
 export function renderProjectsTable(tbody, { view, load }) {

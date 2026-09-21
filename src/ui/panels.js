@@ -30,6 +30,11 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
   // Recherche/filtres de la liste « Bloquée par » : conservés d'un redessin à
   // l'autre du même panneau, remis à zéro quand on en ouvre un autre.
   let pickerState = emptyPickerState();
+  // Dernier panneau dessiné : quand c'est le même qui se redessine (chaque
+  // coche relit Linear puis redessine tout), la position de défilement et la
+  // case qui avait le focus doivent survivre ; à l'ouverture d'un autre, on
+  // repart du haut.
+  let lastDrawn = null;
 
   function open(next) {
     current = next;
@@ -39,6 +44,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
 
   function close() {
     current = null;
+    lastDrawn = null;
     drawer.classList.remove('on');
     drawer.setAttribute('aria-hidden', 'true');
     body.innerHTML = '';
@@ -63,7 +69,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     if (!ctx || !current) return;
     drawer.classList.add('on');
     drawer.setAttribute('aria-hidden', 'false');
-    const listScroll = body.querySelector('[data-field="deps"]')?.scrollTop ?? 0;
+    const keep = current === lastDrawn ? captureView() : null;
     if (current.kind === 'issue') drawIssue(current.id, current.seed);
     else if (current.kind === 'person') drawPerson(current.id);
     else if (current.kind === 'proj') drawProj(current.id, current.seed);
@@ -72,8 +78,34 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     else drawSettings();
     enhanceDateFields(body);
     wireIssuePicker(body.querySelector('[data-picker]'), pickerState);
-    const list = body.querySelector('[data-field="deps"]');
-    if (list) list.scrollTop = listScroll;
+    if (keep) restoreView(keep);
+    lastDrawn = current;
+  }
+
+  // Remplacer le contenu du panneau le vide un instant : le navigateur ramène
+  // alors le défilement en haut (le panneau, et chaque liste à cocher), et la
+  // case qu'on venait de cocher perd le focus.
+  function captureView() {
+    const active = document.activeElement;
+    const box = body.contains(active) && active.type === 'checkbox' ? active : null;
+    return {
+      top: body.scrollTop,
+      lists: Object.fromEntries([...body.querySelectorAll('.chklist[data-field]')].map((l) => [l.dataset.field, l.scrollTop])),
+      focus: box ? { field: box.closest('[data-field]')?.dataset.field, value: box.value } : null,
+    };
+  }
+
+  function restoreView({ top, lists, focus }) {
+    for (const [field, scrollTop] of Object.entries(lists)) {
+      const list = body.querySelector(`.chklist[data-field="${field}"]`);
+      if (list) list.scrollTop = scrollTop;
+    }
+    if (focus?.field) {
+      const list = body.querySelector(`.chklist[data-field="${focus.field}"]`);
+      const box = [...(list?.querySelectorAll('input[type="checkbox"]') ?? [])].find((b) => b.value === focus.value);
+      box?.focus({ preventScroll: true });
+    }
+    body.scrollTop = top;
   }
 
   function drawIssue(issueId, seed) {

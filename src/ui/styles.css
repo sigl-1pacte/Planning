@@ -376,3 +376,7 @@ th:first-child,td:first-child{padding-left:0}
 .picker .chklist{max-height:210px}
 .f-move{display:flex;gap:6px}
 .f-move select{flex:1;min-width:0}
+
+/* Ligne de total des tableaux */
+tbody tr.tot td{border-top:2px solid var(--line);font-weight:600;background:var(--off)}
+tbody tr.tot:hover{background:none}

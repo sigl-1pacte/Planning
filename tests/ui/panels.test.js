@@ -868,3 +868,51 @@ describe('déplacer une tâche', () => {
     expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { projectId: null });
   });
 });
+
+describe('défilement conservé au redessin', () => {
+  // Un navigateur ramène le défilement en haut quand le contenu est remplacé ;
+  // jsdom ne le fait pas, on le simule pour que le test ait un sens.
+  function resetOnRewrite(body) {
+    const desc = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+    Object.defineProperty(body, 'innerHTML', {
+      get() { return desc.get.call(this); },
+      set(value) { desc.set.call(this, value); this.scrollTop = 0; },
+    });
+  }
+
+  it('garde la position du panneau et de la liste des contributeurs quand on coche quelqu\'un', () => {
+    const t = setup();
+    resetOnRewrite(t.body);
+    t.panels.openIssue('i-11');
+    t.body.scrollTop = 320;
+    t.body.querySelector('[data-field="contributors"]').scrollTop = 45;
+    t.body.querySelector('[data-field="deps"]').scrollTop = 30;
+    t.panels.update(context());
+    expect(t.body.scrollTop).toBe(320);
+    expect(t.body.querySelector('[data-field="contributors"]').scrollTop).toBe(45);
+    expect(t.body.querySelector('[data-field="deps"]').scrollTop).toBe(30);
+  });
+
+  it('redonne le focus à la case cochée, sans faire défiler', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const box = t.body.querySelector('[data-field="contributors"] input[value="u-louis"]');
+    box.focus();
+    expect(document.activeElement).toBe(box);
+    t.panels.update(context());
+    const again = t.body.querySelector('[data-field="contributors"] input[value="u-louis"]');
+    expect(again).not.toBe(box);
+    expect(document.activeElement).toBe(again);
+  });
+
+  it('repart du haut quand on ouvre une autre tâche', () => {
+    const t = setup();
+    resetOnRewrite(t.body);
+    t.panels.openIssue('i-11');
+    t.body.scrollTop = 320;
+    t.body.querySelector('[data-field="contributors"]').scrollTop = 45;
+    t.panels.openIssue('i-12');
+    expect(t.body.scrollTop).toBe(0);
+    expect(t.body.querySelector('[data-field="contributors"]').scrollTop).toBe(0);
+  });
+});

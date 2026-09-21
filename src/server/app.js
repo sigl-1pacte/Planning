@@ -6,7 +6,7 @@ import * as repo from './db/repo.js';
 import { computeReschedule, RescheduleCycleError } from '../shared/reschedule.js';
 import { setStartingDate, setContributors } from './linear/parsing.js';
 import { refreshUntil } from './sync/refreshUntil.js';
-import { createIssueWithExtras, buildProjectInput } from './linear/createFlow.js';
+import { createIssueWithExtras, buildProjectInput, withMove } from './linear/createFlow.js';
 
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -101,6 +101,8 @@ const issuePatchBody = {
     assigneeId: { type: ['string', 'null'] },
     estimate: { type: ['number', 'null'], minimum: 0 },
     stateId: { type: 'string', minLength: 1 },
+    teamId: { type: 'string', minLength: 1 },
+    projectId: { type: ['string', 'null'], minLength: 1 },
     start: { type: 'string' },
     end: { type: 'string' },
   },
@@ -291,10 +293,11 @@ export function buildApp({ db, store, validateKey, linear, staticDir = null, log
     // POST .../reschedule) : glisser un bord de barre ne modifie que cette
     // date-là, sans décaler les dépendantes. start vit dans la description
     // (comme ailleurs) ; end est directement le champ natif dueDate.
-    const patch = { ...req.body };
+    const current = store.current();
+    const issue = current?.domain.issues.find((i) => i.id === req.params.issueId);
+    // Changement de team / de projet : statut et projet réalignés côté serveur.
+    const patch = withMove({ ...req.body }, issue, current?.domain ?? null);
     if ('start' in patch) {
-      const current = store.current();
-      const issue = current?.domain.issues.find((i) => i.id === req.params.issueId);
       patch.description = setStartingDate(issue?.rawDescription ?? null, patch.start);
       delete patch.start;
     }

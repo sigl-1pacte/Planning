@@ -250,6 +250,20 @@ describe('écriture', () => {
     expect(linear.addBlocker).toHaveBeenCalledWith('good', 'i-12', 'i-20');
   });
 
+  it('déplace une tâche vers une autre team : statut et projet réalignés, rien d\'autre modifié', async () => {
+    const res = await call('PUT', '/api/issues/i-11', { teamId: 't-web' });
+    expect(res.statusCode).toBe(200);
+    expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-11', { teamId: 't-web', stateId: 'st-web-unstarted', projectId: null });
+  });
+
+  it('refuse un déplacement invalide sans appeler Linear', async () => {
+    for (const body of [{ teamId: 'inconnue' }, { teamId: 't-web', stateId: 'st-iot-started' }, { projectId: 'inconnu' }]) {
+      expect((await call('PUT', '/api/issues/i-11', body)).statusCode).toBe(400);
+    }
+    expect((await call('PUT', '/api/issues/inconnue', { teamId: 't-web' })).statusCode).toBe(404);
+    expect(linear.updateIssue).not.toHaveBeenCalled();
+  });
+
   it('crée une issue', async () => {
     const res = await call('POST', '/api/issues', { teamId: 't-iot', title: 'Nouvelle' });
     expect(res.statusCode).toBe(200);
@@ -418,6 +432,13 @@ describe('écriture', () => {
       const other = snap.domain.issues.find((i) => i.id !== 'i-11');
       expect((await call('DELETE', '/api/issues/i-11', { confirm: other.identifier })).statusCode).toBe(400);
       expect(linear.deleteIssue).not.toHaveBeenCalled();
+    });
+
+    it('rend le message de Linear quand il refuse la suppression, pas « Erreur interne »', async () => {
+      linear.deleteProject.mockRejectedValueOnce(Object.assign(new Error('Erreur GraphQL Linear : Forbidden'), { statusCode: 422 }));
+      const res = await call('DELETE', '/api/projects/p-poc1', { confirm: project.name });
+      expect(res.statusCode).toBe(422);
+      expect(res.json().error).toMatch(/Forbidden/);
     });
 
     it('exige la clé Linear', async () => {

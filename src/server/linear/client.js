@@ -46,7 +46,13 @@ export async function gql(key, query, variables = {}, { fetchImpl = fetch } = {}
     const codes = body.errors.map((e) => e.extensions?.code);
     if (codes.includes('AUTHENTICATION_ERROR')) throw new LinearAuthError();
     if (codes.includes('RATELIMITED')) throw new LinearRateLimitError();
-    throw new Error(`Erreur GraphQL Linear : ${body.errors.map((e) => e.message).join(' ; ')}`);
+    // Linear a répondu, mais refuse l'opération (droits insuffisants, entité
+    // introuvable, valeur invalide…). Ce message est fait pour être lu : il
+    // remonte tel quel (422) au lieu d'un « Erreur interne » qui cachait la cause.
+    throw Object.assign(
+      new Error(`Erreur GraphQL Linear : ${body.errors.map((e) => e.message).join(' ; ')}`),
+      { statusCode: 422 },
+    );
   }
   return body.data;
 }

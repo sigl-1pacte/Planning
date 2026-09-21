@@ -96,3 +96,42 @@ export async function createIssueWithExtras({ linear, key, body, domain }) {
   }
   return { issue, warnings };
 }
+
+// Changer la team ou le projet d'une tâche existante. Les statuts sont propres
+// à chaque team et un projet n'est rattaché qu'à certaines teams : plutôt que
+// de dépendre de ce que Linear fait implicitement, on décide ici.
+//  - statut : sans statut demandé, l'équivalent dans la nouvelle team (même
+//    type, le premier dans l'ordre du workflow) ;
+//  - projet : conservé s'il existe aussi dans la nouvelle team, retiré sinon.
+// Tout est validé avant l'appel à Linear.
+export function withMove(patch, issue, domain) {
+  if (!('teamId' in patch) && !('projectId' in patch)) return patch;
+  if (!domain) throw unavailable();
+  if (!issue) throw Object.assign(new Error('Tâche introuvable'), { statusCode: 404 });
+
+  const out = { ...patch };
+  const targetTeamId = out.teamId ?? issue.teamId;
+  const moving = targetTeamId !== issue.teamId;
+  if (!domain.teams.some((t) => t.id === targetTeamId)) throw badRequest('Team inconnue');
+
+  if (out.projectId) {
+    const project = domain.projects.find((p) => p.id === out.projectId);
+    if (!project) throw badRequest('Projet inconnu');
+    if (!project.teamIds.includes(targetTeamId)) throw badRequest('Ce projet n\'appartient pas à la team de la tâche');
+  } else if (moving && !('projectId' in out) && issue.projectId) {
+    const project = domain.projects.find((p) => p.id === issue.projectId);
+    if (!project || !project.teamIds.includes(targetTeamId)) out.projectId = null;
+  }
+
+  if (moving) {
+    const states = domain.workflowStates.filter((s) => s.teamId === targetTeamId).sort((a, b) => a.position - b.position);
+    if (out.stateId) {
+      if (!states.some((s) => s.id === out.stateId)) throw badRequest('Statut inconnu pour cette team');
+    } else {
+      const type = domain.workflowStates.find((s) => s.id === issue.stateId)?.type;
+      const match = states.find((s) => s.type === type) ?? states.find((s) => s.type === 'unstarted') ?? states[0];
+      if (match) out.stateId = match.id;
+    }
+  }
+  return out;
+}

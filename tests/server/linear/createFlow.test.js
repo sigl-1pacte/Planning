@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildIssuePlan, buildProjectInput, createIssueWithExtras } from '../../../src/server/linear/createFlow.js';
+import { buildIssuePlan, buildProjectInput, createIssueWithExtras, withMove } from '../../../src/server/linear/createFlow.js';
 import { mapWorkspace } from '../../../src/server/linear/mapper.js';
 import { rawWorkspace } from '../../fixtures/workspace.js';
 
@@ -100,5 +100,52 @@ describe('createIssueWithExtras', () => {
     expect(warnings).toHaveLength(2);
     expect(warnings[0]).toMatch(/IOT-11.*refusé/);
     expect(warnings[1]).toMatch(/quota/);
+  });
+});
+
+describe('withMove', () => {
+  const issue = domain.issues.find((i) => i.id === 'i-11'); // t-iot, « In Progress », projet p-poc1 (t-iot seulement)
+
+  it('laisse intact un patch qui ne touche ni la team ni le projet, sans même lire l\'instantané', () => {
+    expect(withMove({ title: 'X' }, undefined, null)).toEqual({ title: 'X' });
+  });
+
+  it('déplace vers une autre team : statut équivalent choisi, projet retiré s\'il n\'existe pas là', () => {
+    // La team web n'a pas de statut « started » : repli sur le premier « unstarted ».
+    expect(withMove({ teamId: 't-web' }, issue, domain)).toEqual({ teamId: 't-web', stateId: 'st-web-unstarted', projectId: null });
+  });
+
+  it('choisit le statut de même type quand la team cible en a un', () => {
+    const done = { ...issue, stateId: 'st-iot-completed' };
+    expect(withMove({ teamId: 't-web' }, done, domain).stateId).toBe('st-web-completed');
+  });
+
+  it('garde le projet, et le statut choisi, quand ils sont valides dans la nouvelle team', () => {
+    const shared = { ...domain, projects: domain.projects.map((p) => ({ ...p, teamIds: ['t-iot', 't-web'] })) };
+    expect(withMove({ teamId: 't-web', stateId: 'st-web-completed' }, issue, shared))
+      .toEqual({ teamId: 't-web', stateId: 'st-web-completed' });
+  });
+
+  it('accepte un retour vers la team d\'origine avec son statut et son projet d\'avant (annulation)', () => {
+    const moved = { ...issue, teamId: 't-web', stateId: 'st-web-unstarted', projectId: null };
+    expect(withMove({ teamId: 't-iot', stateId: 'st-iot-started', projectId: 'p-poc1' }, moved, domain))
+      .toEqual({ teamId: 't-iot', stateId: 'st-iot-started', projectId: 'p-poc1' });
+  });
+
+  it('change de projet sans toucher à la team, à condition que le projet soit de cette team', () => {
+    expect(withMove({ projectId: null }, issue, domain)).toEqual({ projectId: null });
+    const other = { ...domain, projects: [...domain.projects, { id: 'p-web', name: 'W', teamIds: ['t-web'] }] };
+    expect(() => withMove({ projectId: 'p-web' }, issue, other)).toThrow(expect.objectContaining({ statusCode: 400 }));
+  });
+
+  it('refuse team inconnue, projet inconnu, statut d\'une autre team', () => {
+    for (const patch of [{ teamId: 'inconnue' }, { projectId: 'inconnu' }, { teamId: 't-web', stateId: 'st-iot-started' }]) {
+      expect(() => withMove(patch, issue, domain), JSON.stringify(patch)).toThrow(expect.objectContaining({ statusCode: 400 }));
+    }
+  });
+
+  it('répond 503 sans instantané et 404 pour une tâche inconnue', () => {
+    expect(() => withMove({ teamId: 't-web' }, issue, null)).toThrow(expect.objectContaining({ statusCode: 503 }));
+    expect(() => withMove({ teamId: 't-web' }, undefined, domain)).toThrow(expect.objectContaining({ statusCode: 404 }));
   });
 });

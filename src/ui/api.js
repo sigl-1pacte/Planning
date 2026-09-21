@@ -65,8 +65,11 @@ export function createApi({ fetchImpl = (...args) => fetch(...args), storage = g
     setDependencies: (id, blockedBy) => request('PUT', `${issue(id)}/dependencies`, { blockedBy }),
     setContributors: (id, contributorIds) => request('PUT', `${issue(id)}/contributors`, { contributorIds }),
     createIssue: (input) => request('POST', '/api/issues', input),
+    // `confirm` : identifiant de la tâche / nom du projet, que le serveur compare à Linear.
+    deleteIssue: (id, confirm) => request('DELETE', issue(id), { confirm }),
     updateProject: (id, patch) => request('PUT', project(id), patch),
     createProject: (input) => request('POST', '/api/projects', input),
+    deleteProject: (id, confirm) => request('DELETE', project(id), { confirm }),
     createTeam: (input) => request('POST', '/api/teams', input),
     updateMilestone: (id, targetDate) => request('PUT', `/api/milestones/${encodeURIComponent(id)}`, { targetDate }),
   };

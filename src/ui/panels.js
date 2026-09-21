@@ -1,5 +1,6 @@
 import { esc, initials, personColor, fr1, shortDay, longDay, ddmmyyyy } from './render/format.js';
 import { defaultWeeklyHours } from '../shared/load.js';
+import { todayISO } from '../shared/calendar.js';
 
 // [Hypothèse] Le barème d'estimation Linear de cette équipe plafonne à 21
 // points (Fibonacci tronqué) ; à ajuster si le barème change côté Linear.
@@ -23,6 +24,7 @@ function showError(form, message) {
 export function createPanels({ drawer, title, body, closeButton, onMutate, onPrefs, onForgetKey, onWrite }) {
   let current = null;
   let ctx = null;
+  let submitting = false;
 
   function open(next) {
     current = next;
@@ -44,7 +46,11 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     // donc ne doit pas bloquer le redessin qui affiche son effet (ici, les
     // parts recalculées sous la liste des contributeurs).
     const editing = body.contains(active) && active.matches('input:not([type="checkbox"]), select, textarea');
-    if (current && !editing) draw();
+    // Un formulaire de création n'affiche rien qui vienne de l'instantané : le
+    // redessiner (à chaque sondage, ou après une écriture) ne ferait que
+    // vider ce qui vient d'être saisi.
+    const creating = current?.id === null || current?.kind === 'team' || current?.confirmDelete;
+    if (current && !editing && !creating) draw();
   }
 
   function draw() {
@@ -67,6 +73,21 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       title.textContent = 'Tâche introuvable';
       body.innerHTML = '<p class="warn">Cette issue ne figure plus dans l\'instantané Linear.</p>';
       return;
+    }
+    if (current.confirmDelete) {
+      const children = domain.issues.filter((i) => i.parentId === issue.id).length;
+      return drawDeleteConfirm({
+        heading: `Supprimer ${issue.identifier} ?`,
+        subject: `« ${issue.title} »`,
+        expected: issue.identifier,
+        details: [
+          'La tâche est placée dans la corbeille de Linear (récupérable pendant 30 jours depuis Linear, pas depuis cette application).',
+          'Ses dépendances avec les autres tâches sont retirées.',
+          ...(children ? [`Ses ${children} sous-tâche${children > 1 ? 's ne sont' : ' n\'est'} pas supprimée${children > 1 ? 's' : ''}.`] : []),
+        ],
+        run: (api) => api.deleteIssue(issue.id, issue.identifier),
+        label: `${issue.identifier} supprimée`,
+      });
     }
     const userOf = (id) => domain.users.find((u) => u.id === id);
     const identifierOf = (id) => domain.issues.find((i) => i.id === id)?.identifier ?? id;
@@ -160,7 +181,9 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         </div></div>
       <p class="hint">${SOURCE_HINT[issue.contributorsSource]} Cocher/décocher ajoute ou retire une personne ; un commentaire signale les nouveaux venus dans Linear.</p>
       <div class="sec">Parts des contributeurs</div>
-      ${sharesForm}`;
+      ${sharesForm}
+      ${dangerZone('Supprimer la tâche…')}`;
+    body.querySelector('[data-action="ask-delete"]').addEventListener('click', askDelete);
 
     body.querySelector('[data-field="title"]').addEventListener('blur', (e) => {
       const value = e.target.value.trim();
@@ -216,18 +239,159 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     }
   }
 
-  function drawNewIssue({ teamId, projectId }) {
-    title.textContent = 'Nouvelle tâche';
+  // La suppression passe toujours par un écran de confirmation dédié : le
+  // bouton de la « zone dangereuse » ne supprime rien, il ouvre seulement cet
+  // écran. Le bouton de suppression y reste inactif tant que l'identifiant
+  // (ou le nom) exact n'est pas saisi ; Entrée ne valide jamais, Échap annule.
+  const dangerZone = (label) => `<div class="sec">Zone dangereuse</div>
+      <div class="danger-zone"><button class="btn danger-ghost" type="button" data-action="ask-delete">${esc(label)}</button></div>`;
+
+  function askDelete() {
+    current = { ...current, confirmDelete: true };
+    draw();
+  }
+
+  function drawDeleteConfirm({ heading, subject, expected, details, run, label }) {
+    title.textContent = heading;
     body.innerHTML = `
+      <div class="danger-box" role="alertdialog" aria-labelledby="dwT">
+        ${subject ? `<p class="danger-subject">${esc(subject)}</p>` : ''}
+        <ul class="danger-list">${details.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>
+        <div class="fg"><label for="f-confirm">Pour confirmer, saisissez <code class="danger-token">${esc(expected)}</code></label>
+          <input id="f-confirm" data-field="confirm" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+        ${errorSlot}
+        <div class="actions danger-actions">
+          <button class="btn pri" type="button" data-action="cancel-delete">Annuler</button>
+          <button class="btn danger" type="button" data-action="confirm-delete" disabled>Supprimer</button>
+        </div>
+      </div>`;
+    const input = body.querySelector('[data-field="confirm"]');
+    const confirm = body.querySelector('[data-action="confirm-delete"]');
+    const matches = () => input.value.trim() === expected;
+    input.addEventListener('input', () => { confirm.disabled = submitting || !matches(); });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+    body.querySelector('[data-action="cancel-delete"]').addEventListener('click', () => {
+      current = { ...current, confirmDelete: false };
+      draw();
+    });
+    confirm.addEventListener('click', async () => {
+      // Le test est refait ici : retirer l'attribut disabled dans les outils
+      // de développement ne contourne pas la saisie.
+      if (submitting || !matches()) return;
+      submitting = true;
+      confirm.disabled = true;
+      const opened = current;
+      try {
+        const ok = await onWrite(run, label, null);
+        if (ok !== false && current === opened) close();
+      } finally {
+        submitting = false;
+        confirm.disabled = !matches();
+      }
+    });
+    input.focus();
+  }
+
+  // Un seul envoi à la fois : tant que l'écriture n'est pas terminée, le bouton
+  // est inactif et tout autre clic (ou Entrée) est ignoré, sinon chaque clic
+  // créerait une tâche de plus dans Linear. Le formulaire se ferme une fois la
+  // création réussie ; en cas d'échec il reste ouvert, saisie conservée.
+  async function submitCreate(button, call, label) {
+    if (submitting) return;
+    submitting = true;
+    button.disabled = true;
+    const opened = current;
+    try {
+      const ok = await onWrite(call, label, null);
+      if (ok !== false && current === opened) close();
+    } finally {
+      submitting = false;
+      button.disabled = false;
+    }
+  }
+
+  function drawNewIssue({ teamId, projectId }) {
+    const { domain } = ctx;
+    title.textContent = 'Nouvelle tâche';
+    const today = todayISO();
+    const team = domain.teams.find((t) => t.id === teamId);
+    const projects = domain.projects.filter((p) => p.teamIds.includes(teamId));
+    const states = (domain.workflowStates ?? []).filter((s) => s.teamId === teamId);
+    body.innerHTML = `
+      ${ro('Team', team?.name ?? '—')}
       <div class="fg"><label for="f-title">Titre</label><input id="f-title" data-field="title"></div>
+      <div class="fg"><label for="f-project">Projet</label>
+        <select id="f-project" data-field="project">
+          <option value="">Sans projet</option>
+          ${projects.map((p) => `<option value="${esc(p.id)}"${p.id === projectId ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}
+        </select></div>
+      <div class="fg"><label for="f-state">Statut</label>
+        <select id="f-state" data-field="state">
+          <option value="">— par défaut de la team —</option>
+          ${states.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}
+        </select></div>
+      <div class="fg"><label for="f-assignee">Responsable</label>
+        <select id="f-assignee" data-field="assignee">
+          <option value="">— aucun —</option>
+          ${domain.users.map((u) => `<option value="${esc(u.id)}">${esc(u.name)}</option>`).join('')}
+        </select></div>
+      <div class="fg"><label for="f-estimate">Estimation (points)</label>
+        <select id="f-estimate" data-field="estimate">
+          <option value="">— aucune —</option>
+          ${FIB.map((f) => `<option value="${f}">${f}</option>`).join('')}
+        </select></div>
+      <div class="f2">
+        <div class="fg"><label for="f-start">Début</label><div class="dfield">
+          <input id="f-start" type="date" data-field="start" value="${today}">
+          <span class="dovl">${ddmmyyyy(today)}</span></div></div>
+        <div class="fg"><label for="f-end">Échéance</label><div class="dfield">
+          <input id="f-end" type="date" data-field="end" value="${today}">
+          <span class="dovl">${ddmmyyyy(today)}</span></div></div>
+      </div>
+      <p class="hint">Sans dates, la tâche n'apparaît pas sur la frise, seulement dans l'onglet « Non planifiées ».</p>
+      <div class="fg"><label>Bloquée par</label>
+        <div class="chklist" data-field="deps">
+          ${domain.issues.map((x) => `<label class="chkrow">
+            <input type="checkbox" value="${esc(x.id)}">
+            <span>${esc(x.identifier)} · ${esc(x.title)}</span>
+          </label>`).join('') || '<p class="hint">Aucune tâche.</p>'}
+        </div></div>
+      <div class="fg"><label>Contributeurs</label>
+        <div class="chklist" data-field="contributors">
+          ${domain.users.map((u) => `<label class="chkrow">
+            <input type="checkbox" value="${esc(u.id)}">
+            <span class="ini" style="background-color:${personColor(u.id, domain.users)}">${esc(initials(u))}</span>
+            <span>${esc(u.name)}</span>
+          </label>`).join('')}
+        </div></div>
+      <p class="hint">Sans contributeur coché, le responsable porte toute la charge. Les parts se règlent ensuite dans la tâche créée.</p>
       ${errorSlot}
       <div class="actions"><button class="btn pri" type="button" data-action="create-issue">Créer la tâche</button></div>`;
-    body.querySelector('[data-action="create-issue"]').addEventListener('click', () => {
-      const value = body.querySelector('[data-field="title"]').value.trim();
+    const button = body.querySelector('[data-action="create-issue"]');
+    const field = (name) => body.querySelector(`[data-field="${name}"]`);
+    const checked = (name) => [...field(name).querySelectorAll('input:checked')].map((c) => c.value);
+    const submit = () => {
+      const value = field('title').value.trim();
       if (!value) return showError(body, 'Le titre est obligatoire.');
+      const start = field('start').value;
+      const end = field('end').value;
+      if (Boolean(start) !== Boolean(end)) return showError(body, 'Renseignez le début et l\'échéance, ou aucun des deux.');
+      if (start && end < start) return showError(body, 'L\'échéance précède le début.');
       const input = { teamId, title: value };
-      if (projectId) input.projectId = projectId;
-      onWrite((api) => api.createIssue(input), `Tâche « ${value} » créée`, null);
+      if (field('project').value) input.projectId = field('project').value;
+      if (field('state').value) input.stateId = field('state').value;
+      if (field('assignee').value) input.assigneeId = field('assignee').value;
+      if (field('estimate').value) input.estimate = Number(field('estimate').value);
+      if (start) Object.assign(input, { start, end });
+      const blockedBy = checked('deps');
+      if (blockedBy.length) input.blockedBy = blockedBy;
+      const contributorIds = checked('contributors');
+      if (contributorIds.length) input.contributorIds = contributorIds;
+      submitCreate(button, (api) => api.createIssue(input), `Tâche « ${value} » créée`);
+    };
+    button.addEventListener('click', submit);
+    field('title').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submit();
     });
   }
 
@@ -236,17 +400,43 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     title.textContent = 'Nouveau projet';
     body.innerHTML = `
       <div class="fg"><label for="f-pname">Nom du projet</label><input id="f-pname" data-field="pname"></div>
-      <div class="fg"><label for="f-pteam">Team</label>
-        <select id="f-pteam" data-field="pteam">
-          ${domain.teams.map((t) => `<option value="${esc(t.id)}"${t.id === teamId ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}
-        </select></div>
+      <div class="fg"><label>Teams</label>
+        <div class="chklist" data-field="pteams">
+          ${domain.teams.map((t) => `<label class="chkrow">
+            <input type="checkbox" value="${esc(t.id)}"${t.id === teamId ? ' checked' : ''}>
+            <span>${esc(t.name)}</span>
+          </label>`).join('')}
+        </div></div>
+      <div class="f2">
+        <div class="fg"><label for="f-pstart">Début</label><div class="dfield">
+          <input id="f-pstart" type="date" data-field="pstart">
+          <span class="dovl"></span></div></div>
+        <div class="fg"><label for="f-ptarget">Échéance</label><div class="dfield">
+          <input id="f-ptarget" type="date" data-field="ptarget">
+          <span class="dovl"></span></div></div>
+      </div>
+      <div class="fg"><label for="f-pcolor">Couleur</label>
+        <input id="f-pcolor" type="color" data-field="pcolor" value="#2E5F8A"></div>
+      <p class="hint">Sans début et échéance, le projet n'a pas de bande sur la frise. Sans couleur choisie, Linear en attribue une.</p>
       ${errorSlot}
       <div class="actions"><button class="btn pri" type="button" data-action="create-project">Créer le projet</button></div>`;
-    body.querySelector('[data-action="create-project"]').addEventListener('click', () => {
-      const value = body.querySelector('[data-field="pname"]').value.trim();
+    const field = (name) => body.querySelector(`[data-field="${name}"]`);
+    let colorChosen = false;
+    field('pcolor').addEventListener('input', () => { colorChosen = true; });
+    const button = body.querySelector('[data-action="create-project"]');
+    button.addEventListener('click', () => {
+      const value = field('pname').value.trim();
       if (!value) return showError(body, 'Le nom est obligatoire.');
-      const team = body.querySelector('[data-field="pteam"]').value;
-      onWrite((api) => api.createProject({ teamIds: [team], name: value }), `Projet « ${value} » créé`, null);
+      const teamIds = [...field('pteams').querySelectorAll('input:checked')].map((c) => c.value);
+      if (!teamIds.length) return showError(body, 'Choisissez au moins une team.');
+      const startDate = field('pstart').value;
+      const targetDate = field('ptarget').value;
+      if (startDate && targetDate && targetDate < startDate) return showError(body, 'L\'échéance précède le début.');
+      const input = { teamIds, name: value };
+      if (startDate) input.startDate = startDate;
+      if (targetDate) input.targetDate = targetDate;
+      if (colorChosen) input.color = field('pcolor').value;
+      submitCreate(button, (api) => api.createProject(input), `Projet « ${value} » créé`);
     });
   }
 
@@ -257,11 +447,12 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       <div class="fg"><label for="f-tname">Nom</label><input id="f-tname" data-field="tname"></div>
       ${errorSlot}
       <div class="actions"><button class="btn pri" type="button" data-action="create-team">Créer la team</button></div>`;
-    body.querySelector('[data-action="create-team"]').addEventListener('click', () => {
+    const button = body.querySelector('[data-action="create-team"]');
+    button.addEventListener('click', () => {
       const key = body.querySelector('[data-field="tkey"]').value.trim().toUpperCase();
       const name = body.querySelector('[data-field="tname"]').value.trim();
       if (!key || !name) return showError(body, 'La clé et le nom sont obligatoires.');
-      onWrite((api) => api.createTeam({ key, name }), `Team « ${name} » créée`, null);
+      submitCreate(button, (api) => api.createTeam({ key, name }), `Team « ${name} » créée`);
     });
   }
 
@@ -304,6 +495,23 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       body.innerHTML = '<p class="warn">Ce projet ne figure plus dans l\'instantané Linear.</p>';
       return;
     }
+    if (current.confirmDelete) {
+      const count = domain.issues.filter((i) => i.projectId === project.id).length;
+      return drawDeleteConfirm({
+        heading: `Supprimer le projet ${project.name} ?`,
+        subject: null,
+        expected: project.name,
+        details: [
+          'Le projet est placé dans la corbeille de Linear (restaurable depuis Linear, pas depuis cette application).',
+          count
+            ? `Ses ${count} tâche${count > 1 ? 's ne sont' : ' n\'est'} pas supprimée${count > 1 ? 's' : ''} : elle${count > 1 ? 's restent' : ' reste'} dans Linear, sans projet.`
+            : 'Il ne contient aucune tâche.',
+          'Ses jalons disparaissent avec lui.',
+        ],
+        run: (api) => api.deleteProject(project.id, project.name),
+        label: `Projet « ${project.name} » supprimé`,
+      });
+    }
     title.textContent = project.name;
     const teamNames = project.teamIds.map((id) => domain.teams.find((t) => t.id === id)?.name ?? id);
     body.innerHTML = `
@@ -320,7 +528,9 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       </div>
       <div class="fg"><label for="f-pcolor">Couleur</label>
         <input id="f-pcolor" type="color" data-field="pcolor" value="${esc(project.color)}"></div>
-      ${project.milestones.length ? `<div class="sec">Jalons</div>${project.milestones.map((m) => ro(m.name, m.date ? longDay(m.date) : '—')).join('')}` : ''}`;
+      ${project.milestones.length ? `<div class="sec">Jalons</div>${project.milestones.map((m) => ro(m.name, m.date ? longDay(m.date) : '—')).join('')}` : ''}
+      ${dangerZone('Supprimer le projet…')}`;
+    body.querySelector('[data-action="ask-delete"]').addEventListener('click', askDelete);
     body.querySelector('[data-field="pname"]').addEventListener('blur', (e) => {
       const value = e.target.value.trim();
       if (value && value !== project.name) {

@@ -78,9 +78,16 @@ const panels = createPanels({
   body: document.getElementById('dwB'),
   closeButton: document.getElementById('dwX'),
   onMutate: (call) => controller.mutate(call),
-  onWrite: (call, label, restore) => {
-    controller.mutate(async (api) => {
-      await applyWriteResult(api, await call(api));
+  onWrite: async (call, label, restore) => {
+    // Une écriture peut réussir en partie (tâche créée, mais une dépendance
+    // ou une notification refusée par Linear) : le serveur le signale dans
+    // `warnings`. On l'affiche après coup, car mutate() efface l'erreur en
+    // cas de succès.
+    let warnings = [];
+    const ok = await controller.mutate(async (api) => {
+      const result = await call(api);
+      warnings = result?.warnings ?? [];
+      await applyWriteResult(api, result);
       if (restore) {
         undo.arm(label, async () => {
           await applyWriteResult(api, await restore(api));
@@ -90,6 +97,11 @@ const panels = createPanels({
       draw();
       return controller.state.planning;
     });
+    if (ok && warnings.length) {
+      controller.state.error = `${label}, mais : ${warnings.join(' ; ')}.`;
+      draw();
+    }
+    return ok;
   },
   onPrefs: (patch) => setPrefs(patch),
   onForgetKey: () => {

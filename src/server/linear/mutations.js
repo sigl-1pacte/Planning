@@ -10,6 +10,13 @@ const ISSUE_CREATE = `mutation IssueCreate($input: IssueCreateInput!) {
   issueCreate(input: $input) { success issue { ${ISSUE_FIELDS} } }
 }`;
 
+// Suppression douce : Linear met l'issue à la corbeille (30 jours de délai de
+// grâce). On ne passe jamais permanentlyDelete — l'irréversible n'est pas
+// exposé par cette application.
+const ISSUE_DELETE = `mutation IssueDelete($id: String!) {
+  issueDelete(id: $id) { success }
+}`;
+
 const ISSUE_BLOCKERS = `query IssueBlockers($id: String!) {
   issue(id: $id) { inverseRelations(first: 50) { nodes { id type issue { id } } } }
 }`;
@@ -32,6 +39,12 @@ const PROJECT_CREATE = `mutation ProjectCreate($input: ProjectCreateInput!) {
   projectCreate(input: $input) { success project { ${PROJECT_FIELDS} } }
 }`;
 
+// Suppression douce également : le projet part à la corbeille Linear
+// (restaurable avec projectUnarchive).
+const PROJECT_DELETE = `mutation ProjectDelete($id: String!) {
+  projectDelete(id: $id) { success }
+}`;
+
 const TEAM_CREATE = `mutation TeamCreate($input: TeamCreateInput!) {
   teamCreate(input: $input) { success team { id key name } }
 }`;
@@ -49,8 +62,8 @@ const MILESTONE_UPDATE = `mutation ProjectMilestoneUpdate($id: String!, $input: 
 }`;
 
 export const MUTATIONS = [
-  ISSUE_UPDATE, ISSUE_CREATE, ISSUE_RELATION_CREATE, ISSUE_RELATION_DELETE,
-  PROJECT_UPDATE, PROJECT_CREATE, TEAM_CREATE, COMMENT_CREATE, ISSUE_SUBSCRIBE, MILESTONE_UPDATE,
+  ISSUE_UPDATE, ISSUE_CREATE, ISSUE_DELETE, ISSUE_RELATION_CREATE, ISSUE_RELATION_DELETE,
+  PROJECT_UPDATE, PROJECT_CREATE, PROJECT_DELETE, TEAM_CREATE, COMMENT_CREATE, ISSUE_SUBSCRIBE, MILESTONE_UPDATE,
 ];
 
 export async function updateIssue(key, issueId, input, opts) {
@@ -63,6 +76,11 @@ export async function createIssue(key, input, opts) {
   const data = await gql(key, ISSUE_CREATE, { input }, opts);
   if (!data.issueCreate.success) throw new Error('Linear a refusé la création');
   return data.issueCreate.issue;
+}
+
+export async function deleteIssue(key, issueId, opts) {
+  const data = await gql(key, ISSUE_DELETE, { id: issueId }, opts);
+  if (!data.issueDelete.success) throw new Error('Linear a refusé la suppression');
 }
 
 export async function issueBlockers(key, issueId, opts) {
@@ -92,6 +110,11 @@ export async function createProject(key, input, opts) {
   const data = await gql(key, PROJECT_CREATE, { input }, opts);
   if (!data.projectCreate.success) throw new Error('Linear a refusé la création du projet');
   return data.projectCreate.project;
+}
+
+export async function deleteProject(key, projectId, opts) {
+  const data = await gql(key, PROJECT_DELETE, { id: projectId }, opts);
+  if (!data.projectDelete.success) throw new Error('Linear a refusé la suppression du projet');
 }
 
 export async function createTeam(key, input, opts) {

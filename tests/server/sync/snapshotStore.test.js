@@ -155,6 +155,26 @@ describe('snapshotStore', () => {
     expect(deps.fetchWorkspace).toHaveBeenCalledOnce();
   });
 
+  it('ne rejoint pas un cycle démarré avant l\'écriture : il attend puis relance le sien', async () => {
+    let releaseStale;
+    const stale = rawWorkspace();
+    const fresh = rawWorkspace();
+    fresh.projects = [...fresh.projects, { ...fresh.projects[0], id: 'p-created', name: 'Créé' }];
+    const fetchWorkspace = vi.fn()
+      .mockImplementationOnce(() => new Promise((resolve) => { releaseStale = () => resolve(stale); }))
+      .mockImplementationOnce(async () => fresh);
+    const { store } = setup({ fetchWorkspace });
+    const polling = store.get('k');
+    await Promise.resolve();
+    const refreshed = store.forceRefresh('k', { full: true });
+    await Promise.resolve();
+    releaseStale();
+    await polling;
+    const snap = await refreshed;
+    expect(fetchWorkspace).toHaveBeenCalledTimes(2);
+    expect(snap.domain.projects.some((p) => p.id === 'p-created')).toBe(true);
+  });
+
   it('force un cycle complet avec { full: true }, même avant les dix minutes', async () => {
     const { store, clock, deps } = setup();
     await store.get('k');

@@ -101,8 +101,15 @@ export function createSnapshotStore({
     // demandent donc explicitement un cycle complet ; les rafraîchissements
     // après une écriture restent incrémentaux (rapides), l'écriture
     // elle-même ayant déjà mis à jour ce qui vient de changer.
+    //
+    // Un cycle déjà en cours a démarré avant l'écriture qui motive cet appel :
+    // sa réponse peut ne pas la contenir. On attend qu'il finisse et on lance
+    // le nôtre, plutôt que de le rejoindre.
     async forceRefresh(key, { full = false } = {}) {
-      if (now() >= backoffUntil) await refresh(key, full);
+      if (now() >= backoffUntil) {
+        while (inFlight) await inFlight.catch(() => {});
+        await refresh(key, full);
+      }
       return result();
     },
     current() {

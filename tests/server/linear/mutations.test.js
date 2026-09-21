@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  MUTATIONS, updateIssue, createIssue, issueBlockers, addBlocker, removeBlocker,
+  MUTATIONS, updateIssue, createIssue, deleteIssue, deleteProject, issueBlockers, addBlocker, removeBlocker,
   updateProject, createProject, createTeam, addComment, subscribeToIssue, updateMilestone,
 } from '../../../src/server/linear/mutations.js';
 import { fakeFetch, jsonResponse } from '../../helpers/fakeFetch.js';
@@ -26,6 +26,21 @@ describe('mutations', () => {
     const f = fakeFetch([jsonResponse({ data: { issueCreate: { success: true, issue: { id: 'i2', identifier: 'IOT-2' } } } })]);
     const issue = await createIssue('k', { teamId: 't1', title: 'Nouvelle' }, { fetchImpl: f });
     expect(issue.identifier).toBe('IOT-2');
+  });
+
+  it('supprime une issue ou un projet vers la corbeille, sans jamais demander la suppression définitive', async () => {
+    const issue = fakeFetch([jsonResponse({ data: { issueDelete: { success: true } } })]);
+    await deleteIssue('k', 'i1', { fetchImpl: issue });
+    expect(issue.calls[0].body.variables).toEqual({ id: 'i1' });
+    const project = fakeFetch([jsonResponse({ data: { projectDelete: { success: true } } })]);
+    await deleteProject('k', 'p1', { fetchImpl: project });
+    expect(project.calls[0].body.variables).toEqual({ id: 'p1' });
+    for (const m of MUTATIONS) expect(m).not.toMatch(/permanentlyDelete/);
+  });
+
+  it('signale un refus de suppression', async () => {
+    const f = fakeFetch([jsonResponse({ data: { issueDelete: { success: false } } })]);
+    await expect(deleteIssue('k', 'i1', { fetchImpl: f })).rejects.toThrow('Linear a refusé la suppression');
   });
 
   it('liste les bloqueurs actuels d\'une issue', async () => {

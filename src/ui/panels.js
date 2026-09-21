@@ -1,6 +1,8 @@
 import { esc, initials, personColor, fr1, shortDay, longDay, ddmmyyyy } from './render/format.js';
 import { defaultWeeklyHours } from '../shared/load.js';
 import { todayISO } from '../shared/calendar.js';
+import { enhanceDateFields } from './dateField.js';
+import { issuePickerHtml, wireIssuePicker, emptyPickerState } from './issuePicker.js';
 
 // [Hypothèse] Le barème d'estimation Linear de cette équipe plafonne à 21
 // points (Fibonacci tronqué) ; à ajuster si le barème change côté Linear.
@@ -21,13 +23,17 @@ function showError(form, message) {
   slot.hidden = false;
 }
 
-export function createPanels({ drawer, title, body, closeButton, onMutate, onPrefs, onForgetKey, onWrite }) {
+export function createPanels({ drawer, title, body, closeButton, onMutate, onPrefs, onForgetKey, onWrite, lastError = () => null }) {
   let current = null;
   let ctx = null;
   let submitting = false;
+  // Recherche/filtres de la liste « Bloquée par » : conservés d'un redessin à
+  // l'autre du même panneau, remis à zéro quand on en ouvre un autre.
+  let pickerState = emptyPickerState();
 
   function open(next) {
     current = next;
+    pickerState = emptyPickerState();
     draw();
   }
 
@@ -57,12 +63,17 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     if (!ctx || !current) return;
     drawer.classList.add('on');
     drawer.setAttribute('aria-hidden', 'false');
+    const listScroll = body.querySelector('[data-field="deps"]')?.scrollTop ?? 0;
     if (current.kind === 'issue') drawIssue(current.id, current.seed);
     else if (current.kind === 'person') drawPerson(current.id);
     else if (current.kind === 'proj') drawProj(current.id, current.seed);
     else if (current.kind === 'team') drawNewTeam();
     else if (current.kind === 'milestone') drawMilestone(current.id);
     else drawSettings();
+    enhanceDateFields(body);
+    wireIssuePicker(body.querySelector('[data-picker]'), pickerState);
+    const list = body.querySelector('[data-field="deps"]');
+    if (list) list.scrollTop = listScroll;
   }
 
   function drawIssue(issueId, seed) {
@@ -135,8 +146,20 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     body.innerHTML = `
       ${blockers.length ? `<div class="warn">Démarre avant la fin de ${esc(blockers.join(', '))}.</div>` : ''}
       ${issue.unresolvedMentions.length ? `<div class="warn">Mentions non reconnues : ${issue.unresolvedMentions.map((m) => `@${esc(m)}`).join(', ')}.</div>` : ''}
-      ${ro('Team', domain.teams.find((t) => t.id === issue.teamId)?.name ?? '—')}
-      ${ro('Projet', domain.projects.find((p) => p.id === issue.projectId)?.name ?? 'Sans projet')}
+      <div class="fg"><label for="f-team">Team</label>
+        <div class="f-move">
+          <select id="f-team" data-field="team">
+            ${domain.teams.map((t) => `<option value="${esc(t.id)}"${t.id === issue.teamId ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}
+          </select>
+          <button class="btn" type="button" data-action="move-team" disabled>Déplacer</button>
+        </div>
+        <p class="hint" data-move-hint hidden>Changer de team change l'identifiant de la tâche, la place sur le statut équivalent de la nouvelle team et la retire de son projet s'il n'existe pas dans cette team. Annulable pendant 15 secondes.</p></div>
+      <div class="fg"><label for="f-project">Projet</label>
+        <select id="f-project" data-field="project">
+          <option value="">Sans projet</option>
+          ${domain.projects.filter((p) => p.teamIds.includes(issue.teamId))
+            .map((p) => `<option value="${esc(p.id)}"${p.id === issue.projectId ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}
+        </select></div>
       <div class="fg"><label for="f-title">Titre</label>
         <input id="f-title" data-field="title" value="${esc(issue.title)}"></div>
       <div class="fg"><label for="f-state">Statut</label>
@@ -156,21 +179,13 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         </select></div>
       <div class="f2">
         <div class="fg"><label for="f-start">Début</label><div class="dfield">
-          <input id="f-start" type="date" data-field="start" value="${issue.start ?? ''}">
-          <span class="dovl">${issue.start ? ddmmyyyy(issue.start) : ''}</span></div></div>
+          <input id="f-start" type="date" data-field="start" value="${issue.start ?? ''}"></div></div>
         <div class="fg"><label for="f-end">Échéance</label><div class="dfield">
-          <input id="f-end" type="date" data-field="end" value="${issue.end ?? ''}">
-          <span class="dovl">${issue.end ? ddmmyyyy(issue.end) : ''}</span></div></div>
+          <input id="f-end" type="date" data-field="end" value="${issue.end ?? ''}"></div></div>
       </div>
       ${issue.unplannedReason ? `<p class="hint">${esc(issue.unplannedReason)}</p>` : ''}
       <div class="actions"><button class="btn pri" type="button" data-action="reschedule">Replanifier</button></div>
-      <div class="fg"><label>Bloquée par</label>
-        <div class="chklist" data-field="deps">
-          ${otherIssues.map((x) => `<label class="chkrow">
-            <input type="checkbox" value="${esc(x.id)}"${issue.blockedBy.includes(x.id) ? ' checked' : ''}>
-            <span>${esc(x.identifier)} · ${esc(x.title)}</span>
-          </label>`).join('')}
-        </div></div>
+      ${issuePickerHtml({ label: 'Bloquée par', issues: otherIssues, checkedIds: issue.blockedBy, teams: domain.teams, projects: domain.projects, states: domain.workflowStates ?? [] })}
       <div class="fg"><label>Contributeurs</label>
         <div class="chklist" data-field="contributors">
           ${domain.users.map((u) => `<label class="chkrow">
@@ -194,6 +209,35 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     body.querySelector('[data-field="assignee"]').addEventListener('change', (e) => {
       const value = e.target.value || null;
       onWrite((api) => api.updateIssue(issue.id, { assigneeId: value }), `Responsable de ${issue.identifier} modifié`, (api) => api.updateIssue(issue.id, { assigneeId: issue.assigneeId }));
+    });
+    // Le déplacement de team est volontairement en deux temps (choisir, puis
+    // « Déplacer ») : une flèche du clavier sur la liste ne doit jamais
+    // déplacer une tâche à chaque option traversée.
+    const teamSelect = body.querySelector('[data-field="team"]');
+    const moveButton = body.querySelector('[data-action="move-team"]');
+    const moveHint = body.querySelector('[data-move-hint]');
+    teamSelect.addEventListener('change', () => {
+      const differs = teamSelect.value !== issue.teamId;
+      moveButton.disabled = !differs;
+      moveHint.hidden = !differs;
+    });
+    moveButton.addEventListener('click', () => {
+      const teamId = teamSelect.value;
+      if (teamId === issue.teamId) return;
+      const teamName = domain.teams.find((t) => t.id === teamId)?.name ?? teamId;
+      onWrite(
+        (api) => api.updateIssue(issue.id, { teamId }),
+        `${issue.identifier} déplacée vers ${teamName}`,
+        (api) => api.updateIssue(issue.id, { teamId: issue.teamId, stateId: issue.stateId, projectId: issue.projectId }),
+      );
+    });
+    body.querySelector('[data-field="project"]').addEventListener('change', (e) => {
+      const projectId = e.target.value || null;
+      onWrite(
+        (api) => api.updateIssue(issue.id, { projectId }),
+        `Projet de ${issue.identifier} modifié`,
+        (api) => api.updateIssue(issue.id, { projectId: issue.projectId }),
+      );
     });
     body.querySelector('[data-field="state"]').addEventListener('change', (e) => {
       const value = e.target.value;
@@ -283,7 +327,10 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       const opened = current;
       try {
         const ok = await onWrite(run, label, null);
-        if (ok !== false && current === opened) close();
+        // En cas d'échec (droits, réseau…), la raison s'affiche ici, sur
+        // l'écran où l'on vient de cliquer, pas seulement dans le bandeau du haut.
+        if (ok === false) showError(body, lastError() ?? 'La suppression a échoué.');
+        else if (current === opened) close();
       } finally {
         submitting = false;
         confirm.disabled = !matches();
@@ -303,7 +350,8 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     const opened = current;
     try {
       const ok = await onWrite(call, label, null);
-      if (ok !== false && current === opened) close();
+      if (ok === false) showError(body, lastError() ?? 'L\'écriture a échoué.');
+      else if (current === opened) close();
     } finally {
       submitting = false;
       button.disabled = false;
@@ -342,20 +390,12 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         </select></div>
       <div class="f2">
         <div class="fg"><label for="f-start">Début</label><div class="dfield">
-          <input id="f-start" type="date" data-field="start" value="${today}">
-          <span class="dovl">${ddmmyyyy(today)}</span></div></div>
+          <input id="f-start" type="date" data-field="start" value="${today}"></div></div>
         <div class="fg"><label for="f-end">Échéance</label><div class="dfield">
-          <input id="f-end" type="date" data-field="end" value="${today}">
-          <span class="dovl">${ddmmyyyy(today)}</span></div></div>
+          <input id="f-end" type="date" data-field="end" value="${today}"></div></div>
       </div>
       <p class="hint">Sans dates, la tâche n'apparaît pas sur la frise, seulement dans l'onglet « Non planifiées ».</p>
-      <div class="fg"><label>Bloquée par</label>
-        <div class="chklist" data-field="deps">
-          ${domain.issues.map((x) => `<label class="chkrow">
-            <input type="checkbox" value="${esc(x.id)}">
-            <span>${esc(x.identifier)} · ${esc(x.title)}</span>
-          </label>`).join('') || '<p class="hint">Aucune tâche.</p>'}
-        </div></div>
+      ${issuePickerHtml({ label: 'Bloquée par', issues: domain.issues, checkedIds: [], teams: domain.teams, projects: domain.projects, states: domain.workflowStates ?? [] })}
       <div class="fg"><label>Contributeurs</label>
         <div class="chklist" data-field="contributors">
           ${domain.users.map((u) => `<label class="chkrow">
@@ -409,11 +449,9 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         </div></div>
       <div class="f2">
         <div class="fg"><label for="f-pstart">Début</label><div class="dfield">
-          <input id="f-pstart" type="date" data-field="pstart">
-          <span class="dovl"></span></div></div>
+          <input id="f-pstart" type="date" data-field="pstart"></div></div>
         <div class="fg"><label for="f-ptarget">Échéance</label><div class="dfield">
-          <input id="f-ptarget" type="date" data-field="ptarget">
-          <span class="dovl"></span></div></div>
+          <input id="f-ptarget" type="date" data-field="ptarget"></div></div>
       </div>
       <div class="fg"><label for="f-pcolor">Couleur</label>
         <input id="f-pcolor" type="color" data-field="pcolor" value="#2E5F8A"></div>
@@ -473,8 +511,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     body.innerHTML = `
       ${ro('Projet', project.name)}
       <div class="fg"><label for="f-mdate">Date</label><div class="dfield">
-        <input id="f-mdate" type="date" data-field="mdate" value="${milestone.date ?? ''}">
-        <span class="dovl">${milestone.date ? ddmmyyyy(milestone.date) : ''}</span></div></div>`;
+        <input id="f-mdate" type="date" data-field="mdate" value="${milestone.date ?? ''}"></div></div>`;
     body.querySelector('[data-field="mdate"]').addEventListener('change', (e) => {
       const value = e.target.value;
       if (!value) return;
@@ -520,11 +557,9 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       ${ro('Teams', teamNames.join(', ') || 'aucune')}
       <div class="f2">
         <div class="fg"><label for="f-pstart">Début</label><div class="dfield">
-          <input id="f-pstart" type="date" data-field="pstart" value="${project.startDate ?? ''}">
-          <span class="dovl">${project.startDate ? ddmmyyyy(project.startDate) : ''}</span></div></div>
+          <input id="f-pstart" type="date" data-field="pstart" value="${project.startDate ?? ''}"></div></div>
         <div class="fg"><label for="f-ptarget">Échéance</label><div class="dfield">
-          <input id="f-ptarget" type="date" data-field="ptarget" value="${project.targetDate ?? ''}">
-          <span class="dovl">${project.targetDate ? ddmmyyyy(project.targetDate) : ''}</span></div></div>
+          <input id="f-ptarget" type="date" data-field="ptarget" value="${project.targetDate ?? ''}"></div></div>
       </div>
       <div class="fg"><label for="f-pcolor">Couleur</label>
         <input id="f-pcolor" type="color" data-field="pcolor" value="${esc(project.color)}"></div>
@@ -628,8 +663,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       <form data-form="holiday">
         <div class="f2">
           <div class="fg"><label for="h-day">Date</label><div class="dfield">
-            <input id="h-day" name="day" type="date">
-            <span class="dovl"></span></div></div>
+            <input id="h-day" name="day" type="date"></div></div>
           <div class="fg"><label for="h-label">Libellé</label><input id="h-label" name="label"></div>
         </div>
         ${errorSlot}
@@ -690,13 +724,6 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     event.preventDefault();
     const handlers = { shares: submitShares, person: submitPerson, settings: submitSettings, holiday: submitHoliday };
     handlers[form.dataset.form](form);
-  });
-
-  body.addEventListener('input', (event) => {
-    const target = event.target;
-    if (target.type !== 'date') return;
-    const overlay = target.nextElementSibling;
-    if (overlay?.classList.contains('dovl')) overlay.textContent = target.value ? ddmmyyyy(target.value) : '';
   });
 
   body.addEventListener('click', (event) => {

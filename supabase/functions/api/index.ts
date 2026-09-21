@@ -20,7 +20,7 @@ import * as repo from '../../../src/server/db/repo.js';
 import { computeReschedule, RescheduleCycleError } from '../../../src/shared/reschedule.js';
 import { setStartingDate, setContributors } from '../../../src/server/linear/parsing.js';
 import { refreshUntil } from '../../../src/server/sync/refreshUntil.js';
-import { createIssueWithExtras, buildProjectInput } from '../../../src/server/linear/createFlow.js';
+import { createIssueWithExtras, buildProjectInput, withMove } from '../../../src/server/linear/createFlow.js';
 import { createKeyValidator } from '../../../src/server/auth.js';
 import {
   fetchWorkspace, fetchIssuesSince, fetchViewer, fetchDiagnosticSample,
@@ -131,6 +131,8 @@ const issuePatchBody = {
     assigneeId: { type: ['string', 'null'] },
     estimate: { type: ['number', 'null'], minimum: 0 },
     stateId: { type: 'string', minLength: 1 },
+    teamId: { type: 'string', minLength: 1 },
+    projectId: { type: ['string', 'null'], minLength: 1 },
     start: { type: 'string' },
     end: { type: 'string' },
   },
@@ -318,10 +320,11 @@ app.put('/api/issues/:issueId', async (c) => {
   const body: any = await c.req.json();
   assertValid(issuePatchBody, body);
   const key = c.get('linearKey');
-  const patch: any = { ...body };
+  const current = await store.current();
+  const issue = current?.domain.issues.find((i: any) => i.id === c.req.param('issueId'));
+  // Changement de team / de projet : statut et projet réalignés côté serveur.
+  const patch: any = withMove({ ...body }, issue, current?.domain ?? null);
   if ('start' in patch) {
-    const current = await store.current();
-    const issue = current?.domain.issues.find((i: any) => i.id === c.req.param('issueId'));
     patch.description = setStartingDate(issue?.rawDescription ?? null, patch.start);
     delete patch.start;
   }

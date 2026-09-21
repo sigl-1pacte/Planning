@@ -23,7 +23,7 @@ function context({ planningOver = {}, mutate } = {}) {
   return { domain, planning, load, view, prefs: { showCanceled: false } };
 }
 
-function setup(ctx = context()) {
+function setup(ctx = context(), { lastError } = {}) {
   const drawer = document.createElement('aside');
   const title = document.createElement('h3');
   const body = document.createElement('div');
@@ -55,7 +55,7 @@ function setup(ctx = context()) {
   const onWrite = vi.fn((call) => call(api));
   const onPrefs = vi.fn();
   const onForgetKey = vi.fn();
-  const panels = createPanels({ drawer, title, body, closeButton, onMutate, onPrefs, onForgetKey, onWrite });
+  const panels = createPanels({ drawer, title, body, closeButton, onMutate, onPrefs, onForgetKey, onWrite, lastError });
   panels.update(ctx);
   return { drawer, title, body, closeButton, api, onMutate, onWrite, onPrefs, onForgetKey, panels };
 }
@@ -82,10 +82,9 @@ describe('panneau de tâche', () => {
     expect(t.body.querySelector('[data-field="estimate"]').value).toBe('8');
     expect(t.body.querySelector('[data-field="start"]').value).toBe('2026-09-16');
     expect(t.body.querySelector('[data-field="end"]').value).toBe('2026-09-25');
-    // Texte fiable à côté du <input type="date"> natif, dont l'affichage
-    // suit la locale du navigateur (souvent pas DD/MM/YYYY en anglais).
-    expect(t.body.querySelector('[data-field="start"]').nextElementSibling.textContent).toBe('16/09/2026');
-    expect(t.body.querySelector('[data-field="end"]').nextElementSibling.textContent).toBe('25/09/2026');
+    // Champ visible jj/mm/aaaa, indépendant de la locale du navigateur.
+    expect(t.body.querySelector('#f-start').value).toBe('16/09/2026');
+    expect(t.body.querySelector('#f-end').value).toBe('25/09/2026');
     const depsChecked = [...t.body.querySelectorAll('[data-field="deps"] input:checked')].map((i) => i.value);
     expect(depsChecked).toEqual([]);
     const contribChecked = [...t.body.querySelectorAll('[data-field="contributors"] input:checked')].map((i) => i.value);
@@ -132,13 +131,18 @@ describe('panneau de tâche', () => {
     expect(t.api.clearContributions).toHaveBeenCalledWith('i-11');
   });
 
-  it('affiche la date DD/MM/AAAA en direct à côté du sélecteur natif', () => {
+  it('les flèches du champ de date suivent l\'ordre affiché jj/mm : jour, puis mois', () => {
     const t = setup();
     t.panels.openIssue('i-11');
-    const start = t.body.querySelector('[data-field="start"]');
-    start.value = '2026-10-05';
-    start.dispatchEvent(new Event('input', { bubbles: true }));
-    expect(start.nextElementSibling.textContent).toBe('05/10/2026');
+    const text = t.body.querySelector('#f-start');
+    const native = t.body.querySelector('[data-field="start"]');
+    expect(native.value).toBe('2026-09-16');
+    text.setSelectionRange(1, 1);
+    text.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+    expect(native.value).toBe('2026-09-17');
+    text.setSelectionRange(4, 4);
+    text.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+    expect(native.value).toBe('2026-10-17');
   });
 
   it('recalcule en direct la dernière part pour que le total fasse toujours 100', () => {
@@ -229,9 +233,8 @@ describe('champs éditables', () => {
   it('affiche la team et le projet de la tâche', () => {
     const t = setup();
     t.panels.openIssue('i-11');
-    const rows = Object.fromEntries([...t.body.querySelectorAll('.ro')].map((r) => [r.children[0].textContent, r.children[1].textContent]));
-    expect(rows.Team).toBe('IoT');
-    expect(rows.Projet).toBe('Réalisation POC v1');
+    expect(t.body.querySelector('[data-field="team"]').selectedOptions[0].textContent).toBe('IoT');
+    expect(t.body.querySelector('[data-field="project"]').selectedOptions[0].textContent).toBe('Réalisation POC v1');
   });
 });
 
@@ -671,6 +674,21 @@ describe('suppression', () => {
     expect(t.body.querySelector('[data-field="confirm"]').value).toBe('IOT-11');
   });
 
+  it('affiche dans l\'écran de confirmation la raison du refus de Linear', async () => {
+    const t = setup(context(), { lastError: () => 'Erreur GraphQL Linear : Forbidden' });
+    t.onWrite.mockImplementation(async () => false);
+    t.panels.openProject('p-poc1');
+    t.body.querySelector('[data-action="ask-delete"]').click();
+    const name = t.title.textContent.replace(/^Supprimer le projet | \?$/g, '');
+    type(t.body.querySelector('[data-field="confirm"]'), name);
+    t.body.querySelector('[data-action="confirm-delete"]').click();
+    await flush();
+    const slot = t.body.querySelector('[data-error]');
+    expect(slot.hidden).toBe(false);
+    expect(slot.textContent).toBe('Erreur GraphQL Linear : Forbidden');
+    expect(t.drawer.classList.contains('on')).toBe(true);
+  });
+
   it('ne vide pas la saisie de confirmation quand le contexte est rafraîchi', () => {
     const t = setup();
     t.panels.openIssue('i-11');
@@ -695,5 +713,158 @@ describe('suppression', () => {
     confirm.click();
     await flush();
     expect(t.api.deleteProject).toHaveBeenCalledWith('p-poc1', name);
+  });
+});
+
+describe('sélecteur de tâches bloquantes', () => {
+  const visibleIds = (t) => [...t.body.querySelectorAll('[data-field="deps"] .chkrow:not([hidden]) input')].map((i) => i.value);
+  const allIds = (t) => [...t.body.querySelectorAll('[data-field="deps"] .chkrow input')].map((i) => i.value);
+  const setControl = (t, name, value) => {
+    const el = t.body.querySelector(`[data-pk="${name}"]`);
+    if (el.type === 'checkbox') el.checked = value; else el.value = value;
+    el.dispatchEvent(new Event(el.type === 'search' ? 'input' : 'change', { bubbles: true }));
+  };
+
+  it('propose recherche et filtres au-dessus de la liste, dans l\'édition comme à la création', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    for (const n of ['q', 'team', 'project', 'status', 'only']) expect(t.body.querySelector(`[data-pk="${n}"]`), n).not.toBeNull();
+    t.panels.openIssue(null, { teamId: 't-iot' });
+    for (const n of ['q', 'team', 'project', 'status', 'only']) expect(t.body.querySelector(`[data-pk="${n}"]`), n).not.toBeNull();
+  });
+
+  it('cherche par identifiant ou titre, sans tenir compte de la casse ni des accents', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const all = allIds(t);
+    expect(all).not.toContain('i-11');
+    const first = t.body.querySelector('[data-field="deps"] .chkrow');
+    const identifier = first.dataset.text.split(' ')[0];
+    setControl(t, 'q', identifier.toLowerCase());
+    expect(visibleIds(t)).toEqual([first.querySelector('input').value]);
+    setControl(t, 'q', 'zzzz-inexistant');
+    expect(visibleIds(t)).toEqual([]);
+    expect(t.body.querySelector('[data-pk-empty]').hidden).toBe(false);
+    setControl(t, 'q', '');
+    expect(visibleIds(t)).toEqual(all);
+  });
+
+  it('filtre par team, projet et statut', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const rows = [...t.body.querySelectorAll('[data-field="deps"] .chkrow')];
+    const team = rows[0].dataset.team;
+    setControl(t, 'team', team);
+    expect(visibleIds(t)).toEqual(rows.filter((r) => r.dataset.team === team).map((r) => r.querySelector('input').value));
+    setControl(t, 'team', '');
+    const status = rows[0].dataset.status;
+    expect(status).toMatch(/^(Todo|In Progress|Done|Canceled)$/);
+    setControl(t, 'status', status);
+    expect(visibleIds(t)).toEqual(rows.filter((r) => r.dataset.status === status).map((r) => r.querySelector('input').value));
+    setControl(t, 'status', '');
+    setControl(t, 'project', 'none');
+    expect(visibleIds(t)).toEqual(rows.filter((r) => r.dataset.project === 'none').map((r) => r.querySelector('input').value));
+  });
+
+  it('le filtre de statut propose les vrais statuts Linear, sans doublon, dans l\'ordre du cycle de vie', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const names = [...t.body.querySelectorAll('[data-pk="status"] option')].map((o) => o.textContent);
+    expect(names).toEqual(['Tous les statuts', 'Todo', 'In Progress', 'Done', 'Canceled']);
+  });
+
+  it('« cochées seulement » ne montre que la sélection', () => {
+    const t = setup();
+    t.panels.openIssue(null, { teamId: 't-iot' });
+    const boxes = [...t.body.querySelectorAll('[data-field="deps"] input')];
+    boxes[1].checked = true;
+    boxes[1].dispatchEvent(new Event('change', { bubbles: true }));
+    setControl(t, 'only', true);
+    expect(visibleIds(t)).toEqual([boxes[1].value]);
+  });
+
+  it('une tâche cochée puis masquée par un filtre reste bien envoyée', async () => {
+    const t = setup();
+    t.panels.openIssue(null, { teamId: 't-iot' });
+    t.body.querySelector('[data-field="title"]').value = 'X';
+    const box = t.body.querySelector('[data-field="deps"] input');
+    box.checked = true;
+    setControl(t, 'q', 'zzzz-inexistant');
+    expect(visibleIds(t)).toEqual([]);
+    t.body.querySelector('[data-action="create-issue"]').click();
+    await flush();
+    expect(t.api.createIssue.mock.calls[0][0].blockedBy).toEqual([box.value]);
+  });
+
+  it('garde recherche et filtres quand le panneau est redessiné, et les remet à zéro pour une autre tâche', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    setControl(t, 'q', 'zzzz');
+    t.panels.update(context());
+    expect(t.body.querySelector('[data-pk="q"]').value).toBe('zzzz');
+    t.panels.openIssue('i-12');
+    expect(t.body.querySelector('[data-pk="q"]').value).toBe('');
+  });
+
+  it('le compteur indique affichées, total et cochées', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const total = allIds(t).length;
+    expect(t.body.querySelector('[data-pk-count]').textContent).toMatch(new RegExp(`${total} affichées? sur ${total} · \\d+ cochées?`));
+  });
+});
+
+describe('déplacer une tâche', () => {
+  it('propose team et projet modifiables, avec un bouton Déplacer inactif tant que la team ne change pas', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const select = t.body.querySelector('[data-field="team"]');
+    const button = t.body.querySelector('[data-action="move-team"]');
+    expect(select.value).toBe('t-iot');
+    expect(button.disabled).toBe(true);
+    expect(t.body.querySelector('[data-field="project"]').value).toBe('p-poc1');
+  });
+
+  it('ne déplace pas au simple choix d\'une team : il faut cliquer sur Déplacer', async () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const select = t.body.querySelector('[data-field="team"]');
+    select.value = 't-web';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await flush();
+    expect(t.api.updateIssue).not.toHaveBeenCalled();
+    const button = t.body.querySelector('[data-action="move-team"]');
+    expect(button.disabled).toBe(false);
+    expect(t.body.querySelector('[data-move-hint]').hidden).toBe(false);
+    button.click();
+    await flush();
+    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { teamId: 't-web' });
+    expect(t.onWrite.mock.calls.at(-1)[1]).toMatch(/IOT-11 déplacée vers/);
+  });
+
+  it('arme une annulation qui remet team, statut et projet d\'origine', async () => {
+    const t = setup();
+    t.onWrite.mockImplementation((call, label, restore) => { t.restore = restore; return call(t.api); });
+    t.panels.openIssue('i-11');
+    const select = t.body.querySelector('[data-field="team"]');
+    select.value = 't-web';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    t.body.querySelector('[data-action="move-team"]').click();
+    await flush();
+    await t.restore(t.api);
+    expect(t.api.updateIssue).toHaveBeenLastCalledWith('i-11', { teamId: 't-iot', stateId: 'st-iot-started', projectId: 'p-poc1' });
+  });
+
+  it('change le projet d\'une tâche, limité aux projets de sa team', async () => {
+    const t = setup();
+    t.panels.openIssue('i-20');
+    const options = [...t.body.querySelectorAll('[data-field="project"] option')].map((o) => o.value);
+    expect(options).toEqual(['']);
+    t.panels.openIssue('i-11');
+    const project = t.body.querySelector('[data-field="project"]');
+    project.value = '';
+    project.dispatchEvent(new Event('change', { bubbles: true }));
+    await flush();
+    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { projectId: null });
   });
 });

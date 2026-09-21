@@ -103,6 +103,7 @@ const panels = createPanels({
     }
     return ok;
   },
+  lastError: () => controller.state.error,
   onPrefs: (patch) => setPrefs(patch),
   onForgetKey: () => {
     api.forgetKey();

@@ -11,7 +11,7 @@ import { rawWorkspace } from '../fixtures/workspace.js';
 
 const TODAY = '2026-09-17';
 
-function draw({ collapsed = new Set(), mutate } = {}) {
+function draw({ collapsed = new Set(), mutate, withStates = false } = {}) {
   const raw = rawWorkspace();
   mutate?.(raw);
   const domain = mapWorkspace(raw);
@@ -28,6 +28,7 @@ function draw({ collapsed = new Set(), mutate } = {}) {
   const sink = createRowSink(leftRows, rightRows);
   const { rowY, colorOf } = renderGroups(sink, {
     view, axis, holidays, load, users: domain.users, collapsed, selectedIssueId: null,
+    states: withStates ? domain.workflowStates : undefined,
   });
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   renderDependencies(svg, { rowY, colorOf, issues: domain.issues, conflicts: view.conflicts, axis, height: sink.top });
@@ -147,6 +148,33 @@ describe('board', () => {
     expect(l.querySelector('.tm').textContent).toBe('S 45% · L 45%');
     expect(l.querySelector('.pts').textContent).toBe('8');
     expect([...l.querySelectorAll('.dt')].map((e) => e.textContent)).toEqual(['16/09', '25/09']);
+  });
+
+  it('affiche le vrai nom du statut Linear dans le badge, pas un libellé générique', () => {
+    const d = draw({ withStates: true });
+    expect(d.row(d.leftRows, 'i-11').querySelector('.pill').textContent).toBe('In Progress');
+    expect(d.row(d.leftRows, 'i-20').querySelector('.pill').textContent).toBe('Done');
+    expect(d.row(d.leftRows, 'i-11').querySelector('.pill').title).toBe('In Progress');
+  });
+
+  it('un statut personnalisé de la team s\'affiche tel quel, coloré selon son type', () => {
+    const d = draw({
+      withStates: true,
+      mutate: (raw) => {
+        raw.workflowStates.push({ id: 'st-iot-review', name: 'In Review', type: 'started', position: 2.5, team: { id: 't-iot' } });
+        raw.issues[0].state = { id: 'st-iot-review', type: 'started' };
+      },
+    });
+    const pill = d.row(d.leftRows, 'i-11').querySelector('.pill');
+    expect(pill.textContent).toBe('In Review');
+    expect(pill.style.backgroundColor).not.toBe('');
+  });
+
+  it('une tâche bloquée garde son statut Linear en texte, avec la raison en infobulle', () => {
+    const d = draw({ withStates: true, mutate: (raw) => { raw.issues[1].description = 'Starting date: 24/09/2026'; } });
+    const pill = d.row(d.leftRows, 'i-12').querySelector('.pill');
+    expect(pill.textContent).toBe('Todo');
+    expect(pill.title).toMatch(/Todo.*bloquée/);
   });
 
   it('signale les contributeurs à vérifier, l’estimation absente et les tâches terminées', () => {

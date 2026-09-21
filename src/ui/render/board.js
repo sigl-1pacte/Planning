@@ -182,7 +182,10 @@ function orderIssues(issues) {
   return out;
 }
 
-export function renderGroups(sink, { view, axis, holidays, load, users, collapsed, selectedIssueId }) {
+export function renderGroups(sink, { view, axis, holidays, load, users, collapsed, selectedIssueId, states = [] }) {
+  // Le badge affiche le vrai statut Linear (« In Review », « Backlog »…) ; sans
+  // liste de statuts, repli sur le libellé générique à quatre valeurs.
+  const stateNameOf = new Map(states.map((s) => [s.id, s.name]));
   const blocked = new Set(view.conflicts.map((c) => c.issueId));
   const rowY = {};
   const colorOf = {};
@@ -216,6 +219,7 @@ export function renderGroups(sink, { view, axis, holidays, load, users, collapse
             color: block.project.color,
             status: issueStatus(issue, blocked),
             axis, holidays, load, users,
+            stateName: stateNameOf.get(issue.stateId) ?? null,
             selected: issue.id === selectedIssueId,
             depth, parentId,
           });
@@ -322,7 +326,7 @@ export function renderIssueBar(right, issue, { color, status, axis, holidays }) 
   right.appendChild(handleRight);
 }
 
-function renderIssueRow(sink, issue, { color, status, axis, holidays, load, users, selected, depth = 0, parentId = null }) {
+function renderIssueRow(sink, issue, { color, status, axis, holidays, load, users, stateName = null, selected, depth = 0, parentId = null }) {
   const [left, right] = rowPair(`r tk${issue.status === 'canceled' ? ' cx' : ''}${selected ? ' sel' : ''}${depth > 0 ? ' sub' : ''}`);
   left.dataset.t = issue.id;
   right.dataset.t = issue.id;
@@ -342,7 +346,11 @@ function renderIssueRow(sink, issue, { color, status, axis, holidays, load, user
   const warn = issue.unresolvedMentions.length > 0 || issue.contributorsSource === 'none';
   const noEstimate = issue.estimate === null;
 
-  left.innerHTML = `<span class="pill" style="background-color:${STATUS[status].color}">${STATUS[status].label}</span>
+  // La couleur reste celle du type de statut (ou rouge si conflit de
+  // dépendance) ; le texte est le nom réel du statut dans Linear.
+  const pillLabel = stateName ?? STATUS[status].label;
+  const pillTitle = status === 'blocked' ? `${pillLabel} — bloquée : conflit de dépendance` : pillLabel;
+  left.innerHTML = `<span class="pill" style="background-color:${STATUS[status].color}" title="${esc(pillTitle)}">${esc(pillLabel)}</span>
     <span class="id"${depth > 0 ? ` style="padding-left:${depth * 14}px"` : ''}>${esc(issue.identifier)}</span>
     <span class="nmw" title="${esc(issue.title)}">${esc(issue.title)}</span>
     <span class="flag" title="${warn ? 'Contributeurs à vérifier' : ''}">${warn ? '!' : ''}</span>

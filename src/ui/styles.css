@@ -352,3 +352,15 @@ th:first-child,td:first-child{padding-left:0}
   .sheet h2{font-size:16px}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+
+/* Suppression : discrète tant qu'on ne l'a pas demandée, franche ensuite. */
+.danger-zone{margin-top:6px}
+.btn.danger-ghost{background:none;border:1px solid #D9B9BB;color:var(--block);box-shadow:none}
+.btn.danger-ghost:hover{background:#FBF2F2;color:#8E1F26;border-color:var(--block);transform:none;box-shadow:none}
+.danger-box{border:1px solid #D9B9BB;border-left:3px solid var(--block);background:#FDF7F7;border-radius:var(--r-sm);padding:12px 14px}
+.danger-subject{margin:0 0 8px;font-weight:600;color:var(--ink)}
+.danger-list{margin:0 0 12px;padding-left:18px;color:#6A1B20;font-size:12px;line-height:1.5}
+.danger-token{background:#F3E3E4;border-radius:3px;padding:1px 5px;font-weight:600;user-select:all}
+.danger-actions{display:flex;gap:8px;justify-content:space-between}
+.btn.danger{background:linear-gradient(180deg,#C4373F,var(--block));border-color:#8E1F26;color:#fff}
+.btn.danger:hover{background:linear-gradient(180deg,#D0444C,#B8323A)}

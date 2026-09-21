@@ -151,11 +151,19 @@ export function createSnapshotStore({
   // rafraîchissement. Celle qui n'obtient pas le verrou renvoie l'état
   // courant plutôt que d'attendre (pas de canal pour partager une promesse
   // entre invocations séparées, contrairement au process Fastify).
-  async function refresh(key: string, forceFull: boolean) {
+  //
+  // wait: après une écriture, le cycle en cours a démarré avant elle et peut
+  // ne pas la refléter ; on attend alors le verrou (donc la fin de ce cycle)
+  // pour lancer le nôtre, au lieu de renvoyer un état potentiellement périmé.
+  async function refresh(key: string, forceFull: boolean, wait = false) {
     const conn = await db.reserve();
     try {
-      const { rows } = await conn.query('select pg_try_advisory_lock($1) as ok', [ADVISORY_LOCK_KEY]);
-      if (!rows[0].ok) return;
+      if (wait) {
+        await conn.query('select pg_advisory_lock($1)', [ADVISORY_LOCK_KEY]);
+      } else {
+        const { rows } = await conn.query('select pg_try_advisory_lock($1) as ok', [ADVISORY_LOCK_KEY]);
+        if (!rows[0].ok) return;
+      }
       try {
         await cycle(key, forceFull);
       } finally {
@@ -177,7 +185,7 @@ export function createSnapshotStore({
     },
     async forceRefresh(key: string, { full = false } = {}) {
       const row = await loadRow(db);
-      if (now() >= new Date(row.backoff_until).getTime()) await refresh(key, full);
+      if (now() >= new Date(row.backoff_until).getTime()) await refresh(key, full, true);
       return result(await loadRow(db));
     },
     async current() {

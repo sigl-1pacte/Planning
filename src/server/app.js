@@ -5,6 +5,8 @@ import { dayOfWeek, isValidDate } from '../shared/calendar.js';
 import * as repo from './db/repo.js';
 import { computeReschedule, RescheduleCycleError } from '../shared/reschedule.js';
 import { setStartingDate, setContributors } from './linear/parsing.js';
+import { refreshUntil } from './sync/refreshUntil.js';
+import { createIssueWithExtras, buildProjectInput } from './linear/createFlow.js';
 
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -134,7 +136,23 @@ const issueCreateBody = {
     projectId: { type: ['string', 'null'] },
     title: { type: 'string', minLength: 1 },
     estimate: { type: ['number', 'null'], minimum: 0 },
+    start: { type: 'string' },
+    end: { type: 'string' },
+    assigneeId: { type: 'string', minLength: 1 },
+    stateId: { type: 'string', minLength: 1 },
+    blockedBy: { type: 'array', items: { type: 'string', minLength: 1 } },
+    contributorIds: { type: 'array', items: { type: 'string', minLength: 1 } },
   },
+};
+
+// La suppression exige que le client renvoie l'identifiant de la tâche (ou le
+// nom du projet) : le serveur le compare à Linear. Un appel qui ne l'a pas
+// tapé explicitement — script, requête rejouée, mauvais id — est refusé.
+const deleteBody = {
+  type: 'object',
+  required: ['confirm'],
+  additionalProperties: false,
+  properties: { confirm: { type: 'string', minLength: 1 } },
 };
 
 const projectPatchBody = {
@@ -163,6 +181,9 @@ const projectCreateBody = {
   properties: {
     teamIds: { type: 'array', minItems: 1, items: { type: 'string' } },
     name: { type: 'string', minLength: 1 },
+    startDate: { type: 'string' },
+    targetDate: { type: 'string' },
+    color: { type: 'string' },
   },
 };
 
@@ -173,7 +194,7 @@ const teamCreateBody = {
   properties: { key: { type: 'string', minLength: 1 }, name: { type: 'string', minLength: 1 } },
 };
 
-export function buildApp({ db, store, validateKey, linear, staticDir = null, logger = false }) {
+export function buildApp({ db, store, validateKey, linear, staticDir = null, logger = false, refreshDelayMs = 400 }) {
   const app = Fastify({ logger });
 
   app.setErrorHandler((err, req, reply) => {
@@ -361,32 +382,65 @@ export function buildApp({ db, store, validateKey, linear, staticDir = null, log
   });
 
   app.post('/api/issues', { schema: { body: issueCreateBody } }, async (req) => {
-    const issue = await linear.createIssue(req.linearKey, req.body);
-    const snap = await store.forceRefresh(req.linearKey);
-    return { domain: snap.domain, issueId: issue.id };
+    // Tout ce qui peut être refusé l'est avant le premier appel vers Linear
+    // (voir linear/createFlow.js) : start/end, statut, contributeurs, etc.
+    const { issue, warnings } = await createIssueWithExtras({
+      linear, key: req.linearKey, body: req.body, domain: store.current()?.domain ?? null,
+    });
+    const snap = await refreshUntil(store, req.linearKey, (d) => d.issues.some((i) => i.id === issue.id), { delayMs: refreshDelayMs });
+    return { domain: snap.domain, issueId: issue.id, warnings };
+  });
+
+  app.delete('/api/issues/:issueId', { schema: { body: deleteBody } }, async (req) => {
+    const current = store.current();
+    if (!current) throw Object.assign(new Error('Instantané indisponible'), { statusCode: 503 });
+    const issue = current.domain.issues.find((i) => i.id === req.params.issueId);
+    if (!issue) throw Object.assign(new Error('Tâche introuvable'), { statusCode: 404 });
+    if (req.body.confirm !== issue.identifier) throw badRequest('Confirmation incorrecte : saisissez l\'identifiant de la tâche');
+    await linear.deleteIssue(req.linearKey, issue.id);
+    const snap = await refreshUntil(store, req.linearKey, (d) => !d.issues.some((i) => i.id === issue.id), { delayMs: refreshDelayMs });
+    return { domain: snap.domain };
+  });
+
+  app.delete('/api/projects/:projectId', { schema: { body: deleteBody } }, async (req) => {
+    const current = store.current();
+    if (!current) throw Object.assign(new Error('Instantané indisponible'), { statusCode: 503 });
+    const project = current.domain.projects.find((p) => p.id === req.params.projectId);
+    if (!project) throw Object.assign(new Error('Projet introuvable'), { statusCode: 404 });
+    if (req.body.confirm !== project.name) throw badRequest('Confirmation incorrecte : saisissez le nom du projet');
+    await linear.deleteProject(req.linearKey, project.id);
+    // Les tâches du projet restent dans Linear (elles n'ont simplement plus de
+    // projet) : la synchronisation complète les relit toutes.
+    const snap = await refreshUntil(store, req.linearKey, (d) => !d.projects.some((p) => p.id === project.id), { delayMs: refreshDelayMs });
+    return { domain: snap.domain };
   });
 
   app.put('/api/projects/:projectId', { schema: { body: projectPatchBody } }, async (req) => {
     await linear.updateProject(req.linearKey, req.params.projectId, req.body);
-    const snap = await store.forceRefresh(req.linearKey);
+    // Synchronisation complète : un cycle incrémental ne relit que les issues,
+    // pas les projets (nom, dates, couleur, jalons).
+    const snap = await store.forceRefresh(req.linearKey, { full: true });
     return { domain: snap.domain };
   });
 
   app.put('/api/milestones/:milestoneId', { schema: { body: milestoneBody } }, async (req) => {
     await linear.updateMilestone(req.linearKey, req.params.milestoneId, { targetDate: req.body.targetDate });
-    const snap = await store.forceRefresh(req.linearKey);
+    const snap = await store.forceRefresh(req.linearKey, { full: true });
     return { domain: snap.domain };
   });
 
   app.post('/api/projects', { schema: { body: projectCreateBody } }, async (req) => {
-    const project = await linear.createProject(req.linearKey, req.body);
-    const snap = await store.forceRefresh(req.linearKey);
+    // Synchronisation complète : un cycle incrémental ne relit que les issues,
+    // jamais la liste des projets ni des teams (rafraîchie seulement toutes
+    // les dix minutes), donc un projet ou une team créés n'y apparaîtraient pas.
+    const project = await linear.createProject(req.linearKey, buildProjectInput(req.body));
+    const snap = await refreshUntil(store, req.linearKey, (d) => d.projects.some((p) => p.id === project.id), { delayMs: refreshDelayMs });
     return { domain: snap.domain, projectId: project.id };
   });
 
   app.post('/api/teams', { schema: { body: teamCreateBody } }, async (req) => {
-    await linear.createTeam(req.linearKey, req.body);
-    const snap = await store.forceRefresh(req.linearKey);
+    const team = await linear.createTeam(req.linearKey, req.body);
+    const snap = await refreshUntil(store, req.linearKey, (d) => !team?.id || d.teams.some((t) => t.id === team.id), { delayMs: refreshDelayMs });
     return { domain: snap.domain };
   });
 

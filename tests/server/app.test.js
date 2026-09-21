@@ -37,11 +37,13 @@ beforeEach(async () => {
     updateProject: vi.fn(async () => ({})),
     createProject: vi.fn(async () => ({ id: 'p-new' })),
     createTeam: vi.fn(async () => ({})),
+    deleteIssue: vi.fn(async () => {}),
+    deleteProject: vi.fn(async () => {}),
     updateMilestone: vi.fn(async () => ({})),
     addComment: vi.fn(async () => {}),
     subscribeToIssue: vi.fn(async () => {}),
   };
-  app = buildApp({ db, store, validateKey, linear });
+  app = buildApp({ db, store, validateKey, linear, refreshDelayMs: 0 });
   await app.ready();
 });
 
@@ -255,6 +257,57 @@ describe('écriture', () => {
     expect(linear.createIssue).toHaveBeenCalledWith('good', { teamId: 't-iot', title: 'Nouvelle' });
   });
 
+  it('crée une issue planifiée : Starting date dans la description, échéance en dueDate', async () => {
+    const res = await call('POST', '/api/issues', { teamId: 't-iot', title: 'Nouvelle', start: '2026-09-28', end: '2026-10-02' });
+    expect(res.statusCode).toBe(200);
+    expect(linear.createIssue).toHaveBeenCalledWith('good', {
+      teamId: 't-iot', title: 'Nouvelle', description: 'Starting date: 28/09/2026', dueDate: '2026-10-02',
+    });
+  });
+
+  it('refuse une création avec une seule date, une date invalide ou une échéance avant le début', async () => {
+    for (const dates of [
+      { start: '2026-09-28' },
+      { end: '2026-10-02' },
+      { start: '2026-02-30', end: '2026-03-02' },
+      { start: '2026-10-02', end: '2026-09-28' },
+    ]) {
+      expect((await call('POST', '/api/issues', { teamId: 't-iot', title: 'X', ...dates })).statusCode).toBe(400);
+    }
+    expect(linear.createIssue).not.toHaveBeenCalled();
+  });
+
+  it('crée une tâche complète : champs Linear, dépendances, contributeurs, avertissements vides', async () => {
+    const res = await call('POST', '/api/issues', {
+      teamId: 't-iot', title: 'Complète', projectId: 'p-poc1', stateId: 'st-iot-started', assigneeId: 'u-louis',
+      estimate: 5, start: '2026-09-28', end: '2026-10-02', blockedBy: ['i-11'], contributorIds: ['u-sacha'],
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().warnings).toEqual([]);
+    expect(linear.createIssue).toHaveBeenCalledWith('good', {
+      teamId: 't-iot', title: 'Complète', projectId: 'p-poc1', stateId: 'st-iot-started', assigneeId: 'u-louis', estimate: 5,
+      description: 'Starting date: 28/09/2026\n\nContributors: @sacha', dueDate: '2026-10-02',
+    });
+    expect(linear.addBlocker).toHaveBeenCalledWith('good', 'i-new', 'i-11');
+    expect(linear.subscribeToIssue).toHaveBeenCalledWith('good', 'i-new', 'u-sacha');
+  });
+
+  it('refuse une tâche avec un statut d\'une autre team, sans rien créer', async () => {
+    const res = await call('POST', '/api/issues', { teamId: 't-iot', title: 'X', stateId: 'st-web-unstarted' });
+    expect(res.statusCode).toBe(400);
+    expect(linear.createIssue).not.toHaveBeenCalled();
+  });
+
+  it('crée un projet avec dates et couleur, et refuse une échéance avant le début', async () => {
+    const ok = await call('POST', '/api/projects', { teamIds: ['t-iot'], name: 'P', startDate: '2026-10-01', targetDate: '2026-12-01', color: '#112233' });
+    expect(ok.statusCode).toBe(200);
+    expect(linear.createProject).toHaveBeenCalledWith('good', { teamIds: ['t-iot'], name: 'P', startDate: '2026-10-01', targetDate: '2026-12-01', color: '#112233' });
+    linear.createProject.mockClear();
+    const bad = await call('POST', '/api/projects', { teamIds: ['t-iot'], name: 'P', startDate: '2026-12-01', targetDate: '2026-10-01' });
+    expect(bad.statusCode).toBe(400);
+    expect(linear.createProject).not.toHaveBeenCalled();
+  });
+
   it('refuse une création sans team ni titre', async () => {
     expect((await call('POST', '/api/issues', { teamId: 't-iot' })).statusCode).toBe(400);
   });
@@ -301,6 +354,23 @@ describe('écriture', () => {
     expect((await call('POST', '/api/teams', { key: 'NEW', name: 'Nouvelle team' })).statusCode).toBe(200);
   });
 
+  it('relit Linear en synchronisation complète après avoir créé ou modifié un projet, une team, une tâche', async () => {
+    await call('POST', '/api/projects', { teamIds: ['t-iot'], name: 'X' });
+    expect(store.forceRefresh).toHaveBeenCalledWith('good', { full: true });
+    store.forceRefresh.mockClear();
+    await call('POST', '/api/teams', { key: 'NEW', name: 'Nouvelle team' });
+    expect(store.forceRefresh).toHaveBeenCalledWith('good', { full: true });
+    store.forceRefresh.mockClear();
+    await call('POST', '/api/issues', { teamId: 't-iot', title: 'T' });
+    expect(store.forceRefresh).toHaveBeenCalledWith('good', { full: true });
+    store.forceRefresh.mockClear();
+    await call('PUT', '/api/projects/p-poc1', { name: 'Renommé' });
+    expect(store.forceRefresh).toHaveBeenCalledWith('good', { full: true });
+    store.forceRefresh.mockClear();
+    await call('PUT', '/api/milestones/m-1', { targetDate: '2026-11-12' });
+    expect(store.forceRefresh).toHaveBeenCalledWith('good', { full: true });
+  });
+
   it('modifie les dates et la couleur d\'un projet', async () => {
     const res = await call('PUT', '/api/projects/p-poc1', { startDate: '2026-09-20', targetDate: '2026-11-20', color: '#ff0000' });
     expect(res.statusCode).toBe(200);
@@ -311,5 +381,48 @@ describe('écriture', () => {
     const res = await call('PUT', '/api/milestones/m-1', { targetDate: '2026-11-12' });
     expect(res.statusCode).toBe(200);
     expect(linear.updateMilestone).toHaveBeenCalledWith('good', 'm-1', { targetDate: '2026-11-12' });
+  });
+
+  describe('suppression', () => {
+    const issue = snap.domain.issues.find((i) => i.id === 'i-11');
+    const project = snap.domain.projects.find((p) => p.id === 'p-poc1');
+
+    it('supprime une tâche quand son identifiant exact est confirmé, puis relit Linear en entier', async () => {
+      const res = await call('DELETE', '/api/issues/i-11', { confirm: issue.identifier });
+      expect(res.statusCode).toBe(200);
+      expect(linear.deleteIssue).toHaveBeenCalledWith('good', 'i-11');
+      expect(store.forceRefresh).toHaveBeenCalledWith('good', { full: true });
+    });
+
+    it('supprime un projet quand son nom exact est confirmé', async () => {
+      const res = await call('DELETE', '/api/projects/p-poc1', { confirm: project.name });
+      expect(res.statusCode).toBe(200);
+      expect(linear.deleteProject).toHaveBeenCalledWith('good', 'p-poc1');
+    });
+
+    it('refuse sans confirmation, avec une confirmation fausse ou approximative — rien n\'est supprimé', async () => {
+      const wrong = [undefined, {}, { confirm: '' }, { confirm: 'IOT-12' }, { confirm: issue.identifier.toLowerCase() }, { confirm: ` ${issue.identifier}` }];
+      for (const body of wrong) {
+        expect((await call('DELETE', '/api/issues/i-11', body)).statusCode).toBe(400);
+      }
+      for (const body of [undefined, {}, { confirm: 'autre' }, { confirm: project.name.toUpperCase() }]) {
+        expect((await call('DELETE', '/api/projects/p-poc1', body)).statusCode).toBe(400);
+      }
+      expect(linear.deleteIssue).not.toHaveBeenCalled();
+      expect(linear.deleteProject).not.toHaveBeenCalled();
+    });
+
+    it('répond 404 pour une tâche ou un projet inconnus, et ne confond pas l\'identifiant d\'une autre tâche', async () => {
+      expect((await call('DELETE', '/api/issues/inconnue', { confirm: issue.identifier })).statusCode).toBe(404);
+      expect((await call('DELETE', '/api/projects/inconnu', { confirm: project.name })).statusCode).toBe(404);
+      const other = snap.domain.issues.find((i) => i.id !== 'i-11');
+      expect((await call('DELETE', '/api/issues/i-11', { confirm: other.identifier })).statusCode).toBe(400);
+      expect(linear.deleteIssue).not.toHaveBeenCalled();
+    });
+
+    it('exige la clé Linear', async () => {
+      expect((await call('DELETE', '/api/issues/i-11', { confirm: issue.identifier }, {})).statusCode).toBe(401);
+      expect(linear.deleteIssue).not.toHaveBeenCalled();
+    });
   });
 });

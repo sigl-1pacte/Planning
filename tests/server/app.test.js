@@ -40,6 +40,7 @@ beforeEach(async () => {
     deleteIssue: vi.fn(async () => {}),
     deleteProject: vi.fn(async () => {}),
     updateMilestone: vi.fn(async () => ({})),
+    createMilestone: vi.fn(async () => ({ id: 'm-new' })),
     addComment: vi.fn(async () => {}),
     subscribeToIssue: vi.fn(async () => {}),
   };
@@ -389,6 +390,25 @@ describe('écriture', () => {
     const res = await call('PUT', '/api/projects/p-poc1', { startDate: '2026-09-20', targetDate: '2026-11-20', color: '#ff0000' });
     expect(res.statusCode).toBe(200);
     expect(linear.updateProject).toHaveBeenCalledWith('good', 'p-poc1', { startDate: '2026-09-20', targetDate: '2026-11-20', color: '#ff0000' });
+  });
+
+  it('crée un jalon dans un projet et relit Linear en entier', async () => {
+    const res = await call('POST', '/api/milestones', { projectId: 'p-poc1', name: 'Livraison', targetDate: '2026-12-01' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().milestoneId).toBe('m-new');
+    expect(linear.createMilestone).toHaveBeenCalledWith('good', { projectId: 'p-poc1', name: 'Livraison', targetDate: '2026-12-01' });
+    expect(store.forceRefresh).toHaveBeenCalledWith('good', { full: true });
+  });
+
+  it('refuse un jalon invalide sans appeler Linear', async () => {
+    for (const [body, status] of [
+      [{ projectId: 'p-poc1' }, 400], [{ projectId: 'p-poc1', name: '' }, 400], [{ name: 'X' }, 400],
+      [{ projectId: 'p-poc1', name: '  ' }, 400], [{ projectId: 'p-poc1', name: 'X', targetDate: '2026-02-30' }, 400],
+      [{ projectId: 'inconnu', name: 'X' }, 404],
+    ]) {
+      expect((await call('POST', '/api/milestones', body)).statusCode, JSON.stringify(body)).toBe(status);
+    }
+    expect(linear.createMilestone).not.toHaveBeenCalled();
   });
 
   it('modifie la date d\'un jalon', async () => {

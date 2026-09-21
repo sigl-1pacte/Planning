@@ -74,7 +74,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     else if (current.kind === 'person') drawPerson(current.id);
     else if (current.kind === 'proj') drawProj(current.id, current.seed);
     else if (current.kind === 'team') drawNewTeam();
-    else if (current.kind === 'milestone') drawMilestone(current.id);
+    else if (current.kind === 'milestone') drawMilestone(current.id, current.seed);
     else drawSettings();
     enhanceDateFields(body);
     wireIssuePicker(body.querySelector('[data-picker]'), pickerState);
@@ -526,7 +526,41 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     });
   }
 
-  function drawMilestone(milestoneId) {
+  function drawNewMilestone({ projectId } = {}) {
+    const { domain } = ctx;
+    const project = domain.projects.find((p) => p.id === projectId);
+    if (!project) {
+      title.textContent = 'Projet introuvable';
+      body.innerHTML = '<p class="warn">Ce projet ne figure plus dans l\'instantané Linear.</p>';
+      return;
+    }
+    title.textContent = 'Nouveau jalon';
+    const suggested = project.targetDate ?? todayISO();
+    body.innerHTML = `
+      ${ro('Projet', project.name)}
+      <div class="fg"><label for="f-mname">Nom du jalon</label><input id="f-mname" data-field="mname"></div>
+      <div class="fg"><label for="f-mdate">Date</label><div class="dfield">
+        <input id="f-mdate" type="date" data-field="mdate" value="${suggested}"></div></div>
+      <p class="hint">Sans date, le jalon existe dans Linear mais n'apparaît pas sur la frise. Une fois créé, on le déplace en le faisant glisser sur la frise.</p>
+      ${errorSlot}
+      <div class="actions"><button class="btn pri" type="button" data-action="create-milestone">Créer le jalon</button></div>`;
+    const button = body.querySelector('[data-action="create-milestone"]');
+    const submit = () => {
+      const name = body.querySelector('[data-field="mname"]').value.trim();
+      if (!name) return showError(body, 'Le nom est obligatoire.');
+      const targetDate = body.querySelector('[data-field="mdate"]').value;
+      const input = { projectId: project.id, name };
+      if (targetDate) input.targetDate = targetDate;
+      submitCreate(button, (api) => api.createMilestone(input), `Jalon « ${name} » créé`);
+    };
+    button.addEventListener('click', submit);
+    body.querySelector('[data-field="mname"]').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submit();
+    });
+  }
+
+  function drawMilestone(milestoneId, seed) {
+    if (milestoneId === null) return drawNewMilestone(seed ?? {});
     const { domain } = ctx;
     let project = null;
     let milestone = null;
@@ -550,7 +584,8 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       onWrite(
         (api) => api.updateMilestone(milestoneId, value),
         `Jalon « ${milestone.name} » déplacé`,
-        (api) => api.updateMilestone(milestoneId, milestone.date),
+        // Sans date d'origine, il n'y a rien à remettre : pas d'annulation.
+        milestone.date ? (api) => api.updateMilestone(milestoneId, milestone.date) : null,
       );
     });
   }
@@ -595,9 +630,14 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       </div>
       <div class="fg"><label for="f-pcolor">Couleur</label>
         <input id="f-pcolor" type="color" data-field="pcolor" value="${esc(project.color)}"></div>
-      ${project.milestones.length ? `<div class="sec">Jalons</div>${project.milestones.map((m) => ro(m.name, m.date ? longDay(m.date) : '—')).join('')}` : ''}
+      <div class="sec">Jalons</div>
+      ${project.milestones.map((m) => ro(m.name, m.date ? longDay(m.date) : 'sans date')).join('') || '<p class="hint">Aucun jalon.</p>'}
+      <div class="actions"><button class="btn" type="button" data-action="add-milestone">Ajouter un jalon</button></div>
       ${dangerZone('Supprimer le projet…')}`;
     body.querySelector('[data-action="ask-delete"]').addEventListener('click', askDelete);
+    body.querySelector('[data-action="add-milestone"]').addEventListener('click', () => {
+      open({ kind: 'milestone', id: null, seed: { projectId: project.id } });
+    });
     body.querySelector('[data-field="pname"]').addEventListener('blur', (e) => {
       const value = e.target.value.trim();
       if (value && value !== project.name) {

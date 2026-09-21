@@ -61,9 +61,13 @@ const MILESTONE_UPDATE = `mutation ProjectMilestoneUpdate($id: String!, $input: 
   projectMilestoneUpdate(id: $id, input: $input) { success projectMilestone { id name targetDate } }
 }`;
 
+const MILESTONE_CREATE = `mutation ProjectMilestoneCreate($input: ProjectMilestoneCreateInput!) {
+  projectMilestoneCreate(input: $input) { success projectMilestone { id name targetDate } }
+}`;
+
 export const MUTATIONS = [
   ISSUE_UPDATE, ISSUE_CREATE, ISSUE_DELETE, ISSUE_RELATION_CREATE, ISSUE_RELATION_DELETE,
-  PROJECT_UPDATE, PROJECT_CREATE, PROJECT_DELETE, TEAM_CREATE, COMMENT_CREATE, ISSUE_SUBSCRIBE, MILESTONE_UPDATE,
+  PROJECT_UPDATE, PROJECT_CREATE, PROJECT_DELETE, TEAM_CREATE, COMMENT_CREATE, ISSUE_SUBSCRIBE, MILESTONE_UPDATE, MILESTONE_CREATE,
 ];
 
 export async function updateIssue(key, issueId, input, opts) {
@@ -142,4 +146,10 @@ export async function updateMilestone(key, milestoneId, input, opts) {
   const data = await gql(key, MILESTONE_UPDATE, { id: milestoneId, input }, opts);
   if (!data.projectMilestoneUpdate.success) throw new Error('Linear a refusé la modification du jalon');
   return data.projectMilestoneUpdate.projectMilestone;
+}
+
+export async function createMilestone(key, input, opts) {
+  const data = await gql(key, MILESTONE_CREATE, { input }, opts);
+  if (!data.projectMilestoneCreate.success) throw new Error('Linear a refusé la création du jalon');
+  return data.projectMilestoneCreate.projectMilestone;
 }

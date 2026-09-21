@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildIssuePlan, buildProjectInput, createIssueWithExtras, withMove } from '../../../src/server/linear/createFlow.js';
+import { buildIssuePlan, buildProjectInput, createIssueWithExtras, withMove, buildMilestoneInput } from '../../../src/server/linear/createFlow.js';
 import { mapWorkspace } from '../../../src/server/linear/mapper.js';
 import { rawWorkspace } from '../../fixtures/workspace.js';
 
@@ -147,5 +147,20 @@ describe('withMove', () => {
   it('répond 503 sans instantané et 404 pour une tâche inconnue', () => {
     expect(() => withMove({ teamId: 't-web' }, issue, null)).toThrow(expect.objectContaining({ statusCode: 503 }));
     expect(() => withMove({ teamId: 't-web' }, undefined, domain)).toThrow(expect.objectContaining({ statusCode: 404 }));
+  });
+});
+
+describe('buildMilestoneInput', () => {
+  it('garde projet, nom nettoyé et date valide ; la date est facultative', () => {
+    expect(buildMilestoneInput({ projectId: 'p-poc1', name: '  Livraison ', targetDate: '2026-12-01' }, domain))
+      .toEqual({ projectId: 'p-poc1', name: 'Livraison', targetDate: '2026-12-01' });
+    expect(buildMilestoneInput({ projectId: 'p-poc1', name: 'Sans date' }, domain)).toEqual({ projectId: 'p-poc1', name: 'Sans date' });
+  });
+
+  it('refuse nom vide, date impossible ; 404 projet inconnu ; 503 sans instantané', () => {
+    expect(() => buildMilestoneInput({ projectId: 'p-poc1', name: '   ' }, domain)).toThrow(expect.objectContaining({ statusCode: 400 }));
+    expect(() => buildMilestoneInput({ projectId: 'p-poc1', name: 'X', targetDate: '2026-02-30' }, domain)).toThrow(expect.objectContaining({ statusCode: 400 }));
+    expect(() => buildMilestoneInput({ projectId: 'inconnu', name: 'X' }, domain)).toThrow(expect.objectContaining({ statusCode: 404 }));
+    expect(() => buildMilestoneInput({ projectId: 'p-poc1', name: 'X' }, null)).toThrow(expect.objectContaining({ statusCode: 503 }));
   });
 });

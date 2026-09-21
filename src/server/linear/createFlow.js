@@ -135,3 +135,20 @@ export function withMove(patch, issue, domain) {
   }
   return out;
 }
+
+// Création d'un jalon : le projet doit exister ; la date est facultative (un
+// jalon sans date n'apparaît pas sur la frise, mais existe dans Linear).
+export function buildMilestoneInput(body, domain) {
+  if (!domain) throw unavailable();
+  const name = body.name.trim();
+  if (!name) throw badRequest('Le nom du jalon est obligatoire');
+  if (!domain.projects.some((p) => p.id === body.projectId)) {
+    throw Object.assign(new Error('Projet introuvable'), { statusCode: 404 });
+  }
+  const input = { projectId: body.projectId, name };
+  if (body.targetDate) {
+    assertIsoDay(body.targetDate);
+    input.targetDate = body.targetDate;
+  }
+  return input;
+}

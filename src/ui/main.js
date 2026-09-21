@@ -244,14 +244,14 @@ function resolveConflictsInScope() {
     if (blockedByCycle || fixed === 0) return controller.state.planning;
     controller.state.snapshot = { ...controller.state.snapshot, domain };
     controller.state.planning = await api.planning();
-    undo.arm(`${fixed} conflit${fixed > 1 ? 's' : ''} résolu${fixed > 1 ? 's' : ''}`, async (api2) => {
+    undo.arm(`${fixed} conflit${fixed > 1 ? 's' : ''} résolu${fixed > 1 ? 's' : ''}`, async () => {
       let current = controller.state.snapshot.domain;
       for (const o of [...originals].reverse()) {
-        const result = await api2.reschedule(o.issueId, { start: o.start, end: o.end });
+        const result = await api.reschedule(o.issueId, { start: o.start, end: o.end });
         current = result.domain;
       }
       controller.state.snapshot = { ...controller.state.snapshot, domain: current };
-      controller.state.planning = await api2.planning();
+      controller.state.planning = await api.planning();
       draw();
     });
     draw();
@@ -349,8 +349,10 @@ root.addEventListener('pointermove', (event) => {
     showDragTip(`<b>${esc(milestoneDrag.name)}</b><br>${shortDay(newDate)}${deltaLabel(dayDelta)}`);
     if (dayDelta === milestoneDrag.dayDelta) return;
     milestoneDrag.dayDelta = dayDelta;
+    // Le losange est déjà tourné de 45° par le CSS : remplacer son transform par
+    // une simple translation le transformait en carré pendant le glisser.
     const tx = `translateX(${dayDelta * milestoneDrag.dayWidth}px)`;
-    for (const p of milestoneDrag.parts) p.style.transform = tx;
+    for (const p of milestoneDrag.parts) p.style.transform = p.classList.contains('jd') ? `${tx} rotate(45deg)` : tx;
     const label = milestoneDrag.parts.find((p) => p.classList.contains('jt'));
     if (label) label.textContent = `${milestoneDrag.name} · ${shortDay(newDate)}`;
     return;
@@ -440,8 +442,8 @@ function endDrag(commit) {
   const { start, end } = shiftedDates(origStart, origEnd, dayDelta);
   controller.mutate(async (api) => {
     await applyWriteResult(api, await api.reschedule(issueId, { start, end }));
-    undo.arm(`${identifier} déplacée`, async (api2) => {
-      await applyWriteResult(api2, await api2.reschedule(issueId, { start: origStart, end: origEnd }));
+    undo.arm(`${identifier} déplacée`, async () => {
+      await applyWriteResult(api, await api.reschedule(issueId, { start: origStart, end: origEnd }));
       draw();
     });
     draw();
@@ -462,8 +464,8 @@ function endMilestoneDrag(commit) {
   const newDate = addDays(origDate, dayDelta);
   controller.mutate(async (api) => {
     await applyWriteResult(api, await api.updateMilestone(milestoneId, newDate));
-    undo.arm(`Jalon « ${name} » déplacé`, async (api2) => {
-      await applyWriteResult(api2, await api2.updateMilestone(milestoneId, origDate));
+    undo.arm(`Jalon « ${name} » déplacé`, async () => {
+      await applyWriteResult(api, await api.updateMilestone(milestoneId, origDate));
       draw();
     });
     draw();
@@ -505,9 +507,9 @@ function endResizeDrag(commit) {
   controller.mutate(async (api) => {
     await applyWriteResult(api, await api.updateIssue(issueId, { [field]: newValue }));
     for (const s of shifts) await applyWriteResult(api, await api.updateIssue(s.id, { start: s.newStart, end: s.newEnd }));
-    undo.arm(`${identifier} : ${edge === 'start' ? 'début' : 'échéance'} modifié`, async (api2) => {
-      await applyWriteResult(api2, await api2.updateIssue(issueId, { [field]: origValue }));
-      for (const s of shifts) await applyWriteResult(api2, await api2.updateIssue(s.id, { start: s.origStart, end: s.origEnd }));
+    undo.arm(`${identifier} : ${edge === 'start' ? 'début' : 'échéance'} modifié`, async () => {
+      await applyWriteResult(api, await api.updateIssue(issueId, { [field]: origValue }));
+      for (const s of shifts) await applyWriteResult(api, await api.updateIssue(s.id, { start: s.origStart, end: s.origEnd }));
       draw();
     });
     draw();

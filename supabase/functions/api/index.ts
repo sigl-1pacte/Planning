@@ -20,14 +20,14 @@ import * as repo from '../../../src/server/db/repo.js';
 import { computeReschedule, RescheduleCycleError } from '../../../src/shared/reschedule.js';
 import { setStartingDate, setContributors } from '../../../src/server/linear/parsing.js';
 import { refreshUntil } from '../../../src/server/sync/refreshUntil.js';
-import { createIssueWithExtras, buildProjectInput, withMove } from '../../../src/server/linear/createFlow.js';
+import { createIssueWithExtras, buildProjectInput, buildMilestoneInput, withMove } from '../../../src/server/linear/createFlow.js';
 import { createKeyValidator } from '../../../src/server/auth.js';
 import {
   fetchWorkspace, fetchIssuesSince, fetchViewer, fetchDiagnosticSample,
 } from '../../../src/server/linear/queries.js';
 import {
   updateIssue, createIssue, deleteIssue, issueBlockers, addBlocker, removeBlocker,
-  updateProject, createProject, deleteProject, createTeam, addComment, subscribeToIssue, updateMilestone,
+  updateProject, createProject, deleteProject, createTeam, addComment, subscribeToIssue, updateMilestone, createMilestone,
 } from '../../../src/server/linear/mutations.js';
 import { buildDiagnostic } from '../../../src/server/diagnostic.js';
 import { createPool } from './db.ts';
@@ -35,7 +35,7 @@ import { createSnapshotStore } from './snapshotStore.ts';
 
 const linear = {
   updateIssue, createIssue, deleteIssue, issueBlockers, addBlocker, removeBlocker,
-  updateProject, createProject, deleteProject, createTeam, addComment, subscribeToIssue, updateMilestone,
+  updateProject, createProject, deleteProject, createTeam, addComment, subscribeToIssue, updateMilestone, createMilestone,
 };
 
 const DATABASE_URL = Deno.env.get('SUPABASE_DB_URL') ?? Deno.env.get('DATABASE_URL');
@@ -179,6 +179,10 @@ const projectPatchBody = {
 };
 const milestoneBody = {
   type: 'object', required: ['targetDate'], additionalProperties: false, properties: { targetDate: { type: 'string' } },
+};
+const milestoneCreateBody = {
+  type: 'object', required: ['projectId', 'name'], additionalProperties: false,
+  properties: { projectId: { type: 'string', minLength: 1 }, name: { type: 'string', minLength: 1 }, targetDate: { type: 'string' } },
 };
 const projectCreateBody = {
   type: 'object', required: ['teamIds', 'name'], additionalProperties: false,
@@ -458,6 +462,17 @@ app.put('/api/milestones/:milestoneId', async (c) => {
   await linear.updateMilestone(key, c.req.param('milestoneId'), { targetDate: body.targetDate });
   const snap = await store.forceRefresh(key, { full: true });
   return c.json({ domain: snap.domain });
+});
+
+app.post('/api/milestones', async (c) => {
+  const body: any = await c.req.json();
+  assertValid(milestoneCreateBody, body);
+  const key = c.get('linearKey');
+  const input = buildMilestoneInput(body, (await store.current())?.domain ?? null);
+  const milestone = await linear.createMilestone(key, input);
+  // Synchronisation complète : un cycle incrémental ne relit que les issues.
+  const snap = await refreshUntil(store, key, (d: any) => d.projects.some((p: any) => p.milestones.some((m: any) => m.id === milestone.id)));
+  return c.json({ domain: snap.domain, milestoneId: milestone.id });
 });
 
 app.post('/api/projects', async (c) => {

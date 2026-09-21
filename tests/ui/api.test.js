@@ -70,7 +70,7 @@ describe('api', () => {
       jsonResponse({ domain: {} }), jsonResponse({ domain: {}, changes: [] }), jsonResponse({ domain: {} }),
       jsonResponse({ domain: {} }), jsonResponse({ domain: {}, issueId: 'i1' }), jsonResponse({ domain: {} }),
       jsonResponse({ domain: {}, projectId: 'p1' }), jsonResponse({ domain: {} }), jsonResponse({ domain: {} }),
-      jsonResponse({ domain: {} }), jsonResponse({ domain: {} }),
+      jsonResponse({ domain: {} }), jsonResponse({ domain: {} }), jsonResponse({ domain: {} }),
     ]);
     const api = createApi({ fetchImpl: f, storage: memoryStorage() });
     await api.updateIssue('i1', { title: 'X' });
@@ -84,9 +84,11 @@ describe('api', () => {
     await api.updateMilestone('m1', '2026-11-05');
     await api.deleteIssue('i1', 'IOT-1');
     await api.deleteProject('p1', 'Projet');
+    await api.createMilestone({ projectId: 'p1', name: 'Jalon' });
     expect(f.calls.slice(9).map((c) => [c.method, c.url, c.body])).toEqual([
       ['DELETE', '/api/issues/i1', { confirm: 'IOT-1' }],
       ['DELETE', '/api/projects/p1', { confirm: 'Projet' }],
+      ['POST', '/api/milestones', { projectId: 'p1', name: 'Jalon' }],
     ]);
     expect(f.calls.slice(0, 9).map((c) => c.url)).toEqual([
       '/api/issues/i1', '/api/issues/i1/reschedule', '/api/issues/i1/dependencies', '/api/issues/i1/contributors',

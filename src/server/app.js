@@ -6,7 +6,7 @@ import * as repo from './db/repo.js';
 import { computeReschedule, RescheduleCycleError } from '../shared/reschedule.js';
 import { setStartingDate, setContributors } from './linear/parsing.js';
 import { refreshUntil } from './sync/refreshUntil.js';
-import { createIssueWithExtras, buildProjectInput, withMove } from './linear/createFlow.js';
+import { createIssueWithExtras, buildProjectInput, buildMilestoneInput, withMove } from './linear/createFlow.js';
 
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -174,6 +174,17 @@ const milestoneBody = {
   required: ['targetDate'],
   additionalProperties: false,
   properties: { targetDate: { type: 'string' } },
+};
+
+const milestoneCreateBody = {
+  type: 'object',
+  required: ['projectId', 'name'],
+  additionalProperties: false,
+  properties: {
+    projectId: { type: 'string', minLength: 1 },
+    name: { type: 'string', minLength: 1 },
+    targetDate: { type: 'string' },
+  },
 };
 
 const projectCreateBody = {
@@ -430,6 +441,19 @@ export function buildApp({ db, store, validateKey, linear, staticDir = null, log
     await linear.updateMilestone(req.linearKey, req.params.milestoneId, { targetDate: req.body.targetDate });
     const snap = await store.forceRefresh(req.linearKey, { full: true });
     return { domain: snap.domain };
+  });
+
+  app.post('/api/milestones', { schema: { body: milestoneCreateBody } }, async (req) => {
+    const input = buildMilestoneInput(req.body, store.current()?.domain ?? null);
+    const milestone = await linear.createMilestone(req.linearKey, input);
+    // Synchronisation complète : un cycle incrémental ne relit que les issues,
+    // pas les jalons des projets.
+    const snap = await refreshUntil(
+      store, req.linearKey,
+      (d) => d.projects.some((p) => p.milestones.some((m) => m.id === milestone.id)),
+      { delayMs: refreshDelayMs },
+    );
+    return { domain: snap.domain, milestoneId: milestone.id };
   });
 
   app.post('/api/projects', { schema: { body: projectCreateBody } }, async (req) => {

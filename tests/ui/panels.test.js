@@ -47,6 +47,7 @@ function setup(ctx = context(), { lastError } = {}) {
     updateProject: vi.fn(async () => ({})),
     createProject: vi.fn(async () => ({})),
     createTeam: vi.fn(async () => ({})),
+    createMilestone: vi.fn(async () => ({})),
     deleteIssue: vi.fn(async () => ({})),
     deleteProject: vi.fn(async () => ({})),
     updateMilestone: vi.fn(async () => ({})),
@@ -914,5 +915,92 @@ describe('défilement conservé au redessin', () => {
     t.panels.openIssue('i-12');
     expect(t.body.scrollTop).toBe(0);
     expect(t.body.querySelector('[data-field="contributors"]').scrollTop).toBe(0);
+  });
+});
+
+describe('ajouter un jalon', () => {
+  it('le panneau de projet liste les jalons et propose d\'en ajouter', () => {
+    const t = setup();
+    t.panels.openProject('p-poc1');
+    expect(t.body.textContent).toContain('Objet construit');
+    expect(t.body.querySelector('[data-action="add-milestone"]')).not.toBeNull();
+  });
+
+  it('propose l\'ajout même quand le projet n\'a encore aucun jalon', () => {
+    const t = setup(context({ mutate: (raw) => { raw.projects[0].projectMilestones = { nodes: [] }; } }));
+    t.panels.openProject('p-poc1');
+    expect(t.body.textContent).toContain('Aucun jalon');
+    expect(t.body.querySelector('[data-action="add-milestone"]')).not.toBeNull();
+  });
+
+  it('ouvre le formulaire de jalon avec le projet, et la date d\'échéance du projet proposée', () => {
+    const t = setup();
+    t.panels.openProject('p-poc1');
+    t.body.querySelector('[data-action="add-milestone"]').click();
+    expect(t.title.textContent).toBe('Nouveau jalon');
+    expect(t.body.textContent).toContain('Réalisation POC v1');
+    expect(t.body.querySelector('[data-field="mdate"]').value).toBe('2026-11-05');
+  });
+
+  it('crée le jalon (nom, date, projet), puis ferme le panneau', async () => {
+    const t = setup();
+    t.panels.openProject('p-poc1');
+    t.body.querySelector('[data-action="add-milestone"]').click();
+    t.body.querySelector('[data-field="mname"]').value = '  Livraison ';
+    t.body.querySelector('[data-field="mdate"]').value = '2026-12-01';
+    t.body.querySelector('[data-action="create-milestone"]').click();
+    await flush();
+    expect(t.api.createMilestone).toHaveBeenCalledWith({ projectId: 'p-poc1', name: 'Livraison', targetDate: '2026-12-01' });
+    expect(t.onWrite.mock.calls.at(-1)[1]).toMatch(/Jalon « Livraison » créé/);
+    expect(t.drawer.classList.contains('on')).toBe(false);
+  });
+
+  it('crée un jalon sans date si le champ est vidé', async () => {
+    const t = setup();
+    t.panels.openProject('p-poc1');
+    t.body.querySelector('[data-action="add-milestone"]').click();
+    t.body.querySelector('[data-field="mname"]').value = 'À dater';
+    t.body.querySelector('[data-field="mdate"]').value = '';
+    t.body.querySelector('[data-action="create-milestone"]').click();
+    await flush();
+    expect(t.api.createMilestone).toHaveBeenCalledWith({ projectId: 'p-poc1', name: 'À dater' });
+  });
+
+  it('refuse un nom vide, et ne crée qu\'un jalon malgré des clics répétés', async () => {
+    const t = setup();
+    t.panels.openProject('p-poc1');
+    t.body.querySelector('[data-action="add-milestone"]').click();
+    const button = t.body.querySelector('[data-action="create-milestone"]');
+    button.click();
+    expect(t.body.querySelector('[data-error]').textContent).toMatch(/nom/);
+    expect(t.api.createMilestone).not.toHaveBeenCalled();
+    let release;
+    t.onWrite.mockImplementation((call) => new Promise((resolve) => { release = () => resolve(call(t.api)); }));
+    t.body.querySelector('[data-field="mname"]').value = 'Une fois';
+    button.click(); button.click(); button.click();
+    release();
+    await flush();
+    expect(t.api.createMilestone).toHaveBeenCalledTimes(1);
+  });
+
+  it('ne vide pas la saisie quand le contexte est rafraîchi', () => {
+    const t = setup();
+    t.panels.openProject('p-poc1');
+    t.body.querySelector('[data-action="add-milestone"]').click();
+    t.body.querySelector('[data-field="mname"]').value = 'En cours de frappe';
+    t.panels.update(context());
+    expect(t.body.querySelector('[data-field="mname"]').value).toBe('En cours de frappe');
+  });
+
+  it('modifier la date d\'un jalon existant, en tapant jj/mm/aaaa, l\'envoie en ISO avec annulation possible', async () => {
+    const t = setup();
+    t.panels.openMilestone('m-1');
+    const text = t.body.querySelector('#f-mdate');
+    expect(text.value).toBe('05/11/2026');
+    text.value = '12112026';
+    text.dispatchEvent(new Event('input', { bubbles: true }));
+    await flush();
+    expect(t.api.updateMilestone).toHaveBeenCalledWith('m-1', '2026-11-12');
+    expect(typeof t.onWrite.mock.calls.at(-1)[2]).toBe('function');
   });
 });

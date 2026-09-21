@@ -71,6 +71,7 @@ export function createApi({ fetchImpl = (...args) => fetch(...args), storage = g
     createProject: (input) => request('POST', '/api/projects', input),
     deleteProject: (id, confirm) => request('DELETE', project(id), { confirm }),
     createTeam: (input) => request('POST', '/api/teams', input),
+    createMilestone: (input) => request('POST', '/api/milestones', input),
     updateMilestone: (id, targetDate) => request('PUT', `/api/milestones/${encodeURIComponent(id)}`, { targetDate }),
   };
 }

@@ -262,7 +262,7 @@ function resolveConflictsInScope() {
 // Glisser-déposer d'une barre : décale début et échéance du même nombre de
 // jours calendaires (pas de bornage aux jours ouvrés, comme une saisie
 // manuelle de date dans le panneau), puis passe par la même route de
-// replanification en cascade que le bouton « Replanifier ». Le déclic est
+// replanification en cascade que les champs de date du panneau. Le déclic est
 // distingué du clic simple par le nombre de jours réellement franchis : sans
 // déplacement, aucun appel n'est fait et le clic normal (ouverture du
 // panneau) reprend la main.

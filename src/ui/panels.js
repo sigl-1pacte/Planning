@@ -219,7 +219,8 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
           <input id="f-end" type="date" data-field="end" value="${issue.end ?? ''}"></div></div>
       </div>
       ${issue.unplannedReason ? `<p class="hint">${esc(issue.unplannedReason)}</p>` : ''}
-      <div class="actions"><button class="btn pri" type="button" data-action="reschedule">Replanifier</button></div>
+      <p class="warn" data-date-error hidden></p>
+      <p class="hint">Les dates s'enregistrent dans Linear dès qu'elles changent ; les tâches qui dépendent de celle-ci sont décalées avec elle.</p>
       ${issuePickerHtml({ label: 'Bloquée par', issues: otherIssues, checkedIds: issue.blockedBy, teams: domain.teams, projects: domain.projects, states: domain.workflowStates ?? [] })}
       <div class="fg"><label>Contributeurs</label>
         <div class="chklist" data-field="contributors">
@@ -289,16 +290,28 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       const value = e.target.value ? Number(e.target.value) : null;
       onWrite((api) => api.updateIssue(issue.id, { estimate: value }), `Estimation de ${issue.identifier} modifiée`, (api) => api.updateIssue(issue.id, { estimate: issue.estimate }));
     });
-    body.querySelector('[data-action="reschedule"]').addEventListener('click', () => {
-      const start = body.querySelector('[data-field="start"]').value || undefined;
-      const end = body.querySelector('[data-field="end"]').value || undefined;
-      if (!start && !end) return;
+    // Une date qui change s'écrit tout de suite, comme tous les autres champs :
+    // même replanification en cascade que le glisser-déposer de la barre.
+    const dateError = body.querySelector('[data-date-error]');
+    const saveDates = () => {
+      const start = body.querySelector('[data-field="start"]').value;
+      const end = body.querySelector('[data-field="end"]').value;
+      dateError.hidden = true;
+      if (!start || !end) return;
+      if (end < start) {
+        dateError.textContent = 'L\'échéance précède le début : rien n\'est enregistré.';
+        dateError.hidden = false;
+        return;
+      }
+      if (start === issue.start && end === issue.end) return;
       onWrite(
         (api) => api.reschedule(issue.id, { start, end }),
         `${issue.identifier} replanifiée`,
         (api) => api.reschedule(issue.id, { start: issue.start ?? undefined, end: issue.end ?? undefined }),
       );
-    });
+    };
+    body.querySelector('[data-field="start"]').addEventListener('change', saveDates);
+    body.querySelector('[data-field="end"]').addEventListener('change', saveDates);
     body.querySelector('[data-field="deps"]').addEventListener('change', (e) => {
       if (e.target.type !== 'checkbox') return;
       const blockedBy = [...body.querySelectorAll('[data-field="deps"] input:checked')].map((i) => i.value);

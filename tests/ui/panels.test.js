@@ -221,14 +221,26 @@ describe('champs éditables', () => {
     expect(t.api.setContributors).toHaveBeenCalledWith('i-11', ['u-sacha']);
   });
 
-  it('replanifie début et fin en un seul appel', async () => {
+  it('enregistre une date dès qu\'elle change (replanification en cascade), sans bouton', async () => {
     const t = setup();
     t.panels.openIssue('i-13');
+    expect(t.body.querySelector('[data-action="reschedule"]')).toBeNull();
     change(t.body.querySelector('[data-field="start"]'), '2026-10-01');
+    await flush();
+    expect(t.api.reschedule).not.toHaveBeenCalled(); // pas d'échéance encore : on attend
     change(t.body.querySelector('[data-field="end"]'), '2026-10-05');
-    t.body.querySelector('[data-action="reschedule"]').click();
     await flush();
     expect(t.api.reschedule).toHaveBeenCalledWith('i-13', { start: '2026-10-01', end: '2026-10-05' });
+  });
+
+  it('n\'enregistre pas une échéance avant le début, et le dit', async () => {
+    const t = setup();
+    t.panels.openIssue('i-13');
+    change(t.body.querySelector('[data-field="start"]'), '2026-10-10');
+    change(t.body.querySelector('[data-field="end"]'), '2026-10-05');
+    await flush();
+    expect(t.api.reschedule).not.toHaveBeenCalled();
+    expect(t.body.querySelector('[data-date-error]').hidden).toBe(false);
   });
 
   it('modifie les dépendances', async () => {

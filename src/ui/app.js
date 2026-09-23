@@ -124,6 +124,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
   const sink = createRowSink(left, right);
   const { rowY, colorOf } = renderGroups(sink, {
     view, axis, holidays, load, users: domain.users, collapsed: prefs.collapsed, selectedIssueId,
+    states: domain.workflowStates,
   });
   renderLoadRows(sink, { people: view.people, load, planning, axis, users: domain.users, teamScoped: Boolean(view.teamId) });
   renderGrid(root.querySelector('[data-grid]'), axis, holidays, today, sink.top);

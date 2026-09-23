@@ -28,13 +28,18 @@ describe('renderUnplannedTab', () => {
     expect(onPlan).toHaveBeenCalledWith('i1', { start: '2026-10-01', end: '2026-10-05' });
   });
 
-  it('affiche la date DD/MM/AAAA en direct à côté des sélecteurs natifs', () => {
+  it('saisit les dates en jj/mm/aaaa et les transmet en ISO à la planification', () => {
     const section = document.createElement('section');
-    renderUnplannedTab(section, { issues, teams, onPlan: vi.fn() });
-    const start = section.querySelector('[data-start]');
-    start.value = '2026-10-01';
-    start.dispatchEvent(new Event('input', { bubbles: true }));
-    expect(start.nextElementSibling.textContent).toBe('01/10/2026');
+    const onPlan = vi.fn();
+    renderUnplannedTab(section, { issues, teams, onPlan });
+    const row = section.querySelector('tr[data-t]');
+    const type = (input, value) => { input.value = value; input.dispatchEvent(new Event('input', { bubbles: true })); };
+    const [start, end] = row.querySelectorAll('.dtxt');
+    type(start, '01102026');
+    type(end, '05102026');
+    expect(start.value).toBe('01/10/2026');
+    row.querySelector('[data-action="plan"]').click();
+    expect(onPlan).toHaveBeenCalledWith(row.dataset.t, { start: '2026-10-01', end: '2026-10-05' });
   });
 
   it('affiche un message quand tout est planifié', () => {

@@ -53,6 +53,42 @@ describe('rendu', () => {
     expect(louis).toContain('45 h');
   });
 
+  it('ajoute une ligne de total : points et heures sommés, semaines distinctes, pic le plus haut', () => {
+    const ctx = context();
+    const tbody = document.createElement('tbody');
+    renderPeopleTable(tbody, ctx);
+    const rows = [...tbody.rows];
+    expect(rows.length).toBeGreaterThan(2);
+    const total = rows.at(-1);
+    expect(total.classList.contains('tot')).toBe(true);
+    const cells = (row) => [...row.cells].map((c) => c.textContent);
+    const num = (t) => Number(t.replace(/[^\d,]/g, '').replace(',', '.'));
+    const people = rows.slice(0, -1).map(cells);
+    expect(cells(total)[0]).toBe('Total');
+    expect(num(cells(total)[1])).toBeCloseTo(people.reduce((s, r) => s + num(r[1]), 0), 1);
+    expect(num(cells(total)[2])).toBeCloseTo(summarize(ctx).hours, 0);
+    // Les semaines actives ne s'additionnent pas : chacun travaille sur les mêmes semaines.
+    const maxWeeks = Math.max(...people.map((r) => num(r[3])));
+    const sumWeeks = people.reduce((s, r) => s + num(r[3]), 0);
+    expect(num(cells(total)[3])).toBeGreaterThanOrEqual(maxWeeks);
+    expect(num(cells(total)[3])).toBeLessThan(sumWeeks);
+    expect(num(cells(total)[6])).toBe(Math.max(...people.map((r) => num(r[6]))));
+  });
+
+  it('n\'ajoute pas de total pour une seule personne, ni quand personne n\'a de charge', () => {
+    const one = context();
+    one.view = { ...one.view, people: one.view.people.slice(0, 1) };
+    const a = document.createElement('tbody');
+    renderPeopleTable(a, one);
+    expect(a.rows).toHaveLength(1);
+    expect(a.querySelector('.tot')).toBeNull();
+    const none = context();
+    none.view = { ...none.view, people: [] };
+    const b = document.createElement('tbody');
+    renderPeopleTable(b, none);
+    expect(b.textContent).toContain('Personne n\'a de charge');
+  });
+
   it('résume chaque projet avec période et jalons', () => {
     const tbody = document.createElement('tbody');
     renderProjectsTable(tbody, context());

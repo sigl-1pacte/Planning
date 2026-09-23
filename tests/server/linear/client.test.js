@@ -53,6 +53,13 @@ describe('gql', () => {
     await expect(gql('k', 'q', {}, { fetchImpl: fakeFetch([jsonResponse(body, 400)]) }))
       .rejects.toThrow('Erreur GraphQL Linear : Query too complex');
   });
+
+  it('marque un refus de Linear en 422, pour que son message atteigne l\'utilisateur au lieu d\'« Erreur interne »', async () => {
+    const body = { errors: [{ message: 'You do not have permission to delete this project' }] };
+    const err = await gql('k', 'q', {}, { fetchImpl: fakeFetch([jsonResponse(body, 200)]) }).catch((e) => e);
+    expect(err.statusCode).toBe(422);
+    expect(err.message).toMatch(/permission to delete this project/);
+  });
 });
 
 describe('requêtes', () => {

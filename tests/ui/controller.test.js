@@ -136,6 +136,27 @@ describe('controller', () => {
     expect(t.c.state.planning).toEqual({ v: 'mutée' });
   });
 
+  it('ne laisse pas une interrogation antérieure à l\'écriture effacer ce qu\'elle vient de créer', async () => {
+    const late = deferred();
+    const before = { issues: [] };
+    const after = { issues: [{ id: 'i-new' }] };
+    const api = {
+      getKey: () => 'k',
+      snapshot: vi.fn().mockResolvedValueOnce(snap(1, before)).mockReturnValueOnce(late.promise),
+      planning: vi.fn(async () => ({ v: 1 })),
+    };
+    const t = setup(api);
+    await t.c.start();
+    const polling = t.tick();
+    await t.c.mutate(async () => {
+      t.c.state.snapshot = { ...t.c.state.snapshot, domain: after };
+      return { v: 2 };
+    });
+    late.resolve(snap(1, before));
+    await polling;
+    expect(t.c.state.snapshot.domain).toEqual(after);
+  });
+
   it('retient la modification commencée en dernier entre deux modifications concurrentes', async () => {
     const api = { getKey: () => 'k', snapshot: vi.fn(async () => snap(1)), planning: vi.fn(async () => ({ v: 0 })) };
     const t = setup(api);

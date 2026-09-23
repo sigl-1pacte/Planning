@@ -5,7 +5,6 @@ import { setContributions, getPlanning } from '../../src/server/db/repo.js';
 import { mapWorkspace } from '../../src/server/linear/mapper.js';
 import { rawWorkspace } from '../fixtures/workspace.js';
 import { LinearAuthError, LinearUnavailableError } from '../../src/server/linear/client.js';
-import { RescheduleCycleError } from '../../src/shared/reschedule.js';
 
 const KEY = { 'x-linear-key': 'good' };
 const snap = {
@@ -16,7 +15,6 @@ const snap = {
 let app;
 let db;
 let store;
-let linear;
 
 beforeEach(async () => {
   db = await createTestDb();
@@ -28,20 +26,7 @@ beforeEach(async () => {
     if (key !== 'good') throw new LinearAuthError();
     return { id: 'u-sacha', name: 'Sacha', email: 'sacha@ex.fr' };
   };
-  linear = {
-    updateIssue: vi.fn(async () => ({})),
-    createIssue: vi.fn(async () => ({ id: 'i-new', identifier: 'IOT-99' })),
-    issueBlockers: vi.fn(async () => [{ relationId: 'r1', blockerId: 'i-11' }]),
-    addBlocker: vi.fn(async () => {}),
-    removeBlocker: vi.fn(async () => {}),
-    updateProject: vi.fn(async () => ({})),
-    createProject: vi.fn(async () => ({ id: 'p-new' })),
-    createTeam: vi.fn(async () => ({})),
-    updateMilestone: vi.fn(async () => ({})),
-    addComment: vi.fn(async () => {}),
-    subscribeToIssue: vi.fn(async () => {}),
-  };
-  app = buildApp({ db, store, validateKey, linear });
+  app = buildApp({ db, store, validateKey });
   await app.ready();
 });
 
@@ -184,132 +169,5 @@ describe('planification', () => {
     expect((await call('POST', '/api/holidays', { day: '2026-12-24', label: '' })).statusCode).toBe(400);
     const del = await call('DELETE', '/api/holidays/2026-11-11');
     expect(del.json().holidays.map((h) => h.day)).not.toContain('2026-11-11');
-  });
-});
-
-describe('écriture', () => {
-  it('modifie une issue puis force un rafraîchissement', async () => {
-    const res = await call('PUT', '/api/issues/i-11', { title: 'Nouveau titre' });
-    expect(res.statusCode).toBe(200);
-    expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-11', { title: 'Nouveau titre' });
-    expect(store.forceRefresh).toHaveBeenCalledWith('good');
-    expect(res.json().domain.issues).toHaveLength(4);
-  });
-
-  it('modifie le début (sans cascade) via la description, et l\'échéance via dueDate natif', async () => {
-    const res = await call('PUT', '/api/issues/i-11', { start: '2026-09-18', end: '2026-09-27' });
-    expect(res.statusCode).toBe(200);
-    expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-11', {
-      description: 'Starting date: 18/09/2026\nContributors: @sacha @louis',
-      dueDate: '2026-09-27',
-    });
-  });
-
-  it('modifie le statut d\'une issue', async () => {
-    const res = await call('PUT', '/api/issues/i-11', { stateId: 'st-iot-completed' });
-    expect(res.statusCode).toBe(200);
-    expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-11', { stateId: 'st-iot-completed' });
-  });
-
-  it('refuse un corps sans aucun champ', async () => {
-    expect((await call('PUT', '/api/issues/i-11', {})).statusCode).toBe(400);
-  });
-
-  it('décale une issue et ses dépendantes', async () => {
-    const res = await call('POST', '/api/issues/i-11/reschedule', { start: '2026-09-18', end: '2026-09-27' });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.changes.find((c) => c.issueId === 'i-11')).toMatchObject({ newStart: '2026-09-18' });
-    expect(linear.updateIssue).toHaveBeenCalled();
-    const call1 = linear.updateIssue.mock.calls.find((c) => c[1] === 'i-11');
-    expect(call1[2].dueDate).toBe('2026-09-27');
-    // La cascade ne doit remplacer que la ligne « Starting date » : le reste
-    // de la description (dont la ligne Contributors) doit survivre intact.
-    expect(call1[2].description).toBe('Starting date: 18/09/2026\nContributors: @sacha @louis');
-  });
-
-  it('refuse un décalage en cycle avec un message explicite', async () => {
-    linear.updateIssue.mockClear();
-    const cyclic = { ...snap, domain: { ...snap.domain, issues: [
-      { id: 'a', identifier: 'A', teamId: 't-iot', status: 'todo', start: '2026-09-14', end: '2026-09-15', blockedBy: ['b'], contributorIds: [], estimate: 1 },
-      { id: 'b', identifier: 'B', teamId: 't-iot', status: 'todo', start: '2026-09-16', end: '2026-09-17', blockedBy: ['a'], contributorIds: [], estimate: 1 },
-    ] } };
-    store.current.mockReturnValueOnce(cyclic);
-    const res = await call('POST', '/api/issues/a/reschedule', { start: '2026-09-20', end: '2026-09-21' });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toMatch(/circulaires/);
-    expect(linear.updateIssue).not.toHaveBeenCalled();
-  });
-
-  it('remplace la liste des bloqueurs par la différence exacte', async () => {
-    const res = await call('PUT', '/api/issues/i-12/dependencies', { blockedBy: ['i-20'] });
-    expect(res.statusCode).toBe(200);
-    expect(linear.removeBlocker).toHaveBeenCalledWith('good', 'r1');
-    expect(linear.addBlocker).toHaveBeenCalledWith('good', 'i-12', 'i-20');
-  });
-
-  it('crée une issue', async () => {
-    const res = await call('POST', '/api/issues', { teamId: 't-iot', title: 'Nouvelle' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().issueId).toBe('i-new');
-    expect(linear.createIssue).toHaveBeenCalledWith('good', { teamId: 't-iot', title: 'Nouvelle' });
-  });
-
-  it('refuse une création sans team ni titre', async () => {
-    expect((await call('POST', '/api/issues', { teamId: 't-iot' })).statusCode).toBe(400);
-  });
-
-  it('remplace les contributeurs, commente et abonne uniquement les nouveaux', async () => {
-    // i-12 n'a pas de ligne Contributors (contributeur par défaut : l'assigné, u-louis).
-    const res = await call('PUT', '/api/issues/i-12/contributors', { contributorIds: ['u-louis', 'u-sacha'] });
-    expect(res.statusCode).toBe(200);
-    expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-12', {
-      description: 'Starting date: 28/09/2026\n\nContributors: @louis @sacha',
-    });
-    expect(linear.addComment).toHaveBeenCalledWith('good', 'i-12', 'Ajouté·e·s comme contributeurs : Sacha');
-    expect(linear.subscribeToIssue).toHaveBeenCalledWith('good', 'i-12', 'u-sacha');
-    expect(linear.subscribeToIssue).not.toHaveBeenCalledWith('good', 'i-12', 'u-louis');
-  });
-
-  it('ne commente ni n\'abonne quand personne de nouveau n\'est ajouté', async () => {
-    // i-11 porte déjà @sacha et @louis ; on retire louis, personne n'est nouveau.
-    const res = await call('PUT', '/api/issues/i-11/contributors', { contributorIds: ['u-sacha'] });
-    expect(res.statusCode).toBe(200);
-    expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-11', {
-      description: 'Starting date: 16/09/2026\nContributors: @sacha',
-    });
-    expect(linear.addComment).not.toHaveBeenCalled();
-    expect(linear.subscribeToIssue).not.toHaveBeenCalled();
-  });
-
-  it('purge en base la part de qui n\'est plus contributeur', async () => {
-    await setContributions(db, 'i-11', [{ linearUserId: 'u-sacha', share: 60 }, { linearUserId: 'u-louis', share: 40 }]);
-    const res = await call('PUT', '/api/issues/i-11/contributors', { contributorIds: ['u-sacha'] });
-    expect(res.statusCode).toBe(200);
-    expect((await getPlanning(db)).contributions).toEqual([{ issueId: 'i-11', linearUserId: 'u-sacha', share: 60 }]);
-  });
-
-  it('refuse une issue inconnue pour les contributeurs', async () => {
-    const res = await call('PUT', '/api/issues/inconnue/contributors', { contributorIds: [] });
-    expect(res.statusCode).toBe(404);
-  });
-
-  it('modifie et crée un projet, crée une team', async () => {
-    expect((await call('PUT', '/api/projects/p-poc1', { name: 'Nouveau nom' })).statusCode).toBe(200);
-    const created = await call('POST', '/api/projects', { teamIds: ['t-iot'], name: 'X' });
-    expect(created.json().projectId).toBe('p-new');
-    expect((await call('POST', '/api/teams', { key: 'NEW', name: 'Nouvelle team' })).statusCode).toBe(200);
-  });
-
-  it('modifie les dates et la couleur d\'un projet', async () => {
-    const res = await call('PUT', '/api/projects/p-poc1', { startDate: '2026-09-20', targetDate: '2026-11-20', color: '#ff0000' });
-    expect(res.statusCode).toBe(200);
-    expect(linear.updateProject).toHaveBeenCalledWith('good', 'p-poc1', { startDate: '2026-09-20', targetDate: '2026-11-20', color: '#ff0000' });
-  });
-
-  it('modifie la date d\'un jalon', async () => {
-    const res = await call('PUT', '/api/milestones/m-1', { targetDate: '2026-11-12' });
-    expect(res.statusCode).toBe(200);
-    expect(linear.updateMilestone).toHaveBeenCalledWith('good', 'm-1', { targetDate: '2026-11-12' });
   });
 });

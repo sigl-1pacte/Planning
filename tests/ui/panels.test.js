@@ -23,7 +23,7 @@ function context({ planningOver = {}, mutate } = {}) {
   return { domain, planning, load, view, prefs: { showCanceled: false } };
 }
 
-function setup(ctx = context()) {
+function setup(ctx = context(), { lastError } = {}) {
   const drawer = document.createElement('aside');
   const title = document.createElement('h3');
   const body = document.createElement('div');
@@ -47,13 +47,16 @@ function setup(ctx = context()) {
     updateProject: vi.fn(async () => ({})),
     createProject: vi.fn(async () => ({})),
     createTeam: vi.fn(async () => ({})),
+    createMilestone: vi.fn(async () => ({})),
+    deleteIssue: vi.fn(async () => ({})),
+    deleteProject: vi.fn(async () => ({})),
     updateMilestone: vi.fn(async () => ({})),
   };
   const onMutate = vi.fn((call) => call(api));
   const onWrite = vi.fn((call) => call(api));
   const onPrefs = vi.fn();
   const onForgetKey = vi.fn();
-  const panels = createPanels({ drawer, title, body, closeButton, onMutate, onPrefs, onForgetKey, onWrite });
+  const panels = createPanels({ drawer, title, body, closeButton, onMutate, onPrefs, onForgetKey, onWrite, lastError });
   panels.update(ctx);
   return { drawer, title, body, closeButton, api, onMutate, onWrite, onPrefs, onForgetKey, panels };
 }
@@ -80,10 +83,9 @@ describe('panneau de tâche', () => {
     expect(t.body.querySelector('[data-field="estimate"]').value).toBe('8');
     expect(t.body.querySelector('[data-field="start"]').value).toBe('2026-09-16');
     expect(t.body.querySelector('[data-field="end"]').value).toBe('2026-09-25');
-    // Texte fiable à côté du <input type="date"> natif, dont l'affichage
-    // suit la locale du navigateur (souvent pas DD/MM/YYYY en anglais).
-    expect(t.body.querySelector('[data-field="start"]').nextElementSibling.textContent).toBe('16/09/2026');
-    expect(t.body.querySelector('[data-field="end"]').nextElementSibling.textContent).toBe('25/09/2026');
+    // Champ visible jj/mm/aaaa, indépendant de la locale du navigateur.
+    expect(t.body.querySelector('#f-start').value).toBe('16/09/2026');
+    expect(t.body.querySelector('#f-end').value).toBe('25/09/2026');
     const depsChecked = [...t.body.querySelectorAll('[data-field="deps"] input:checked')].map((i) => i.value);
     expect(depsChecked).toEqual([]);
     const contribChecked = [...t.body.querySelectorAll('[data-field="contributors"] input:checked')].map((i) => i.value);
@@ -130,13 +132,18 @@ describe('panneau de tâche', () => {
     expect(t.api.clearContributions).toHaveBeenCalledWith('i-11');
   });
 
-  it('affiche la date DD/MM/AAAA en direct à côté du sélecteur natif', () => {
+  it('les flèches du champ de date suivent l\'ordre affiché jj/mm : jour, puis mois', () => {
     const t = setup();
     t.panels.openIssue('i-11');
-    const start = t.body.querySelector('[data-field="start"]');
-    start.value = '2026-10-05';
-    start.dispatchEvent(new Event('input', { bubbles: true }));
-    expect(start.nextElementSibling.textContent).toBe('05/10/2026');
+    const text = t.body.querySelector('#f-start');
+    const native = t.body.querySelector('[data-field="start"]');
+    expect(native.value).toBe('2026-09-16');
+    text.setSelectionRange(1, 1);
+    text.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+    expect(native.value).toBe('2026-09-17');
+    text.setSelectionRange(4, 4);
+    text.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+    expect(native.value).toBe('2026-10-17');
   });
 
   it('recalcule en direct la dernière part pour que le total fasse toujours 100', () => {
@@ -227,9 +234,8 @@ describe('champs éditables', () => {
   it('affiche la team et le projet de la tâche', () => {
     const t = setup();
     t.panels.openIssue('i-11');
-    const rows = Object.fromEntries([...t.body.querySelectorAll('.ro')].map((r) => [r.children[0].textContent, r.children[1].textContent]));
-    expect(rows.Team).toBe('IoT');
-    expect(rows.Projet).toBe('Réalisation POC v1');
+    expect(t.body.querySelector('[data-field="team"]').selectedOptions[0].textContent).toBe('IoT');
+    expect(t.body.querySelector('[data-field="project"]').selectedOptions[0].textContent).toBe('Réalisation POC v1');
   });
 });
 
@@ -241,15 +247,117 @@ describe('création', () => {
     expect(t.body.querySelector('[data-field="title"]').value).toBe('');
   });
 
-  it('crée la tâche et arme une annulation d’étiquette explicite', async () => {
+  it('crée la tâche avec ses dates, puis ferme le panneau', async () => {
     const t = setup();
     t.panels.openIssue(null, { teamId: 't-iot', projectId: 'p-poc1' });
     t.body.querySelector('[data-field="title"]').value = 'Nouvelle tâche';
+    t.body.querySelector('[data-field="start"]').value = '2026-09-28';
+    t.body.querySelector('[data-field="end"]').value = '2026-10-02';
     t.body.querySelector('[data-action="create-issue"]').click();
     await flush();
-    expect(t.api.createIssue).toHaveBeenCalledWith({ teamId: 't-iot', projectId: 'p-poc1', title: 'Nouvelle tâche' });
-    expect(t.onWrite).toHaveBeenCalled();
+    expect(t.api.createIssue).toHaveBeenCalledWith({
+      teamId: 't-iot', projectId: 'p-poc1', title: 'Nouvelle tâche', start: '2026-09-28', end: '2026-10-02',
+    });
     expect(t.onWrite.mock.calls[0][1]).toMatch(/créée/);
+    expect(t.drawer.classList.contains('on')).toBe(false);
+  });
+
+  it('propose tous les champs d\'une tâche à la création, comme le panneau d\'édition', () => {
+    const t = setup();
+    t.panels.openIssue(null, { teamId: 't-iot', projectId: 'p-poc1' });
+    for (const name of ['title', 'project', 'state', 'assignee', 'estimate', 'start', 'end', 'deps', 'contributors']) {
+      expect(t.body.querySelector(`[data-field="${name}"]`), name).not.toBeNull();
+    }
+    expect(t.body.querySelector('[data-field="project"]').value).toBe('p-poc1');
+    const stateIds = [...t.body.querySelectorAll('[data-field="state"] option')].map((o) => o.value).filter(Boolean);
+    expect(stateIds.length).toBeGreaterThan(0);
+    expect(stateIds.every((id) => id.startsWith('st-iot'))).toBe(true);
+  });
+
+  it('envoie statut, responsable, estimation, dépendances et contributeurs choisis', async () => {
+    const t = setup();
+    t.panels.openIssue(null, { teamId: 't-iot' });
+    const f = (n) => t.body.querySelector(`[data-field="${n}"]`);
+    f('title').value = 'Complète';
+    f('project').value = 'p-poc1';
+    f('state').value = [...f('state').options].find((o) => o.value).value;
+    f('assignee').value = 'u-louis';
+    f('estimate').value = '5';
+    f('deps').querySelector('input').checked = true;
+    const blocker = f('deps').querySelector('input').value;
+    f('contributors').querySelector('input[value="u-sacha"]').checked = true;
+    t.body.querySelector('[data-action="create-issue"]').click();
+    await flush();
+    const arg = t.api.createIssue.mock.calls[0][0];
+    expect(arg).toMatchObject({
+      teamId: 't-iot', title: 'Complète', projectId: 'p-poc1', assigneeId: 'u-louis', estimate: 5,
+      blockedBy: [blocker], contributorIds: ['u-sacha'],
+    });
+    expect(arg.stateId).toMatch(/^st-iot/);
+  });
+
+  it('crée une tâche sans dates si les deux champs sont vidés', async () => {
+    const t = setup();
+    t.panels.openIssue(null, { teamId: 't-iot' });
+    t.body.querySelector('[data-field="title"]').value = 'Sans dates';
+    t.body.querySelector('[data-field="start"]').value = '';
+    t.body.querySelector('[data-field="end"]').value = '';
+    t.body.querySelector('[data-action="create-issue"]').click();
+    await flush();
+    expect(t.api.createIssue).toHaveBeenCalledWith({ teamId: 't-iot', title: 'Sans dates' });
+  });
+
+  it('refuse une seule date ou une échéance avant le début', async () => {
+    const t = setup();
+    t.panels.openIssue(null, { teamId: 't-iot' });
+    t.body.querySelector('[data-field="title"]').value = 'X';
+    t.body.querySelector('[data-field="end"]').value = '';
+    t.body.querySelector('[data-action="create-issue"]').click();
+    expect(t.body.querySelector('[data-error]').hidden).toBe(false);
+    t.body.querySelector('[data-field="start"]').value = '2026-10-02';
+    t.body.querySelector('[data-field="end"]').value = '2026-09-28';
+    t.body.querySelector('[data-action="create-issue"]').click();
+    await flush();
+    expect(t.body.querySelector('[data-error]').textContent).toMatch(/précède/);
+    expect(t.api.createIssue).not.toHaveBeenCalled();
+  });
+
+  it('ne crée qu\'une tâche quand on clique plusieurs fois de suite', async () => {
+    const t = setup();
+    let release;
+    t.onWrite.mockImplementation((call) => new Promise((resolve) => { release = () => resolve(call(t.api)); }));
+    t.panels.openIssue(null, { teamId: 't-iot' });
+    t.body.querySelector('[data-field="title"]').value = 'Une seule';
+    const button = t.body.querySelector('[data-action="create-issue"]');
+    button.click();
+    button.click();
+    t.body.querySelector('[data-field="title"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(button.disabled).toBe(true);
+    release();
+    await flush();
+    expect(t.onWrite).toHaveBeenCalledTimes(1);
+    expect(t.api.createIssue).toHaveBeenCalledTimes(1);
+  });
+
+  it('garde le formulaire ouvert, saisie intacte, si la création échoue', async () => {
+    const t = setup();
+    t.onWrite.mockImplementation(async () => false);
+    t.panels.openIssue(null, { teamId: 't-iot' });
+    t.body.querySelector('[data-field="title"]').value = 'Échec';
+    const button = t.body.querySelector('[data-action="create-issue"]');
+    button.click();
+    await flush();
+    expect(t.drawer.classList.contains('on')).toBe(true);
+    expect(t.body.querySelector('[data-field="title"]').value).toBe('Échec');
+    expect(button.disabled).toBe(false);
+  });
+
+  it('ne vide pas le formulaire de création quand le contexte est rafraîchi', () => {
+    const t = setup();
+    t.panels.openIssue(null, { teamId: 't-iot' });
+    t.body.querySelector('[data-field="title"]').value = 'En cours de saisie';
+    t.panels.update(context());
+    expect(t.body.querySelector('[data-field="title"]').value).toBe('En cours de saisie');
   });
 
   it('permet de modifier les dates et la couleur d’un projet existant', async () => {
@@ -269,11 +377,44 @@ describe('création', () => {
   it('ouvre un panneau de projet vide, préchoisit la team demandée et le crée', async () => {
     const t = setup();
     t.panels.openProject(null, { teamId: 't-web' });
-    expect(t.body.querySelector('[data-field="pteam"]').value).toBe('t-web');
+    const boxes = [...t.body.querySelectorAll('[data-field="pteams"] input')];
+    expect(boxes.filter((b) => b.checked).map((b) => b.value)).toEqual(['t-web']);
     t.body.querySelector('[data-field="pname"]').value = 'Nouveau projet';
     t.body.querySelector('[data-action="create-project"]').click();
     await flush();
     expect(t.api.createProject).toHaveBeenCalledWith({ teamIds: ['t-web'], name: 'Nouveau projet' });
+  });
+
+  it('crée un projet avec plusieurs teams, dates et couleur choisies', async () => {
+    const t = setup();
+    t.panels.openProject(null, { teamId: 't-web' });
+    for (const b of t.body.querySelectorAll('[data-field="pteams"] input')) b.checked = true;
+    t.body.querySelector('[data-field="pname"]').value = 'Grand projet';
+    t.body.querySelector('[data-field="pstart"]').value = '2026-10-01';
+    t.body.querySelector('[data-field="ptarget"]').value = '2026-12-01';
+    const color = t.body.querySelector('[data-field="pcolor"]');
+    color.value = '#ff0000';
+    color.dispatchEvent(new Event('input', { bubbles: true }));
+    t.body.querySelector('[data-action="create-project"]').click();
+    await flush();
+    const arg = t.api.createProject.mock.calls[0][0];
+    expect(arg.teamIds.length).toBeGreaterThan(1);
+    expect(arg).toMatchObject({ name: 'Grand projet', startDate: '2026-10-01', targetDate: '2026-12-01', color: '#ff0000' });
+  });
+
+  it('refuse un projet sans team ou dont l\'échéance précède le début', async () => {
+    const t = setup();
+    t.panels.openProject(null, { teamId: 't-web' });
+    t.body.querySelector('[data-field="pname"]').value = 'P';
+    for (const b of t.body.querySelectorAll('[data-field="pteams"] input')) b.checked = false;
+    t.body.querySelector('[data-action="create-project"]').click();
+    expect(t.body.querySelector('[data-error]').textContent).toMatch(/team/);
+    t.body.querySelector('[data-field="pteams"] input').checked = true;
+    t.body.querySelector('[data-field="pstart"]').value = '2026-12-01';
+    t.body.querySelector('[data-field="ptarget"]').value = '2026-10-01';
+    t.body.querySelector('[data-action="create-project"]').click();
+    expect(t.body.querySelector('[data-error]').textContent).toMatch(/précède/);
+    expect(t.api.createProject).not.toHaveBeenCalled();
   });
 
   it('ouvre un panneau de team vide et la crée, clé en majuscules', async () => {
@@ -436,5 +577,430 @@ describe('cycle de vie', () => {
     const input = t.body.querySelector('input');
     t.panels.update(context());
     expect(t.body.querySelector('input')).not.toBe(input);
+  });
+});
+
+describe('suppression', () => {
+  const type = (input, value) => {
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  it('ne supprime rien au premier clic : il ouvre seulement l\'écran de confirmation', async () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    t.body.querySelector('[data-action="ask-delete"]').click();
+    await flush();
+    expect(t.title.textContent).toBe('Supprimer IOT-11 ?');
+    expect(t.api.deleteIssue).not.toHaveBeenCalled();
+    expect(t.onWrite).not.toHaveBeenCalled();
+    expect(t.body.querySelector('[data-action="confirm-delete"]').disabled).toBe(true);
+  });
+
+  it('garde le bouton inactif tant que l\'identifiant exact n\'est pas saisi', async () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    t.body.querySelector('[data-action="ask-delete"]').click();
+    const input = t.body.querySelector('[data-field="confirm"]');
+    const confirm = t.body.querySelector('[data-action="confirm-delete"]');
+    for (const wrong of ['', 'iot-11', 'IOT-1', 'IOT-111', 'Conception']) {
+      type(input, wrong);
+      expect(confirm.disabled).toBe(true);
+    }
+    type(input, 'IOT-11');
+    expect(confirm.disabled).toBe(false);
+  });
+
+  it('ignore le clic même si le bouton est réactivé à la main sans la bonne saisie', async () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    t.body.querySelector('[data-action="ask-delete"]').click();
+    const confirm = t.body.querySelector('[data-action="confirm-delete"]');
+    confirm.disabled = false;
+    confirm.click();
+    await flush();
+    expect(t.api.deleteIssue).not.toHaveBeenCalled();
+  });
+
+  it('n\'est pas validé par Entrée', async () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    t.body.querySelector('[data-action="ask-delete"]').click();
+    const input = t.body.querySelector('[data-field="confirm"]');
+    type(input, 'IOT-11');
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    input.dispatchEvent(enter);
+    await flush();
+    expect(enter.defaultPrevented).toBe(true);
+    expect(t.api.deleteIssue).not.toHaveBeenCalled();
+  });
+
+  it('supprime la tâche une seule fois malgré des clics répétés, puis ferme le panneau', async () => {
+    const t = setup();
+    let release;
+    t.onWrite.mockImplementation((call) => new Promise((resolve) => { release = () => resolve(call(t.api)); }));
+    t.panels.openIssue('i-11');
+    t.body.querySelector('[data-action="ask-delete"]').click();
+    type(t.body.querySelector('[data-field="confirm"]'), 'IOT-11');
+    const confirm = t.body.querySelector('[data-action="confirm-delete"]');
+    confirm.click();
+    confirm.click();
+    confirm.click();
+    release();
+    await flush();
+    expect(t.onWrite).toHaveBeenCalledTimes(1);
+    expect(t.api.deleteIssue).toHaveBeenCalledExactlyOnceWith('i-11', 'IOT-11');
+    expect(t.drawer.classList.contains('on')).toBe(false);
+  });
+
+  it('annuler revient à la tâche sans rien supprimer', async () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    t.body.querySelector('[data-action="ask-delete"]').click();
+    t.body.querySelector('[data-action="cancel-delete"]').click();
+    expect(t.title.textContent).toBe('IOT-11');
+    expect(t.body.querySelector('[data-field="title"]')).not.toBeNull();
+    expect(t.api.deleteIssue).not.toHaveBeenCalled();
+  });
+
+  it('garde l\'écran ouvert si la suppression échoue', async () => {
+    const t = setup();
+    t.onWrite.mockImplementation(async () => false);
+    t.panels.openIssue('i-11');
+    t.body.querySelector('[data-action="ask-delete"]').click();
+    type(t.body.querySelector('[data-field="confirm"]'), 'IOT-11');
+    t.body.querySelector('[data-action="confirm-delete"]').click();
+    await flush();
+    expect(t.drawer.classList.contains('on')).toBe(true);
+    expect(t.body.querySelector('[data-field="confirm"]').value).toBe('IOT-11');
+  });
+
+  it('affiche dans l\'écran de confirmation la raison du refus de Linear', async () => {
+    const t = setup(context(), { lastError: () => 'Erreur GraphQL Linear : Forbidden' });
+    t.onWrite.mockImplementation(async () => false);
+    t.panels.openProject('p-poc1');
+    t.body.querySelector('[data-action="ask-delete"]').click();
+    const name = t.title.textContent.replace(/^Supprimer le projet | \?$/g, '');
+    type(t.body.querySelector('[data-field="confirm"]'), name);
+    t.body.querySelector('[data-action="confirm-delete"]').click();
+    await flush();
+    const slot = t.body.querySelector('[data-error]');
+    expect(slot.hidden).toBe(false);
+    expect(slot.textContent).toBe('Erreur GraphQL Linear : Forbidden');
+    expect(t.drawer.classList.contains('on')).toBe(true);
+  });
+
+  it('ne vide pas la saisie de confirmation quand le contexte est rafraîchi', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    t.body.querySelector('[data-action="ask-delete"]').click();
+    type(t.body.querySelector('[data-field="confirm"]'), 'IOT');
+    t.panels.update(context());
+    expect(t.body.querySelector('[data-field="confirm"]').value).toBe('IOT');
+  });
+
+  it('supprime un projet en exigeant son nom exact, et annonce que ses tâches restent', async () => {
+    const t = setup();
+    t.panels.openProject('p-poc1');
+    t.body.querySelector('[data-action="ask-delete"]').click();
+    expect(t.body.textContent).toMatch(/ne sont pas supprimées|n'est pas supprimée/);
+    const name = t.title.textContent.replace(/^Supprimer le projet | \?$/g, '');
+    const input = t.body.querySelector('[data-field="confirm"]');
+    const confirm = t.body.querySelector('[data-action="confirm-delete"]');
+    type(input, name.toLowerCase());
+    expect(confirm.disabled).toBe(true);
+    type(input, name);
+    expect(confirm.disabled).toBe(false);
+    confirm.click();
+    await flush();
+    expect(t.api.deleteProject).toHaveBeenCalledWith('p-poc1', name);
+  });
+});
+
+describe('sélecteur de tâches bloquantes', () => {
+  const visibleIds = (t) => [...t.body.querySelectorAll('[data-field="deps"] .chkrow:not([hidden]) input')].map((i) => i.value);
+  const allIds = (t) => [...t.body.querySelectorAll('[data-field="deps"] .chkrow input')].map((i) => i.value);
+  const setControl = (t, name, value) => {
+    const el = t.body.querySelector(`[data-pk="${name}"]`);
+    if (el.type === 'checkbox') el.checked = value; else el.value = value;
+    el.dispatchEvent(new Event(el.type === 'search' ? 'input' : 'change', { bubbles: true }));
+  };
+
+  it('propose recherche et filtres au-dessus de la liste, dans l\'édition comme à la création', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    for (const n of ['q', 'team', 'project', 'status', 'only']) expect(t.body.querySelector(`[data-pk="${n}"]`), n).not.toBeNull();
+    t.panels.openIssue(null, { teamId: 't-iot' });
+    for (const n of ['q', 'team', 'project', 'status', 'only']) expect(t.body.querySelector(`[data-pk="${n}"]`), n).not.toBeNull();
+  });
+
+  it('cherche par identifiant ou titre, sans tenir compte de la casse ni des accents', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const all = allIds(t);
+    expect(all).not.toContain('i-11');
+    const first = t.body.querySelector('[data-field="deps"] .chkrow');
+    const identifier = first.dataset.text.split(' ')[0];
+    setControl(t, 'q', identifier.toLowerCase());
+    expect(visibleIds(t)).toEqual([first.querySelector('input').value]);
+    setControl(t, 'q', 'zzzz-inexistant');
+    expect(visibleIds(t)).toEqual([]);
+    expect(t.body.querySelector('[data-pk-empty]').hidden).toBe(false);
+    setControl(t, 'q', '');
+    expect(visibleIds(t)).toEqual(all);
+  });
+
+  it('filtre par team, projet et statut', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const rows = [...t.body.querySelectorAll('[data-field="deps"] .chkrow')];
+    const team = rows[0].dataset.team;
+    setControl(t, 'team', team);
+    expect(visibleIds(t)).toEqual(rows.filter((r) => r.dataset.team === team).map((r) => r.querySelector('input').value));
+    setControl(t, 'team', '');
+    const status = rows[0].dataset.status;
+    expect(status).toMatch(/^(Todo|In Progress|Done|Canceled)$/);
+    setControl(t, 'status', status);
+    expect(visibleIds(t)).toEqual(rows.filter((r) => r.dataset.status === status).map((r) => r.querySelector('input').value));
+    setControl(t, 'status', '');
+    setControl(t, 'project', 'none');
+    expect(visibleIds(t)).toEqual(rows.filter((r) => r.dataset.project === 'none').map((r) => r.querySelector('input').value));
+  });
+
+  it('le filtre de statut propose les vrais statuts Linear, sans doublon, dans l\'ordre du cycle de vie', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const names = [...t.body.querySelectorAll('[data-pk="status"] option')].map((o) => o.textContent);
+    expect(names).toEqual(['Tous les statuts', 'Todo', 'In Progress', 'Done', 'Canceled']);
+  });
+
+  it('« cochées seulement » ne montre que la sélection', () => {
+    const t = setup();
+    t.panels.openIssue(null, { teamId: 't-iot' });
+    const boxes = [...t.body.querySelectorAll('[data-field="deps"] input')];
+    boxes[1].checked = true;
+    boxes[1].dispatchEvent(new Event('change', { bubbles: true }));
+    setControl(t, 'only', true);
+    expect(visibleIds(t)).toEqual([boxes[1].value]);
+  });
+
+  it('une tâche cochée puis masquée par un filtre reste bien envoyée', async () => {
+    const t = setup();
+    t.panels.openIssue(null, { teamId: 't-iot' });
+    t.body.querySelector('[data-field="title"]').value = 'X';
+    const box = t.body.querySelector('[data-field="deps"] input');
+    box.checked = true;
+    setControl(t, 'q', 'zzzz-inexistant');
+    expect(visibleIds(t)).toEqual([]);
+    t.body.querySelector('[data-action="create-issue"]').click();
+    await flush();
+    expect(t.api.createIssue.mock.calls[0][0].blockedBy).toEqual([box.value]);
+  });
+
+  it('garde recherche et filtres quand le panneau est redessiné, et les remet à zéro pour une autre tâche', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    setControl(t, 'q', 'zzzz');
+    t.panels.update(context());
+    expect(t.body.querySelector('[data-pk="q"]').value).toBe('zzzz');
+    t.panels.openIssue('i-12');
+    expect(t.body.querySelector('[data-pk="q"]').value).toBe('');
+  });
+
+  it('le compteur indique affichées, total et cochées', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const total = allIds(t).length;
+    expect(t.body.querySelector('[data-pk-count]').textContent).toMatch(new RegExp(`${total} affichées? sur ${total} · \\d+ cochées?`));
+  });
+});
+
+describe('déplacer une tâche', () => {
+  it('propose team et projet modifiables, avec un bouton Déplacer inactif tant que la team ne change pas', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const select = t.body.querySelector('[data-field="team"]');
+    const button = t.body.querySelector('[data-action="move-team"]');
+    expect(select.value).toBe('t-iot');
+    expect(button.disabled).toBe(true);
+    expect(t.body.querySelector('[data-field="project"]').value).toBe('p-poc1');
+  });
+
+  it('ne déplace pas au simple choix d\'une team : il faut cliquer sur Déplacer', async () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const select = t.body.querySelector('[data-field="team"]');
+    select.value = 't-web';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await flush();
+    expect(t.api.updateIssue).not.toHaveBeenCalled();
+    const button = t.body.querySelector('[data-action="move-team"]');
+    expect(button.disabled).toBe(false);
+    expect(t.body.querySelector('[data-move-hint]').hidden).toBe(false);
+    button.click();
+    await flush();
+    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { teamId: 't-web' });
+    expect(t.onWrite.mock.calls.at(-1)[1]).toMatch(/IOT-11 déplacée vers/);
+  });
+
+  it('arme une annulation qui remet team, statut et projet d\'origine', async () => {
+    const t = setup();
+    t.onWrite.mockImplementation((call, label, restore) => { t.restore = restore; return call(t.api); });
+    t.panels.openIssue('i-11');
+    const select = t.body.querySelector('[data-field="team"]');
+    select.value = 't-web';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    t.body.querySelector('[data-action="move-team"]').click();
+    await flush();
+    await t.restore(t.api);
+    expect(t.api.updateIssue).toHaveBeenLastCalledWith('i-11', { teamId: 't-iot', stateId: 'st-iot-started', projectId: 'p-poc1' });
+  });
+
+  it('change le projet d\'une tâche, limité aux projets de sa team', async () => {
+    const t = setup();
+    t.panels.openIssue('i-20');
+    const options = [...t.body.querySelectorAll('[data-field="project"] option')].map((o) => o.value);
+    expect(options).toEqual(['']);
+    t.panels.openIssue('i-11');
+    const project = t.body.querySelector('[data-field="project"]');
+    project.value = '';
+    project.dispatchEvent(new Event('change', { bubbles: true }));
+    await flush();
+    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { projectId: null });
+  });
+});
+
+describe('défilement conservé au redessin', () => {
+  // Un navigateur ramène le défilement en haut quand le contenu est remplacé ;
+  // jsdom ne le fait pas, on le simule pour que le test ait un sens.
+  function resetOnRewrite(body) {
+    const desc = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+    Object.defineProperty(body, 'innerHTML', {
+      get() { return desc.get.call(this); },
+      set(value) { desc.set.call(this, value); this.scrollTop = 0; },
+    });
+  }
+
+  it('garde la position du panneau et de la liste des contributeurs quand on coche quelqu\'un', () => {
+    const t = setup();
+    resetOnRewrite(t.body);
+    t.panels.openIssue('i-11');
+    t.body.scrollTop = 320;
+    t.body.querySelector('[data-field="contributors"]').scrollTop = 45;
+    t.body.querySelector('[data-field="deps"]').scrollTop = 30;
+    t.panels.update(context());
+    expect(t.body.scrollTop).toBe(320);
+    expect(t.body.querySelector('[data-field="contributors"]').scrollTop).toBe(45);
+    expect(t.body.querySelector('[data-field="deps"]').scrollTop).toBe(30);
+  });
+
+  it('redonne le focus à la case cochée, sans faire défiler', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const box = t.body.querySelector('[data-field="contributors"] input[value="u-louis"]');
+    box.focus();
+    expect(document.activeElement).toBe(box);
+    t.panels.update(context());
+    const again = t.body.querySelector('[data-field="contributors"] input[value="u-louis"]');
+    expect(again).not.toBe(box);
+    expect(document.activeElement).toBe(again);
+  });
+
+  it('repart du haut quand on ouvre une autre tâche', () => {
+    const t = setup();
+    resetOnRewrite(t.body);
+    t.panels.openIssue('i-11');
+    t.body.scrollTop = 320;
+    t.body.querySelector('[data-field="contributors"]').scrollTop = 45;
+    t.panels.openIssue('i-12');
+    expect(t.body.scrollTop).toBe(0);
+    expect(t.body.querySelector('[data-field="contributors"]').scrollTop).toBe(0);
+  });
+});
+
+describe('ajouter un jalon', () => {
+  it('le panneau de projet liste les jalons et propose d\'en ajouter', () => {
+    const t = setup();
+    t.panels.openProject('p-poc1');
+    expect(t.body.textContent).toContain('Objet construit');
+    expect(t.body.querySelector('[data-action="add-milestone"]')).not.toBeNull();
+  });
+
+  it('propose l\'ajout même quand le projet n\'a encore aucun jalon', () => {
+    const t = setup(context({ mutate: (raw) => { raw.projects[0].projectMilestones = { nodes: [] }; } }));
+    t.panels.openProject('p-poc1');
+    expect(t.body.textContent).toContain('Aucun jalon');
+    expect(t.body.querySelector('[data-action="add-milestone"]')).not.toBeNull();
+  });
+
+  it('ouvre le formulaire de jalon avec le projet, et la date d\'échéance du projet proposée', () => {
+    const t = setup();
+    t.panels.openProject('p-poc1');
+    t.body.querySelector('[data-action="add-milestone"]').click();
+    expect(t.title.textContent).toBe('Nouveau jalon');
+    expect(t.body.textContent).toContain('Réalisation POC v1');
+    expect(t.body.querySelector('[data-field="mdate"]').value).toBe('2026-11-05');
+  });
+
+  it('crée le jalon (nom, date, projet), puis ferme le panneau', async () => {
+    const t = setup();
+    t.panels.openProject('p-poc1');
+    t.body.querySelector('[data-action="add-milestone"]').click();
+    t.body.querySelector('[data-field="mname"]').value = '  Livraison ';
+    t.body.querySelector('[data-field="mdate"]').value = '2026-12-01';
+    t.body.querySelector('[data-action="create-milestone"]').click();
+    await flush();
+    expect(t.api.createMilestone).toHaveBeenCalledWith({ projectId: 'p-poc1', name: 'Livraison', targetDate: '2026-12-01' });
+    expect(t.onWrite.mock.calls.at(-1)[1]).toMatch(/Jalon « Livraison » créé/);
+    expect(t.drawer.classList.contains('on')).toBe(false);
+  });
+
+  it('crée un jalon sans date si le champ est vidé', async () => {
+    const t = setup();
+    t.panels.openProject('p-poc1');
+    t.body.querySelector('[data-action="add-milestone"]').click();
+    t.body.querySelector('[data-field="mname"]').value = 'À dater';
+    t.body.querySelector('[data-field="mdate"]').value = '';
+    t.body.querySelector('[data-action="create-milestone"]').click();
+    await flush();
+    expect(t.api.createMilestone).toHaveBeenCalledWith({ projectId: 'p-poc1', name: 'À dater' });
+  });
+
+  it('refuse un nom vide, et ne crée qu\'un jalon malgré des clics répétés', async () => {
+    const t = setup();
+    t.panels.openProject('p-poc1');
+    t.body.querySelector('[data-action="add-milestone"]').click();
+    const button = t.body.querySelector('[data-action="create-milestone"]');
+    button.click();
+    expect(t.body.querySelector('[data-error]').textContent).toMatch(/nom/);
+    expect(t.api.createMilestone).not.toHaveBeenCalled();
+    let release;
+    t.onWrite.mockImplementation((call) => new Promise((resolve) => { release = () => resolve(call(t.api)); }));
+    t.body.querySelector('[data-field="mname"]').value = 'Une fois';
+    button.click(); button.click(); button.click();
+    release();
+    await flush();
+    expect(t.api.createMilestone).toHaveBeenCalledTimes(1);
+  });
+
+  it('ne vide pas la saisie quand le contexte est rafraîchi', () => {
+    const t = setup();
+    t.panels.openProject('p-poc1');
+    t.body.querySelector('[data-action="add-milestone"]').click();
+    t.body.querySelector('[data-field="mname"]').value = 'En cours de frappe';
+    t.panels.update(context());
+    expect(t.body.querySelector('[data-field="mname"]').value).toBe('En cours de frappe');
+  });
+
+  it('modifier la date d\'un jalon existant, en tapant jj/mm/aaaa, l\'envoie en ISO avec annulation possible', async () => {
+    const t = setup();
+    t.panels.openMilestone('m-1');
+    const text = t.body.querySelector('#f-mdate');
+    expect(text.value).toBe('05/11/2026');
+    text.value = '12112026';
+    text.dispatchEvent(new Event('input', { bubbles: true }));
+    await flush();
+    expect(t.api.updateMilestone).toHaveBeenCalledWith('m-1', '2026-11-12');
+    expect(typeof t.onWrite.mock.calls.at(-1)[2]).toBe('function');
   });
 });

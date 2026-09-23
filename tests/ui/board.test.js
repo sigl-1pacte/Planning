@@ -74,13 +74,13 @@ describe('board', () => {
     expect(none.dataset.openProject).toBeUndefined();
   });
 
-  it('propose d’ajouter un jalon depuis la ligne d’un vrai projet, pas de « Sans projet »', () => {
+  it('propose d’ajouter un jalon à droite de la bande du projet, pas pour « Sans projet »', () => {
     const d = draw();
-    const rows = [...d.leftRows.querySelectorAll('.r.p')];
-    const real = rows.find((r) => r.querySelector('.pn').textContent === 'Réalisation POC v1');
-    const none = rows.find((r) => r.querySelector('.pn').textContent === 'Sans projet');
-    expect(real.querySelector('[data-action="add-milestone"]').dataset.project).toBe('p-poc1');
-    expect(none.querySelector('[data-action="add-milestone"]')).toBeNull();
+    const pairs = [...d.leftRows.querySelectorAll('.r.p')].map((l, i) => [l, d.rightRows.querySelectorAll('.r.p')[i]]);
+    const of = (name) => pairs.find(([l]) => l.querySelector('.pn').textContent === name)[1];
+    expect(of('Réalisation POC v1').querySelector('[data-action="add-milestone"]').dataset.project).toBe('p-poc1');
+    expect(of('Sans projet').querySelector('[data-action="add-milestone"]')).toBeNull();
+    expect(d.leftRows.querySelector('[data-action="add-milestone"]')).toBeNull();
   });
 
   it('propose d’ajouter une team, à la toute fin de la liste', () => {

@@ -81,6 +81,11 @@ function mapIssue(i, users, blockedBy) {
     start: planned ? start.date : null,
     end: planned ? end : null,
     unplannedReason,
+    // Dates lues telles quelles dans Linear, même quand la tâche n'est pas
+    // planifiée (start/end restent null dans ce cas) : sert à préremplir les
+    // champs — une échéance déjà posée dans Linear ne doit pas disparaître.
+    startDate: start.ok ? start.date : null,
+    dueDate: end,
     contributorIds,
     contributorsSource,
     unresolvedMentions: contrib.unresolved,

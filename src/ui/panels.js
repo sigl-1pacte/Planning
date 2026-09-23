@@ -213,9 +213,9 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         </select></div>
       <div class="f2">
         <div class="fg"><label for="f-start">Début</label><div class="dfield">
-          <input id="f-start" type="date" data-field="start" value="${issue.start ?? ''}"></div></div>
+          <input id="f-start" type="date" data-field="start" value="${issue.start ?? issue.startDate ?? ''}"></div></div>
         <div class="fg"><label for="f-end">Échéance</label><div class="dfield">
-          <input id="f-end" type="date" data-field="end" value="${issue.end ?? ''}"></div></div>
+          <input id="f-end" type="date" data-field="end" value="${issue.end ?? issue.dueDate ?? ''}"></div></div>
       </div>
       ${issue.unplannedReason ? `<p class="hint">${esc(issue.unplannedReason)}</p>` : ''}
       <p class="warn" data-date-error hidden></p>

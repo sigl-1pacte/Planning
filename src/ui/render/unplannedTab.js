@@ -17,8 +17,8 @@ export function renderUnplannedTab(section, { issues, teams, onPlan }) {
         <td>${esc(teamKey(i.teamId))}</td>
         <td class="r">${i.estimate ?? '—'}</td>
         <td class="why">${esc(i.unplannedReason)}</td>
-        <td><div class="dfield"><input type="date" data-start data-issue="${esc(i.id)}"></div></td>
-        <td><div class="dfield"><input type="date" data-end data-issue="${esc(i.id)}"></div></td>
+        <td><div class="dfield"><input type="date" data-start data-issue="${esc(i.id)}" value="${esc(i.startDate ?? '')}"></div></td>
+        <td><div class="dfield"><input type="date" data-end data-issue="${esc(i.id)}" value="${esc(i.dueDate ?? '')}"></div></td>
         <td><button class="btn" type="button" data-action="plan" data-issue="${esc(i.id)}">Planifier</button></td>
       </tr>`).join('')}</tbody>
     </table></div>`;

@@ -22,7 +22,7 @@ describe('mapWorkspace', () => {
     expect(find(mapWorkspace(rawWorkspace()), 'i-11')).toEqual({
       id: 'i-11', identifier: 'IOT-11', title: 'Conception', teamId: 't-iot', projectId: 'p-poc1', parentId: null,
       estimate: 8, status: 'doing', stateId: 'st-iot-started', assigneeId: 'u-sacha', start: '2026-09-16', end: '2026-09-25',
-      unplannedReason: null, contributorIds: ['u-sacha', 'u-louis'], contributorsSource: 'description',
+      unplannedReason: null, startDate: '2026-09-16', dueDate: '2026-09-25', contributorIds: ['u-sacha', 'u-louis'], contributorsSource: 'description',
       unresolvedMentions: [], blockedBy: [], updatedAt: '2026-09-10T08:00:00.000Z',
       rawDescription: 'Starting date: 16/09/2026\nContributors: @sacha @louis',
     });
@@ -60,6 +60,16 @@ describe('mapWorkspace', () => {
     expect(i.end).toBeNull();
     expect(i.unplannedReason).toBe('Aucune ligne « Starting date » dans la description');
     expect(i.contributorsSource).toBe('none');
+  });
+
+  it('garde l\'échéance (et le début lisible) de Linear sur une tâche non planifiée, pour préremplir les champs', () => {
+    const raw = rawWorkspace();
+    raw.issues[2].dueDate = '2026-10-30';
+    const i = find(mapWorkspace(raw), 'i-13');
+    expect(i.start).toBeNull();
+    expect(i.end).toBeNull();
+    expect(i.dueDate).toBe('2026-10-30');
+    expect(i.startDate).toBeNull();
   });
 
   it('met en non planifiée une issue sans échéance ou à échéance antérieure', () => {

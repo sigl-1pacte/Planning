@@ -3,6 +3,8 @@ import { isValidDate } from '../../shared/calendar.js';
 const START_RE = /^\s*Starting date\s*:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s*$/im;
 const START_LABEL_RE = /^\s*Starting date\s*:(.*)$/im;
 const CONTRIB_RE = /^\s*Contributors\s*:\s*(.+)$/im;
+const REAL_RE = /^\s*Real points\s*:\s*(\d+(?:[.,]\d+)?)\s*$/im;
+const REAL_LABEL_RE = /^\s*Real points\s*:(.*)$/im;
 const MENTION_RE = /@([\p{L}\p{N}._-]+)/gu;
 const NO_LINE = 'Aucune ligne « Starting date » dans la description';
 
@@ -74,7 +76,7 @@ export function setContributors(description, users) {
 // Texte libre de la description : tout sauf les lignes structurées « Starting
 // date » et « Contributors », qui restent gérées à part (dates et
 // contributeurs ont leurs propres champs).
-const isStructuredLine = (line) => START_LABEL_RE.test(line) || CONTRIB_RE.test(line);
+const isStructuredLine = (line) => START_LABEL_RE.test(line) || CONTRIB_RE.test(line) || REAL_LABEL_RE.test(line);
 
 export function parseDescriptionText(description) {
   if (!description) return '';
@@ -87,4 +89,26 @@ export function setDescriptionText(description, text) {
   const structured = (description ?? '').split('\n').filter(isStructuredLine).map((l) => l.trim());
   const free = (text ?? '').trim();
   return [free, structured.join('\n')].filter(Boolean).join('\n\n');
+}
+
+// Charge réelle (points réellement consommés par la tâche), en ligne « Real
+// points: N » de la description — comme la date de début et les contributeurs,
+// donc dans Linear. null si la ligne est absente ou illisible.
+export function parseRealPoints(description) {
+  const m = description?.match(REAL_RE);
+  return m ? Number(m[1].replace(',', '.')) : null;
+}
+
+// Pose (ou retire, si points est null) la ligne « Real points » sans toucher
+// au reste de la description.
+export function setRealPoints(description, points) {
+  const base = description ?? '';
+  const has = REAL_LABEL_RE.test(base);
+  if (points === null || points === undefined) {
+    if (!has) return description ?? '';
+    return base.split('\n').filter((line) => !REAL_LABEL_RE.test(line)).join('\n').trim();
+  }
+  const line = `Real points: ${points}`;
+  if (has) return base.replace(REAL_LABEL_RE, line);
+  return base ? `${base}\n${line}` : line;
 }

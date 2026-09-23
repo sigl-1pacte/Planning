@@ -200,6 +200,16 @@ describe('champs éditables', () => {
     expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { stateId: 'st-iot-completed' });
   });
 
+  it('saisit la charge réelle d\'une tâche (vide = aucune)', async () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const real = t.body.querySelector('[data-field="real"]');
+    expect(real.value).toBe('');
+    change(real, '3.5');
+    await flush();
+    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { realPoints: 3.5 });
+  });
+
   it('édite la description : le texte libre seul, sans les lignes Starting date / Contributors', async () => {
     const t = setup();
     t.panels.openIssue('i-11');

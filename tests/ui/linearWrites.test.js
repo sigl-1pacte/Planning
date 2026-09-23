@@ -359,3 +359,16 @@ describe('jalons', () => {
     expect(resync).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('charge réelle', () => {
+  it('écrit la ligne Real points en gardant date et contributeurs, et la retire avec null', async () => {
+    await call('PUT', '/api/issues/i-11', { realPoints: 5 });
+    expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-11', {
+      description: 'Starting date: 16/09/2026\nContributors: @sacha @louis\nReal points: 5',
+    });
+    linear.updateIssue.mockClear();
+    domainNow = { ...snap.domain, issues: snap.domain.issues.map((i) => (i.id === 'i-11' ? { ...i, rawDescription: 'Starting date: 16/09/2026\nReal points: 5' } : i)) };
+    await call('PUT', '/api/issues/i-11', { realPoints: null });
+    expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-11', { description: 'Starting date: 16/09/2026' });
+  });
+});

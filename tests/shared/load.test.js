@@ -93,6 +93,22 @@ describe('computeLoad', () => {
     expect(w1.unavailable).toBe(false);
   });
 
+  it('charge réelle : dérivée des points réels des tâches, sur les mêmes jours et parts que le prévu', () => {
+    const r = computeLoad(domain([issue({ realPoints: 4 })]), planning(), { range });
+    const [w1, w2] = r.people.u1;
+    expect(w1.realHours).toBeCloseTo(3.75); // 4 pts × 5 h × 50 % réparti sur 8 jours ouvrés (3 + 5)
+    expect(w2.realHours).toBeCloseTo(6.25);
+    expect(w1.realPct).toBeCloseTo((3.75 / 28) * 100, 1);
+    expect(w1.hours).toBeCloseTo(7.5); // le prévu ne bouge pas
+  });
+
+  it('une tâche sans charge réelle saisie compte pour 0 (et 0 point aussi)', () => {
+    const none = computeLoad(domain([issue()]), planning(), { range });
+    expect(none.people.u1.every((w) => w.realHours === 0)).toBe(true);
+    const zero = computeLoad(domain([issue({ realPoints: 0 })]), planning(), { range });
+    expect(zero.people.u1.every((w) => w.realHours === 0)).toBe(true);
+  });
+
   it('réduit la capacité d\'une semaine qui contient un jour chômé', () => {
     const r = computeLoad(domain([]), planning({ holidays: [{ day: '2026-11-11', label: 'Armistice' }] }), {
       range: { from: '2026-11-09', to: '2026-11-15' },
@@ -136,6 +152,6 @@ describe('personStats', () => {
       { hours: 14, pct: 50 },
       { hours: 21, pct: 75 },
     ];
-    expect(personStats(rows)).toEqual({ total: 35, activeWeeks: 2, peakPct: 75, avgPct: 62.5 });
+    expect(personStats(rows)).toEqual({ total: 35, realTotal: 0, activeWeeks: 2, peakPct: 75, avgPct: 62.5 });
   });
 });

@@ -211,6 +211,8 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
           <option value="">— aucune —</option>
           ${FIB.map((f) => `<option value="${f}"${f === issue.estimate ? ' selected' : ''}>${f}</option>`).join('')}
         </select></div>
+      <div class="fg"><label for="f-real">Charge réelle (points consommés)</label>
+        <input id="f-real" data-field="real" type="number" min="0" step="0.5" value="${issue.realPoints ?? ''}" placeholder="non renseignée — compte pour 0 dans la charge réelle"></div>
       <div class="f2">
         <div class="fg"><label for="f-start">Début</label><div class="dfield">
           <input id="f-start" type="date" data-field="start" value="${issue.start ?? issue.startDate ?? ''}"></div></div>
@@ -284,6 +286,17 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     body.querySelector('[data-field="state"]').addEventListener('change', (e) => {
       const value = e.target.value;
       onWrite((api) => api.updateIssue(issue.id, { stateId: value }), `Statut de ${issue.identifier} modifié`, (api) => api.updateIssue(issue.id, { stateId: issue.stateId }));
+    });
+    body.querySelector('[data-field="real"]').addEventListener('change', (e) => {
+      const raw = e.target.value.trim();
+      const value = raw === '' ? null : Number(raw);
+      if (value !== null && !(Number.isFinite(value) && value >= 0)) return;
+      if (value === issue.realPoints) return;
+      onWrite(
+        (api) => api.updateIssue(issue.id, { realPoints: value }),
+        `Charge réelle de ${issue.identifier} modifiée`,
+        (api) => api.updateIssue(issue.id, { realPoints: issue.realPoints }),
+      );
     });
     body.querySelector('[data-field="estimate"]').addEventListener('change', (e) => {
       const value = e.target.value ? Number(e.target.value) : null;
@@ -745,7 +758,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
           <span class="cn">sem. du ${shortDay(w.weekStart)}</span>
           <input type="number" min="0" step="0.5" data-week="${w.weekStart}" value="${override ? override.hours : ''}"
             placeholder="${fr1(fallback)}" aria-label="Capacité de la semaine du ${shortDay(w.weekStart)}">
-          <span class="cx">${fr1(w.hours)} h prévues</span>
+          <span class="cx">${fr1(w.hours)} h prévues${w.realHours > 0.01 ? ` · ${fr1(w.realHours)} h réelles` : ''}</span>
         </div>`;
       }).join('')}`;
   }

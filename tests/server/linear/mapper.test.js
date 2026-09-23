@@ -22,7 +22,7 @@ describe('mapWorkspace', () => {
     expect(find(mapWorkspace(rawWorkspace()), 'i-11')).toEqual({
       id: 'i-11', identifier: 'IOT-11', title: 'Conception', teamId: 't-iot', projectId: 'p-poc1', parentId: null,
       estimate: 8, status: 'doing', stateId: 'st-iot-started', assigneeId: 'u-sacha', start: '2026-09-16', end: '2026-09-25',
-      unplannedReason: null, startDate: '2026-09-16', dueDate: '2026-09-25', contributorIds: ['u-sacha', 'u-louis'], contributorsSource: 'description',
+      unplannedReason: null, realPoints: null, startDate: '2026-09-16', dueDate: '2026-09-25', contributorIds: ['u-sacha', 'u-louis'], contributorsSource: 'description',
       unresolvedMentions: [], blockedBy: [], updatedAt: '2026-09-10T08:00:00.000Z',
       rawDescription: 'Starting date: 16/09/2026\nContributors: @sacha @louis',
     });

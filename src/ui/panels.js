@@ -168,10 +168,9 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
             <span class="cx">${person ? `${fr1(person.hours)} h · ${person.ratePct ?? '—'} %` : '—'}</span>
           </div>`;
         }).join('')}
-        <p class="hint">${lastUid !== null ? `La part de ${esc(userOf(lastUid)?.name ?? lastUid)} complète les autres jusqu'à 100 %.` : 'Les parts sont ramenées à 100 %.'} ${rows.length ? 'Répartition ajustée à la main.' : 'Répartition égale par défaut.'}</p>
+        <p class="hint">${lastUid !== null ? `La part de ${esc(userOf(lastUid)?.name ?? lastUid)} complète les autres jusqu'à 100 %.` : 'Les parts sont ramenées à 100 %.'} ${rows.length ? 'Répartition ajustée à la main.' : 'Répartition égale par défaut.'} Les parts s\'enregistrent dès que vous quittez un champ.</p>
         ${errorSlot}
         <div class="actions">
-          <button class="btn pri" type="submit">Enregistrer les parts</button>
           ${rows.length ? '<button class="btn" type="button" data-action="equal-shares">Répartition égale</button>' : ''}
         </div>
       </form>` : '';
@@ -325,6 +324,11 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         `Contributeurs de ${issue.identifier} modifiés`,
         (api) => api.setContributors(issue.id, issue.contributorIds),
       );
+    });
+    // Comme les autres champs : une part modifiée s'enregistre à la sortie du
+    // champ (événement change), sans bouton — la Entrée du formulaire aussi.
+    body.querySelector('form[data-form="shares"]')?.addEventListener('change', (e) => {
+      if (e.target.matches('input[type="number"]')) submitShares(e.currentTarget);
     });
     if (lastUid !== null) {
       const numberInputs = [...body.querySelectorAll('form[data-form="shares"] input[type="number"]')];
@@ -865,7 +869,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     openPerson: (id) => open({ kind: 'person', id }),
     openSettings: () => open({ kind: 'settings' }),
     openTeam: () => open({ kind: 'team' }),
-    openMilestone: (id) => open({ kind: 'milestone', id }),
+    openMilestone: (id, seed) => open({ kind: 'milestone', id, seed }),
     close,
     update,
     selectedIssueId: () => (current?.kind === 'issue' ? current.id : null),

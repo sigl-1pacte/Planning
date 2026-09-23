@@ -130,8 +130,8 @@ svg.dep{position:absolute;left:0;top:0;overflow:visible;z-index:3;pointer-events
 .sw{width:9px;height:9px;flex:0 0 9px;border-radius:2px;box-shadow:0 0 0 1px rgba(16,29,40,.12),0 1px 2px rgba(16,29,40,.18)}
 .pbar{width:56px;height:6px;flex:0 0 56px;background:#DBE2E7;border-radius:3px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(16,29,40,.12)}
 .pbar i{display:block;height:100%;border-radius:3px;background-image:linear-gradient(180deg,rgba(255,255,255,.35),transparent 60%)}
-.pm{margin-left:auto;color:var(--ink2);font-size:10px;font-variant-numeric:tabular-nums}
-.pn{font-family:"IBM Plex Sans Condensed";font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:220px;flex:0 0 220px}
+.pm{margin-left:auto;color:var(--ink2);font-size:10px;font-variant-numeric:tabular-nums;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pn{font-family:"IBM Plex Sans Condensed";font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:160px;flex:0 0 160px}
 
 .pill{display:inline-block;width:76px;flex:0 0 76px;text-align:center;border-radius:10px;padding:2.5px 6px;
   font-size:9.5px;font-weight:600;letter-spacing:.01em;color:#fff;box-shadow:0 1px 2px rgba(16,29,40,.22);

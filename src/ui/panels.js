@@ -1,6 +1,7 @@
 import { esc, initials, personColor, fr1, shortDay, longDay, ddmmyyyy } from './render/format.js';
 import { defaultWeeklyHours } from '../shared/load.js';
 import { todayISO } from '../shared/calendar.js';
+import { parseDescriptionText } from '../server/linear/parsing.js';
 import { enhanceDateFields } from './dateField.js';
 import { issuePickerHtml, wireIssuePicker, emptyPickerState } from './issuePicker.js';
 
@@ -194,6 +195,8 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         </select></div>
       <div class="fg"><label for="f-title">Titre</label>
         <input id="f-title" data-field="title" value="${esc(issue.title)}"></div>
+      <div class="fg"><label for="f-desc">Description</label>
+        <textarea id="f-desc" data-field="description" rows="4" placeholder="Texte libre — la date de début et les contributeurs restent gérés par leurs champs">${esc(parseDescriptionText(issue.rawDescription))}</textarea></div>
       <div class="fg"><label for="f-state">Statut</label>
         <select id="f-state" data-field="state">
           ${(domain.workflowStates ?? []).filter((s) => s.teamId === issue.teamId)
@@ -236,6 +239,13 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       const value = e.target.value.trim();
       if (value && value !== issue.title) {
         onWrite((api) => api.updateIssue(issue.id, { title: value }), `Titre de ${issue.identifier} modifié`, (api) => api.updateIssue(issue.id, { title: issue.title }));
+      }
+    });
+    body.querySelector('[data-field="description"]').addEventListener('blur', (e) => {
+      const value = e.target.value.trim();
+      const before = parseDescriptionText(issue.rawDescription);
+      if (value !== before) {
+        onWrite((api) => api.updateIssue(issue.id, { description: value }), `Description de ${issue.identifier} modifiée`, (api) => api.updateIssue(issue.id, { description: before }));
       }
     });
     body.querySelector('[data-field="assignee"]').addEventListener('change', (e) => {
@@ -400,6 +410,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     body.innerHTML = `
       ${ro('Team', team?.name ?? '—')}
       <div class="fg"><label for="f-title">Titre</label><input id="f-title" data-field="title"></div>
+      <div class="fg"><label for="f-desc">Description</label><textarea id="f-desc" data-field="description" rows="4"></textarea></div>
       <div class="fg"><label for="f-project">Projet</label>
         <select id="f-project" data-field="project">
           <option value="">Sans projet</option>
@@ -450,6 +461,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       if (Boolean(start) !== Boolean(end)) return showError(body, 'Renseignez le début et l\'échéance, ou aucun des deux.');
       if (start && end < start) return showError(body, 'L\'échéance précède le début.');
       const input = { teamId, title: value };
+      if (field('description').value.trim()) input.description = field('description').value.trim();
       if (field('project').value) input.projectId = field('project').value;
       if (field('state').value) input.stateId = field('state').value;
       if (field('assignee').value) input.assigneeId = field('assignee').value;

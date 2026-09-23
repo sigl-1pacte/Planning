@@ -326,3 +326,27 @@ describe('écritures Linear depuis le client', () => {
 
   });
 });
+
+describe('description', () => {
+  it('remplace le texte libre en gardant Starting date et Contributors', async () => {
+    const res = await call('PUT', '/api/issues/i-11', { description: 'Un nouveau texte' });
+    expect(res.statusCode).toBe(200);
+    expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-11', {
+      description: 'Un nouveau texte\n\nStarting date: 16/09/2026\nContributors: @sacha @louis',
+    });
+  });
+
+  it('description et début ensemble : aucun n\'écrase l\'autre', async () => {
+    await call('PUT', '/api/issues/i-11', { description: 'Texte', start: '2026-09-18' });
+    expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-11', {
+      description: 'Texte\nStarting date: 18/09/2026\nContributors: @sacha @louis',
+    });
+  });
+
+  it('la création accepte une description, avec la date de début', async () => {
+    await call('POST', '/api/issues', { teamId: 't-iot', title: 'N', description: 'Contexte', start: '2026-09-28', end: '2026-10-02' });
+    expect(linear.createIssue).toHaveBeenCalledWith('good', {
+      teamId: 't-iot', title: 'N', description: 'Starting date: 28/09/2026\n\nContexte', dueDate: '2026-10-02',
+    });
+  });
+});

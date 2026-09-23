@@ -70,3 +70,21 @@ export function setContributors(description, users) {
   if (hasLine) return description.replace(CONTRIB_RE, line);
   return `${description}\n\n${line}`;
 }
+
+// Texte libre de la description : tout sauf les lignes structurées « Starting
+// date » et « Contributors », qui restent gérées à part (dates et
+// contributeurs ont leurs propres champs).
+const isStructuredLine = (line) => START_LABEL_RE.test(line) || CONTRIB_RE.test(line);
+
+export function parseDescriptionText(description) {
+  if (!description) return '';
+  return description.split('\n').filter((line) => !isStructuredLine(line)).join('\n').trim();
+}
+
+// Remplace le texte libre en gardant les lignes « Starting date » et
+// « Contributors » telles quelles : texte, puis ces lignes.
+export function setDescriptionText(description, text) {
+  const structured = (description ?? '').split('\n').filter(isStructuredLine).map((l) => l.trim());
+  const free = (text ?? '').trim();
+  return [free, structured.join('\n')].filter(Boolean).join('\n\n');
+}

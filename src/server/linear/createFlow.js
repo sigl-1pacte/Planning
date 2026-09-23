@@ -43,7 +43,7 @@ export function buildProjectInput(body) {
 }
 
 export function buildIssuePlan(body, domain) {
-  const { start, end, blockedBy = [], contributorIds = [], ...input } = body;
+  const { start, end, blockedBy = [], contributorIds = [], description: text, ...input } = body;
   const dates = checkedDates(start, end);
   const needsDomain = blockedBy.length > 0 || contributorIds.length > 0;
   if (needsDomain && !domain) throw unavailable();
@@ -62,7 +62,8 @@ export function buildIssuePlan(body, domain) {
   const contributors = contributorIds
     .map((id) => domain?.users.find((u) => u.id === id))
     .filter(Boolean);
-  let description = dates ? setStartingDate(null, dates.start) : null;
+  let description = text?.trim() ? text.trim() : null;
+  if (dates) description = setStartingDate(description, dates.start);
   if (contributors.length) description = setContributors(description, contributors);
   if (description) input.description = description;
   if (dates) input.dueDate = dates.end;

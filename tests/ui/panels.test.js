@@ -199,6 +199,17 @@ describe('champs éditables', () => {
     expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { stateId: 'st-iot-completed' });
   });
 
+  it('édite la description : le texte libre seul, sans les lignes Starting date / Contributors', async () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    const area = t.body.querySelector('[data-field="description"]');
+    expect(area.value).not.toMatch(/Starting date|Contributors/);
+    area.value = 'Nouvelle description';
+    area.dispatchEvent(new Event('blur'));
+    await flush();
+    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { description: 'Nouvelle description' });
+  });
+
   it('modifie les contributeurs', async () => {
     const t = setup();
     t.panels.openIssue('i-11');

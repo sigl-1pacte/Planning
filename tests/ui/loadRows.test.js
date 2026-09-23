@@ -14,15 +14,17 @@ const basePlanning = (over = {}) => ({
   ...over,
 });
 
-function draw(planning = basePlanning(), teamScoped = false) {
-  const domain = mapWorkspace(rawWorkspace());
+function draw(planning = basePlanning(), teamScoped = false, mode = 'planned', mutate) {
+  const raw = rawWorkspace();
+  mutate?.(raw);
+  const domain = mapWorkspace(raw);
   const view = buildView(domain, { route: { view: 'global', teamKey: null }, showCanceled: false });
   const axis = createAxis({ from: '2026-09-14', to: '2026-11-08' }, 10);
   const load = computeLoad(domain, planning, { range: axis, teamId: null });
   const left = document.createElement('div');
   const right = document.createElement('div');
   const sink = createRowSink(left, right);
-  renderLoadRows(sink, { people: view.people, load, planning, axis, users: domain.users, teamScoped });
+  renderLoadRows(sink, { people: view.people, load, planning, axis, users: domain.users, teamScoped, mode });
   return { left, right, sink };
 }
 
@@ -72,5 +74,34 @@ describe('renderLoadRows', () => {
 
   it('précise quand la charge est limitée à une team', () => {
     expect(draw(basePlanning(), true).left.querySelector('.r.band').textContent).toContain('Charge prévisionnelle de la team');
+  });
+});
+
+describe('charge prévue / réelle', () => {
+  const withReal = (raw) => { raw.issues[0].description += '\nReal points: 4'; };
+  const firstCell = (d) => d.right.querySelectorAll('.r.ld')[0].querySelector('.cell');
+
+  it('propose les trois vues dans le bandeau, la vue courante étant active', () => {
+    const d = draw(basePlanning(), false, 'real');
+    expect([...d.left.querySelectorAll('[data-load-mode]')].map((b) => b.dataset.loadMode)).toEqual(['planned', 'real', 'both']);
+    expect(d.left.querySelector('[data-load-mode].on').dataset.loadMode).toBe('real');
+    expect(d.left.querySelector('.r.band').textContent).toContain('Charge réelle');
+  });
+
+  it('vue prévue : filet de charge réelle sous la cellule quand elle existe', () => {
+    expect(firstCell(draw(basePlanning(), false, 'planned', withReal)).querySelector('.rl')).not.toBeNull();
+    expect(firstCell(draw()).querySelector('.rl')).toBeNull();
+  });
+
+  it('vue réelle : les heures réelles, 0 tâche sans charge réelle = pas de cellule', () => {
+    const none = draw(basePlanning(), false, 'real');
+    expect(none.right.querySelectorAll('.cell')).toHaveLength(0);
+    const some = draw(basePlanning(), false, 'real', withReal);
+    expect(firstCell(some).textContent).toMatch(/h/);
+    expect(some.right.querySelectorAll('.cell').length).toBeGreaterThan(0);
+  });
+
+  it('vue comparer : prévu et réel dans la même cellule', () => {
+    expect(firstCell(draw(basePlanning(), false, 'both', withReal)).textContent).toMatch(/réel .* h/);
   });
 });

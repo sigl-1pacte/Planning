@@ -1,5 +1,5 @@
 const PREFS_KEY = 'planning.prefs';
-const DEFAULTS = { zoom: 'all', dayWidth: null, collapsed: [], showCanceled: false, lastRoute: '#/' };
+const DEFAULTS = { zoom: 'all', dayWidth: null, collapsed: [], showCanceled: false, lastRoute: '#/', loadMode: 'planned' };
 
 export function loadPrefs(storage = globalThis.localStorage) {
   try {

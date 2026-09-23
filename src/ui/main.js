@@ -189,6 +189,8 @@ root.addEventListener('click', (event) => {
   } else if (el('[data-milestone]')) {
     panels.openMilestone(el('[data-milestone]').dataset.milestone);
     draw();
+  } else if (el('[data-load-mode]')) {
+    setPrefs({ loadMode: el('[data-load-mode]').dataset.loadMode });
   } else if (el('[data-zoom]')) {
     recenter = true;
     setPrefs({ zoom: el('[data-zoom]').dataset.zoom, dayWidth: null });

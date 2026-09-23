@@ -18,6 +18,14 @@ describe('renderUnplannedTab', () => {
     expect(section.querySelector('[data-end]')).not.toBeNull();
   });
 
+  it('préremplit l\'échéance déjà posée dans Linear (et le début lisible)', () => {
+    const section = document.createElement('section');
+    const withDue = [{ ...issues[0], dueDate: '2026-10-30', startDate: null }];
+    renderUnplannedTab(section, { issues: withDue, teams, onPlan: vi.fn() });
+    expect(section.querySelector('[data-end]').value).toBe('2026-10-30');
+    expect(section.querySelector('[data-start]').value).toBe('');
+  });
+
   it('appelle onPlan avec les deux dates saisies', () => {
     const onPlan = vi.fn();
     const section = document.createElement('section');

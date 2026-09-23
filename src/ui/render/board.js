@@ -247,8 +247,7 @@ function renderProjectRow(sink, { key, project, issues }, open, axis, teamId) {
     <span class="pn" title="${project.id ? `Cliquer pour modifier ${esc(project.name)}` : esc(project.name)}">${esc(project.name)}</span>
     <span class="pbar" title="${pct} % des points terminés"><i style="width:${pct}%;background-color:${color}"></i></span>
     <span class="pm">${issues.length} tâches · ${points} pts · ${pct} %</span>
-    <button class="addb" type="button" data-action="add-task" data-team="${esc(teamId)}" data-project="${esc(project.id ?? '')}">Ajouter une tâche</button>
-    ${project.id ? `<button class="addb" type="button" data-action="add-milestone" data-project="${esc(project.id)}">Ajouter un jalon</button>` : ''}`;
+    <button class="addb" type="button" data-action="add-task" data-team="${esc(teamId)}" data-project="${esc(project.id ?? '')}">Ajouter une tâche</button>`;
   if (project.startDate && project.targetDate) {
     const start = xOf(axis, project.startDate);
     const band = positioned('pband', start, Math.max(2, xOf(axis, project.targetDate) + axis.dayWidth - start));
@@ -256,6 +255,17 @@ function renderProjectRow(sink, { key, project, issues }, open, axis, teamId) {
     right.appendChild(band);
   }
   renderProjectMilestones(right, project, axis);
+  if (project.id) {
+    // À droite de la bande où vivent les jalons ; sticky pour rester visible à
+    // l'extrémité droite de la fenêtre même quand la frise défile.
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'addb addm';
+    add.dataset.action = 'add-milestone';
+    add.dataset.project = project.id;
+    add.textContent = 'Ajouter un jalon';
+    right.appendChild(add);
+  }
   sink.push(left, right, 28);
 }
 

@@ -100,9 +100,10 @@ describe('panneau de tâche', () => {
     const t = setup();
     t.panels.openIssue('i-11');
     const [sacha, louis] = t.body.querySelectorAll('form[data-form="shares"] input');
+    expect(t.body.querySelector('form[data-form="shares"] button[type="submit"]')).toBeNull();
     sacha.value = '70';
     louis.value = '30';
-    submit(t.body.querySelector('form[data-form="shares"]'));
+    change(sacha, '70'); // s'enregistre à la sortie du champ, sans bouton
     await flush();
     expect(t.api.setContributions).toHaveBeenCalledWith('i-11', [
       { linearUserId: 'u-sacha', share: 70 },
@@ -114,7 +115,7 @@ describe('panneau de tâche', () => {
     const t = setup();
     t.panels.openIssue('i-11');
     for (const input of t.body.querySelectorAll('form[data-form="shares"] input')) input.value = '0';
-    submit(t.body.querySelector('form[data-form="shares"]'));
+    change(t.body.querySelector('form[data-form="shares"] input'), '0');
     expect(t.onMutate).not.toHaveBeenCalled();
     const error = t.body.querySelector('[data-error]');
     expect(error.hidden).toBe(false);
@@ -596,7 +597,7 @@ describe('cycle de vie', () => {
   it('redessine après un clic sur un bouton du panneau', () => {
     const t = setup();
     t.panels.openIssue('i-11');
-    t.body.querySelector('button[type="submit"]').focus();
+    t.body.querySelector('button[data-action="ask-delete"]').focus();
     const input = t.body.querySelector('input');
     t.panels.update(context());
     expect(t.body.querySelector('input')).not.toBe(input);

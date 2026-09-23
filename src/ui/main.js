@@ -209,6 +209,9 @@ root.addEventListener('click', (event) => {
     };
     window.addEventListener('afterprint', restore, { once: true });
     window.print();
+  } else if (el('[data-action="add-milestone"]')) {
+    panels.openMilestone(null, { projectId: el('[data-action="add-milestone"]').dataset.project });
+    draw();
   } else if (el('[data-action="add-task"]')) {
     const btn = el('[data-action="add-task"]');
     panels.openIssue(null, { teamId: btn.dataset.team, projectId: btn.dataset.project || undefined });

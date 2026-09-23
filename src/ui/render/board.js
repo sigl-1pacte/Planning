@@ -247,7 +247,8 @@ function renderProjectRow(sink, { key, project, issues }, open, axis, teamId) {
     <span class="pn" title="${project.id ? `Cliquer pour modifier ${esc(project.name)}` : esc(project.name)}">${esc(project.name)}</span>
     <span class="pbar" title="${pct} % des points terminés"><i style="width:${pct}%;background-color:${color}"></i></span>
     <span class="pm">${issues.length} tâches · ${points} pts · ${pct} %</span>
-    <button class="addb" type="button" data-action="add-task" data-team="${esc(teamId)}" data-project="${esc(project.id ?? '')}">Ajouter une tâche</button>`;
+    <button class="addb" type="button" data-action="add-task" data-team="${esc(teamId)}" data-project="${esc(project.id ?? '')}">Ajouter une tâche</button>
+    ${project.id ? `<button class="addb" type="button" data-action="add-milestone" data-project="${esc(project.id)}">Ajouter un jalon</button>` : ''}`;
   if (project.startDate && project.targetDate) {
     const start = xOf(axis, project.startDate);
     const band = positioned('pband', start, Math.max(2, xOf(axis, project.targetDate) + axis.dayWidth - start));

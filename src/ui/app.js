@@ -126,7 +126,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
     view, axis, holidays, load, users: domain.users, collapsed: prefs.collapsed, selectedIssueId,
     states: domain.workflowStates,
   });
-  renderLoadRows(sink, { people: view.people, load, planning, axis, users: domain.users, teamScoped: Boolean(view.teamId) });
+  renderLoadRows(sink, { people: view.people, load, planning, axis, users: domain.users, teamScoped: Boolean(view.teamId), mode: prefs.loadMode });
   renderGrid(root.querySelector('[data-grid]'), axis, holidays, today, sink.top);
   renderDependencies(root.querySelector('[data-deps]'), { rowY, colorOf, issues: domain.issues, conflicts: view.conflicts, axis, height: sink.top });
   renderAxis(root.querySelector('[data-axis]'), axis, today);

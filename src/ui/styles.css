@@ -389,3 +389,10 @@ tbody tr.tot:hover{background:none}
 .cell{overflow:hidden}
 .cell .rl{position:absolute;left:0;bottom:0;height:3px;background:rgba(16,29,40,.72);border-radius:0 2px 0 0}
 .rl-txt{color:var(--ink3);font-size:9.5px}
+
+.lmode{margin-left:auto;display:inline-flex;gap:0}
+.lmode button{background:#1E303D;border:1px solid #35495B;color:#C9D7E0;padding:2px 8px;cursor:pointer;font-size:10px;font-weight:500}
+.lmode button:first-child{border-radius:3px 0 0 3px}
+.lmode button:last-child{border-radius:0 3px 3px 0}
+.lmode button.on{background:#EEF3F6;color:var(--ink)}
+.cell u{white-space:nowrap}

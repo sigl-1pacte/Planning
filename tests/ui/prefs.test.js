@@ -9,7 +9,7 @@ const storage = () => {
 describe('prefs', () => {
   it('fournit des valeurs par défaut', () => {
     expect(loadPrefs(storage())).toEqual({
-      zoom: 'all', dayWidth: null, collapsed: [], showCanceled: false, lastRoute: '#/',
+      zoom: 'all', dayWidth: null, collapsed: [], showCanceled: false, lastRoute: '#/', loadMode: 'planned',
     });
   });
 

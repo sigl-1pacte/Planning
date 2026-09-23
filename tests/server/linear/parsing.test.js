@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseStartingDate, parseContributors, resolveMention, setStartingDate, setContributors } from '../../../src/server/linear/parsing.js';
+import { parseStartingDate, parseContributors, resolveMention, setStartingDate, setContributors, parseDescriptionText, setDescriptionText } from '../../../src/server/linear/parsing.js';
 
 const users = [
   { id: 'u1', name: 'Sacha Martin', displayName: 'sacha', email: 'sacha.martin@ex.fr' },
@@ -129,5 +129,28 @@ describe('setContributors', () => {
   it('ne touche rien quand la liste est déjà vide et qu\'il n\'y a pas de ligne', () => {
     expect(setContributors('Rien ici', [])).toBe('Rien ici');
     expect(setContributors(null, [])).toBe('');
+  });
+});
+
+describe('texte libre de la description', () => {
+  const raw = 'Débattre de l\'architecture\nsuite du texte\nStarting date: 12/09/2026\nContributors: @sacha @louis';
+
+  it('extrait le texte libre sans les lignes structurées', () => {
+    expect(parseDescriptionText(raw)).toBe('Débattre de l\'architecture\nsuite du texte');
+    expect(parseDescriptionText('Starting date: 12/09/2026')).toBe('');
+    expect(parseDescriptionText(null)).toBe('');
+  });
+
+  it('remplace le texte en gardant Starting date et Contributors', () => {
+    expect(setDescriptionText(raw, 'Nouveau texte')).toBe('Nouveau texte\n\nStarting date: 12/09/2026\nContributors: @sacha @louis');
+  });
+
+  it('un texte vide ne laisse que les lignes structurées, et une description absente donne juste le texte', () => {
+    expect(setDescriptionText(raw, '  ')).toBe('Starting date: 12/09/2026\nContributors: @sacha @louis');
+    expect(setDescriptionText(null, 'Seul')).toBe('Seul');
+  });
+
+  it('ne perd pas une ligne « Starting date » illisible', () => {
+    expect(setDescriptionText('Starting date: bientôt\nAncien', 'Neuf')).toBe('Neuf\n\nStarting date: bientôt');
   });
 });

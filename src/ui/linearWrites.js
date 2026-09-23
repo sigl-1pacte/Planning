@@ -7,7 +7,7 @@
 import { LinearAuthError, LinearRateLimitError, LinearUnavailableError } from '../server/linear/client.js';
 import * as mutations from '../server/linear/mutations.js';
 import { createIssueWithExtras, buildProjectInput, buildMilestoneInput, withMove } from '../server/linear/createFlow.js';
-import { setStartingDate, setContributors } from '../server/linear/parsing.js';
+import { setStartingDate, setContributors, setDescriptionText } from '../server/linear/parsing.js';
 import { computeReschedule } from '../shared/reschedule.js';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -56,8 +56,13 @@ export function createLinearWrites({ getKey, getDomain, resync, AuthError, ApiEr
       const domain = getDomain();
       const issue = domain?.issues.find((i) => i.id === id);
       const patch = withMove({ ...body }, issue, domain ?? null);
-      if ('start' in patch) {
-        patch.description = setStartingDate(issue?.rawDescription ?? null, patch.start);
+      // Texte libre puis date de début s'appliquent l'un sur l'autre : aucun ne
+      // doit écraser l'autre (ni la ligne Contributors).
+      if ('description' in patch || 'start' in patch) {
+        let desc = issue?.rawDescription ?? null;
+        if ('description' in patch) desc = setDescriptionText(desc, patch.description);
+        if ('start' in patch) desc = setStartingDate(desc, patch.start);
+        patch.description = desc;
         delete patch.start;
       }
       if ('end' in patch) {
@@ -70,6 +75,7 @@ export function createLinearWrites({ getKey, getDomain, resync, AuthError, ApiEr
       const checks = { stateId: 'stateId', teamId: 'teamId', title: 'title', assigneeId: 'assigneeId', estimate: 'estimate', projectId: 'projectId' };
       const reflected = (d) => {
         const now = d.issues.find((i) => i.id === id);
+        if (now && 'description' in body && (now.rawDescription ?? '') !== (patch.description ?? '')) return false;
         return !now || Object.entries(checks).every(([field, prop]) => !(field in body) || now[prop] === body[field]);
       };
       return { domain: (await syncUntil(reflected)).domain };

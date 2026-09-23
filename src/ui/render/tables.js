@@ -67,7 +67,7 @@ export function renderPeopleTable(tbody, { view, load, planning, domain }) {
     return `<tr>
       <td><span class="ini" style="background-color:${personColor(user.id, domain.users)};display:inline-block;margin-right:8px">${esc(initials(user))}</span>${esc(user.name)}</td>
       <td class="r">${fr1(points)}</td>
-      <td class="r">${Math.round(stats.total)} h</td>
+      <td class="r">${Math.round(stats.total)} h${stats.realTotal > 0.01 ? `<br><span class="rl-txt">réel ${Math.round(stats.realTotal)} h</span>` : ''}</td>
       <td class="r">${stats.activeWeeks}</td>
       <td class="r">${fr1(stats.activeWeeks ? stats.total / stats.activeWeeks : 0)} h</td>
       <td class="r">${Math.round(stats.avgPct)} %</td>
@@ -136,5 +136,6 @@ export function renderLegend(el, { view, planning }) {
     `<span><i style="background:#E5B274;border:1px solid rgba(16,29,40,.15)"></i>au-dessus de ${ceiling} %</span>`,
     '<span><i style="background:#B23A3A"></i>surcharge</span>',
     '<span><i style="background:#fff;box-shadow:inset 0 -3px 0 #101D28;border:1px solid rgba(16,29,40,.15)"></i>capacité ajustée</span>',
+    '<span><i style="background:#DEECE4;box-shadow:inset 0 -3px 0 rgba(16,29,40,.72);border:1px solid rgba(16,29,40,.15)"></i>filet : charge réelle</span>',
   ].join('');
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseStartingDate, parseContributors, resolveMention, setStartingDate, setContributors, parseDescriptionText, setDescriptionText } from '../../../src/server/linear/parsing.js';
+import { parseStartingDate, parseContributors, resolveMention, setStartingDate, setContributors, parseDescriptionText, setDescriptionText, parseRealPoints, setRealPoints } from '../../../src/server/linear/parsing.js';
 
 const users = [
   { id: 'u1', name: 'Sacha Martin', displayName: 'sacha', email: 'sacha.martin@ex.fr' },
@@ -152,5 +152,28 @@ describe('texte libre de la description', () => {
 
   it('ne perd pas une ligne « Starting date » illisible', () => {
     expect(setDescriptionText('Starting date: bientôt\nAncien', 'Neuf')).toBe('Neuf\n\nStarting date: bientôt');
+  });
+});
+
+describe('charge réelle (Real points)', () => {
+  it('lit la ligne, avec virgule ou point, et rend null sinon', () => {
+    expect(parseRealPoints('Texte\nReal points: 5\nStarting date: 12/09/2026')).toBe(5);
+    expect(parseRealPoints('Real points: 2,5')).toBe(2.5);
+    expect(parseRealPoints('Real points: beaucoup')).toBeNull();
+    expect(parseRealPoints(null)).toBeNull();
+  });
+
+  it('pose, remplace et retire la ligne sans toucher au reste', () => {
+    expect(setRealPoints('Texte', 3)).toBe('Texte\nReal points: 3');
+    expect(setRealPoints('Texte\nReal points: 3', 8)).toBe('Texte\nReal points: 8');
+    expect(setRealPoints('Texte\nReal points: 3\nContributors: @a', null)).toBe('Texte\nContributors: @a');
+    expect(setRealPoints(null, null)).toBe('');
+    expect(setRealPoints(null, 2)).toBe('Real points: 2');
+  });
+
+  it('la ligne ne fait pas partie du texte libre et survit à son édition', () => {
+    const raw = 'Texte\nReal points: 3\nStarting date: 12/09/2026';
+    expect(parseDescriptionText(raw)).toBe('Texte');
+    expect(setDescriptionText(raw, 'Neuf')).toBe('Neuf\n\nReal points: 3\nStarting date: 12/09/2026');
   });
 });

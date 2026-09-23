@@ -1,4 +1,4 @@
-import { parseStartingDate, parseContributors } from './parsing.js';
+import { parseStartingDate, parseContributors, parseRealPoints } from './parsing.js';
 
 const STATUS = {
   triage: 'todo', backlog: 'todo', unstarted: 'todo',
@@ -75,6 +75,7 @@ function mapIssue(i, users, blockedBy) {
     projectId: i.project?.id ?? null,
     parentId: i.parent?.id ?? null,
     estimate: i.estimate ?? null,
+    realPoints: parseRealPoints(i.description),
     status: STATUS[i.state.type] ?? 'todo',
     stateId: i.state.id,
     assigneeId: i.assignee?.id ?? null,

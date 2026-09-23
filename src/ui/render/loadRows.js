@@ -49,6 +49,15 @@ export function renderLoadRows(sink, { people, load, planning, axis, users, team
           ? `<b>${fr1(week.hours)} h</b><u>${Math.round(week.pct)} %</u>`
           : `<b>${Math.round(week.pct)}%</b>`;
       }
+      // Charge réelle : filet sombre en bas de la cellule, proportionnel à la
+      // capacité (une tâche sans charge réelle saisie compte pour 0).
+      if (week.realHours > 0.01) {
+        const real = document.createElement('i');
+        real.className = 'rl';
+        real.style.width = `${Math.min(100, Number.isFinite(week.realPct) ? week.realPct : 100)}%`;
+        cell.appendChild(real);
+        cell.title = `Prévu ${fr1(week.hours)} h · réel ${fr1(week.realHours)} h`;
+      }
       right.appendChild(cell);
     }
     sink.push(left, right, 34);

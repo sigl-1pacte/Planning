@@ -384,3 +384,8 @@ th:first-child,td:first-child{padding-left:0}
 /* Ligne de total des tableaux */
 tbody tr.tot td{border-top:2px solid var(--line);font-weight:600;background:var(--off)}
 tbody tr.tot:hover{background:none}
+
+/* charge réelle : filet en bas d'une cellule de charge, et libellé du tableau */
+.cell{overflow:hidden}
+.cell .rl{position:absolute;left:0;bottom:0;height:3px;background:rgba(16,29,40,.72);border-radius:0 2px 0 0}
+.rl-txt{color:var(--ink3);font-size:9.5px}

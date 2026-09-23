@@ -175,9 +175,15 @@ export function createLinearWrites({ getKey, getDomain, resync, AuthError, ApiEr
       return { domain: snap.domain, milestoneId: milestone.id };
     }),
 
-    updateMilestone: guard(async (key, id, targetDate) => {
-      await m.updateMilestone(key, id, { targetDate });
-      return { domain: (await syncUntil(() => true)).domain };
+    // `change` : une date ISO (déplacement) ou un objet { name?, targetDate? }.
+    updateMilestone: guard(async (key, id, change) => {
+      const input = typeof change === 'string' ? { targetDate: change } : { ...change };
+      await m.updateMilestone(key, id, input);
+      const reflected = (d) => {
+        const now = (d.projects ?? []).flatMap((p) => p.milestones).find((x) => x.id === id);
+        return !now || (!('name' in input) || now.name === input.name);
+      };
+      return { domain: (await syncUntil(reflected)).domain };
     }),
   };
 }

@@ -350,3 +350,12 @@ describe('description', () => {
     });
   });
 });
+
+describe('jalons', () => {
+  it('renomme un jalon sans toucher à sa date, et attend que le nom soit relu', async () => {
+    resync.mockResolvedValue({ ...snap, domain: { ...snap.domain, projects: snap.domain.projects.map((p) => ({ ...p, milestones: p.milestones.map((m) => ({ ...m, name: 'Nouveau' })) })) } });
+    await writes.updateMilestone('m-1', { name: 'Nouveau' });
+    expect(linear.updateMilestone).toHaveBeenCalledWith('good', 'm-1', { name: 'Nouveau' });
+    expect(resync).toHaveBeenCalledTimes(1);
+  });
+});

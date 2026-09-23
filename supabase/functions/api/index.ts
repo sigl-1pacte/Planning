@@ -17,26 +17,14 @@ import Ajv from 'npm:ajv@8';
 import { LinearAuthError, LinearRateLimitError, LinearUnavailableError } from '../../../src/server/linear/client.js';
 import { dayOfWeek, isValidDate } from '../../../src/shared/calendar.js';
 import * as repo from '../../../src/server/db/repo.js';
-import { computeReschedule, RescheduleCycleError } from '../../../src/shared/reschedule.js';
-import { setStartingDate, setContributors } from '../../../src/server/linear/parsing.js';
-import { refreshUntil } from '../../../src/server/sync/refreshUntil.js';
-import { createIssueWithExtras, buildProjectInput, buildMilestoneInput, withMove } from '../../../src/server/linear/createFlow.js';
 import { createKeyValidator } from '../../../src/server/auth.js';
 import {
   fetchWorkspace, fetchIssuesSince, fetchViewer, fetchDiagnosticSample,
 } from '../../../src/server/linear/queries.js';
-import {
-  updateIssue, createIssue, deleteIssue, issueBlockers, addBlocker, removeBlocker,
-  updateProject, createProject, deleteProject, createTeam, addComment, subscribeToIssue, updateMilestone, createMilestone,
-} from '../../../src/server/linear/mutations.js';
 import { buildDiagnostic } from '../../../src/server/diagnostic.js';
 import { createPool } from './db.ts';
 import { createSnapshotStore } from './snapshotStore.ts';
 
-const linear = {
-  updateIssue, createIssue, deleteIssue, issueBlockers, addBlocker, removeBlocker,
-  updateProject, createProject, deleteProject, createTeam, addComment, subscribeToIssue, updateMilestone, createMilestone,
-};
 
 const DATABASE_URL = Deno.env.get('SUPABASE_DB_URL') ?? Deno.env.get('DATABASE_URL');
 if (!DATABASE_URL) throw new Error('SUPABASE_DB_URL (ou DATABASE_URL) absente.');
@@ -123,77 +111,6 @@ const contributionsBody = {
 const holidayBody = {
   type: 'object', required: ['day', 'label'], additionalProperties: false,
   properties: { day: { type: 'string' }, label: { type: 'string', minLength: 1 } },
-};
-const issuePatchBody = {
-  type: 'object', minProperties: 1, additionalProperties: false,
-  properties: {
-    title: { type: 'string', minLength: 1 },
-    assigneeId: { type: ['string', 'null'] },
-    estimate: { type: ['number', 'null'], minimum: 0 },
-    stateId: { type: 'string', minLength: 1 },
-    teamId: { type: 'string', minLength: 1 },
-    projectId: { type: ['string', 'null'], minLength: 1 },
-    start: { type: 'string' },
-    end: { type: 'string' },
-  },
-};
-const rescheduleBody = {
-  type: 'object', minProperties: 1, additionalProperties: false,
-  properties: { start: { type: 'string' }, end: { type: 'string' } },
-};
-const dependenciesBody = {
-  type: 'object', required: ['blockedBy'], additionalProperties: false,
-  properties: { blockedBy: { type: 'array', items: { type: 'string' } } },
-};
-const contributorsBody = {
-  type: 'object', required: ['contributorIds'], additionalProperties: false,
-  properties: { contributorIds: { type: 'array', items: { type: 'string' } } },
-};
-const issueCreateBody = {
-  type: 'object', required: ['teamId', 'title'], additionalProperties: false,
-  properties: {
-    teamId: { type: 'string', minLength: 1 },
-    projectId: { type: ['string', 'null'] },
-    title: { type: 'string', minLength: 1 },
-    estimate: { type: ['number', 'null'], minimum: 0 },
-    start: { type: 'string' },
-    end: { type: 'string' },
-    assigneeId: { type: 'string', minLength: 1 },
-    stateId: { type: 'string', minLength: 1 },
-    blockedBy: { type: 'array', items: { type: 'string', minLength: 1 } },
-    contributorIds: { type: 'array', items: { type: 'string', minLength: 1 } },
-  },
-};
-// Voir la même constante dans src/server/app.js : le client doit renvoyer
-// l'identifiant de la tâche (ou le nom du projet), comparé à Linear.
-const deleteBody = {
-  type: 'object', required: ['confirm'], additionalProperties: false,
-  properties: { confirm: { type: 'string', minLength: 1 } },
-};
-const projectPatchBody = {
-  type: 'object', minProperties: 1, additionalProperties: false,
-  properties: {
-    name: { type: 'string', minLength: 1 }, color: { type: 'string' },
-    startDate: { type: 'string' }, targetDate: { type: 'string' },
-  },
-};
-const milestoneBody = {
-  type: 'object', required: ['targetDate'], additionalProperties: false, properties: { targetDate: { type: 'string' } },
-};
-const milestoneCreateBody = {
-  type: 'object', required: ['projectId', 'name'], additionalProperties: false,
-  properties: { projectId: { type: 'string', minLength: 1 }, name: { type: 'string', minLength: 1 }, targetDate: { type: 'string' } },
-};
-const projectCreateBody = {
-  type: 'object', required: ['teamIds', 'name'], additionalProperties: false,
-  properties: {
-    teamIds: { type: 'array', minItems: 1, items: { type: 'string' } }, name: { type: 'string', minLength: 1 },
-    startDate: { type: 'string' }, targetDate: { type: 'string' }, color: { type: 'string' },
-  },
-};
-const teamCreateBody = {
-  type: 'object', required: ['key', 'name'], additionalProperties: false,
-  properties: { key: { type: 'string', minLength: 1 }, name: { type: 'string', minLength: 1 } },
 };
 
 type Vars = { linearKey: string; viewer: unknown };
@@ -320,180 +237,9 @@ app.delete('/api/holidays/:day', async (c) => c.json(await withDatabase(async ()
   return repo.getPlanning(db);
 })));
 
-app.put('/api/issues/:issueId', async (c) => {
-  const body: any = await c.req.json();
-  assertValid(issuePatchBody, body);
-  const key = c.get('linearKey');
-  const current = await store.current();
-  const issue = current?.domain.issues.find((i: any) => i.id === c.req.param('issueId'));
-  // Changement de team / de projet : statut et projet réalignés côté serveur.
-  const patch: any = withMove({ ...body }, issue, current?.domain ?? null);
-  if ('start' in patch) {
-    patch.description = setStartingDate(issue?.rawDescription ?? null, patch.start);
-    delete patch.start;
-  }
-  if ('end' in patch) {
-    patch.dueDate = patch.end;
-    delete patch.end;
-  }
-  await linear.updateIssue(key, c.req.param('issueId'), patch);
-  const snap = await store.forceRefresh(key);
-  return c.json({ domain: snap.domain });
-});
-
-app.post('/api/issues/:issueId/reschedule', async (c) => {
-  const body: any = await c.req.json();
-  assertValid(rescheduleBody, body);
-  const key = c.get('linearKey');
-  const current = await store.current();
-  if (!current) throw Object.assign(new Error('Instantané indisponible'), { statusCode: 503 });
-  let changes;
-  try {
-    changes = computeReschedule(current.domain.issues, new Set(), c.req.param('issueId'), body);
-  } catch (err: any) {
-    throw Object.assign(err, { statusCode: 400 });
-  }
-  const byId = new Map(current.domain.issues.map((i: any) => [i.id, i]));
-  for (const change of changes as any[]) {
-    const issue: any = byId.get(change.issueId);
-    await linear.updateIssue(key, change.issueId, {
-      description: setStartingDate(issue?.rawDescription ?? null, change.newStart),
-      dueDate: change.newEnd,
-    });
-  }
-  const snap = await store.forceRefresh(key);
-  return c.json({ domain: snap.domain, changes });
-});
-
-app.put('/api/issues/:issueId/dependencies', async (c) => {
-  const body: any = await c.req.json();
-  assertValid(dependenciesBody, body);
-  const key = c.get('linearKey');
-  const issueId = c.req.param('issueId');
-  const current = await linear.issueBlockers(key, issueId);
-  const desired: Set<string> = new Set(body.blockedBy);
-  const existing = new Set(current.map((cur: any) => cur.blockerId));
-  for (const { relationId, blockerId } of current as any[]) {
-    if (!desired.has(blockerId)) await linear.removeBlocker(key, relationId);
-  }
-  for (const blockerId of desired) {
-    if (!existing.has(blockerId)) await linear.addBlocker(key, issueId, blockerId);
-  }
-  const snap = await store.forceRefresh(key);
-  return c.json({ domain: snap.domain });
-});
-
-app.put('/api/issues/:issueId/contributors', async (c) => {
-  const body: any = await c.req.json();
-  assertValid(contributorsBody, body);
-  const key = c.get('linearKey');
-  const current = await store.current();
-  if (!current) throw Object.assign(new Error('Instantané indisponible'), { statusCode: 503 });
-  const issue = current.domain.issues.find((i: any) => i.id === c.req.param('issueId'));
-  if (!issue) throw Object.assign(new Error('Issue inconnue'), { statusCode: 404 });
-  const byId = new Map(current.domain.users.map((u: any) => [u.id, u]));
-  const selected = body.contributorIds.map((id: string) => byId.get(id)).filter(Boolean);
-  await linear.updateIssue(key, issue.id, { description: setContributors(issue.rawDescription, selected) });
-  const added = body.contributorIds.filter((id: string) => !issue.contributorIds.includes(id));
-  const addedUsers = added.map((id: string) => byId.get(id)).filter(Boolean);
-  if (addedUsers.length) {
-    const names = addedUsers.map((u: any) => u.name).join(', ');
-    await linear.addComment(key, issue.id, `Ajouté·e·s comme contributeurs : ${names}`);
-    for (const u of addedUsers as any[]) await linear.subscribeToIssue(key, issue.id, u.id);
-  }
-  await repo.pruneContributions(db, issue.id, body.contributorIds);
-  const snap = await store.forceRefresh(key);
-  return c.json({ domain: snap.domain });
-});
-
-app.post('/api/issues', async (c) => {
-  const body: any = await c.req.json();
-  assertValid(issueCreateBody, body);
-  const key = c.get('linearKey');
-  // Tout ce qui peut être refusé l'est avant le premier appel vers Linear
-  // (voir linear/createFlow.js) : start/end, statut, contributeurs, etc.
-  const { issue, warnings } = await createIssueWithExtras({ linear, key, body, domain: (await store.current())?.domain ?? null });
-  const snap = await refreshUntil(store, key, (d: any) => d.issues.some((i: any) => i.id === issue.id));
-  return c.json({ domain: snap.domain, issueId: issue.id, warnings });
-});
-
-app.delete('/api/issues/:issueId', async (c) => {
-  const body: any = await c.req.json().catch(() => ({}));
-  assertValid(deleteBody, body);
-  const key = c.get('linearKey');
-  const current = await store.current();
-  if (!current) throw Object.assign(new Error('Instantané indisponible'), { statusCode: 503 });
-  const issue = current.domain.issues.find((i: any) => i.id === c.req.param('issueId'));
-  if (!issue) throw Object.assign(new Error('Tâche introuvable'), { statusCode: 404 });
-  if (body.confirm !== issue.identifier) throw badRequest('Confirmation incorrecte : saisissez l\'identifiant de la tâche');
-  await linear.deleteIssue(key, issue.id);
-  const snap = await refreshUntil(store, key, (d: any) => !d.issues.some((i: any) => i.id === issue.id));
-  return c.json({ domain: snap.domain });
-});
-
-app.delete('/api/projects/:projectId', async (c) => {
-  const body: any = await c.req.json().catch(() => ({}));
-  assertValid(deleteBody, body);
-  const key = c.get('linearKey');
-  const current = await store.current();
-  if (!current) throw Object.assign(new Error('Instantané indisponible'), { statusCode: 503 });
-  const project = current.domain.projects.find((p: any) => p.id === c.req.param('projectId'));
-  if (!project) throw Object.assign(new Error('Projet introuvable'), { statusCode: 404 });
-  if (body.confirm !== project.name) throw badRequest('Confirmation incorrecte : saisissez le nom du projet');
-  await linear.deleteProject(key, project.id);
-  const snap = await refreshUntil(store, key, (d: any) => !d.projects.some((p: any) => p.id === project.id));
-  return c.json({ domain: snap.domain });
-});
-
-app.put('/api/projects/:projectId', async (c) => {
-  const body: any = await c.req.json();
-  assertValid(projectPatchBody, body);
-  const key = c.get('linearKey');
-  await linear.updateProject(key, c.req.param('projectId'), body);
-  // Synchronisation complète : un cycle incrémental ne relit que les issues.
-  const snap = await store.forceRefresh(key, { full: true });
-  return c.json({ domain: snap.domain });
-});
-
-app.put('/api/milestones/:milestoneId', async (c) => {
-  const body: any = await c.req.json();
-  assertValid(milestoneBody, body);
-  const key = c.get('linearKey');
-  await linear.updateMilestone(key, c.req.param('milestoneId'), { targetDate: body.targetDate });
-  const snap = await store.forceRefresh(key, { full: true });
-  return c.json({ domain: snap.domain });
-});
-
-app.post('/api/milestones', async (c) => {
-  const body: any = await c.req.json();
-  assertValid(milestoneCreateBody, body);
-  const key = c.get('linearKey');
-  const input = buildMilestoneInput(body, (await store.current())?.domain ?? null);
-  const milestone = await linear.createMilestone(key, input);
-  // Synchronisation complète : un cycle incrémental ne relit que les issues.
-  const snap = await refreshUntil(store, key, (d: any) => d.projects.some((p: any) => p.milestones.some((m: any) => m.id === milestone.id)));
-  return c.json({ domain: snap.domain, milestoneId: milestone.id });
-});
-
-app.post('/api/projects', async (c) => {
-  const body: any = await c.req.json();
-  assertValid(projectCreateBody, body);
-  const key = c.get('linearKey');
-  const project = await linear.createProject(key, buildProjectInput(body));
-  // Synchronisation complète : un cycle incrémental ne relit que les issues,
-  // jamais les projets ni les teams.
-  const snap = await refreshUntil(store, key, (d: any) => d.projects.some((p: any) => p.id === project.id));
-  return c.json({ domain: snap.domain, projectId: project.id });
-});
-
-app.post('/api/teams', async (c) => {
-  const body: any = await c.req.json();
-  assertValid(teamCreateBody, body);
-  const key = c.get('linearKey');
-  const team = await linear.createTeam(key, body);
-  const snap = await refreshUntil(store, key, (d: any) => !team?.id || d.teams.some((t: any) => t.id === team.id));
-  return c.json({ domain: snap.domain });
-});
+// Aucune route n'écrit vers Linear : les écritures partent du navigateur, avec la
+// clé personnelle de l'utilisateur (src/ui/linearWrites.js). Cette fonction ne lit
+// Linear que pour son cache, et ne persiste que les données locales de planification.
 
 app.get('/api/diagnostic', async (c) => {
   const requested = Number(c.req.query('limit') ?? 20);

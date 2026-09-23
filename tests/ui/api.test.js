@@ -65,37 +65,20 @@ describe('api', () => {
     expect(() => api.forgetKey()).not.toThrow();
   });
 
-  it('envoie les nouvelles routes d\'écriture', async () => {
-    const f = fakeFetch([
-      jsonResponse({ domain: {} }), jsonResponse({ domain: {}, changes: [] }), jsonResponse({ domain: {} }),
-      jsonResponse({ domain: {} }), jsonResponse({ domain: {}, issueId: 'i1' }), jsonResponse({ domain: {} }),
-      jsonResponse({ domain: {}, projectId: 'p1' }), jsonResponse({ domain: {} }), jsonResponse({ domain: {} }),
-      jsonResponse({ domain: {} }), jsonResponse({ domain: {} }), jsonResponse({ domain: {} }),
-    ]);
-    const api = createApi({ fetchImpl: f, storage: memoryStorage() });
-    await api.updateIssue('i1', { title: 'X' });
-    await api.reschedule('i1', { start: '2026-09-18' });
-    await api.setDependencies('i1', ['b1']);
-    await api.setContributors('i1', ['u1', 'u2']);
-    await api.createIssue({ teamId: 't1', title: 'Y' });
-    await api.updateProject('p1', { name: 'Z' });
-    await api.createProject({ teamIds: ['t1'], name: 'W' });
-    await api.createTeam({ key: 'K', name: 'N' });
+  it('n\'envoie jamais une écriture Linear au backend : elles partent directement vers Linear, avec la clé de l\'utilisateur', async () => {
+    const backend = fakeFetch([jsonResponse({ domain: {} })]);
+    const linearCalls = [];
+    const linearFetch = async (url, init) => {
+      const { query } = JSON.parse(init.body);
+      linearCalls.push({ url, auth: init.headers.Authorization, op: /mutation\s+(\w+)/.exec(query)?.[1] });
+      return { status: 200, json: async () => ({ data: { milestone: { success: true }, projectMilestoneUpdate: { success: true, projectMilestone: {} } } }) };
+    };
+    const storage = memoryStorage();
+    storage.setItem('planning.linearKey', 'lin_perso');
+    const api = createApi({ fetchImpl: backend, storage, getDomain: () => null, linearOpts: { fetchImpl: linearFetch } });
     await api.updateMilestone('m1', '2026-11-05');
-    await api.deleteIssue('i1', 'IOT-1');
-    await api.deleteProject('p1', 'Projet');
-    await api.createMilestone({ projectId: 'p1', name: 'Jalon' });
-    expect(f.calls.slice(9).map((c) => [c.method, c.url, c.body])).toEqual([
-      ['DELETE', '/api/issues/i1', { confirm: 'IOT-1' }],
-      ['DELETE', '/api/projects/p1', { confirm: 'Projet' }],
-      ['POST', '/api/milestones', { projectId: 'p1', name: 'Jalon' }],
-    ]);
-    expect(f.calls.slice(0, 9).map((c) => c.url)).toEqual([
-      '/api/issues/i1', '/api/issues/i1/reschedule', '/api/issues/i1/dependencies', '/api/issues/i1/contributors',
-      '/api/issues', '/api/projects/p1', '/api/projects', '/api/teams', '/api/milestones/m1',
-    ]);
-    expect(f.calls[8].body).toEqual({ targetDate: '2026-11-05' });
-    expect(f.calls[2].body).toEqual({ blockedBy: ['b1'] });
-    expect(f.calls[3].body).toEqual({ contributorIds: ['u1', 'u2'] });
+    expect(linearCalls).toEqual([{ url: 'https://api.linear.app/graphql', auth: 'lin_perso', op: 'ProjectMilestoneUpdate' }]);
+    // Côté backend : uniquement la relecture (POST /api/refresh), jamais la modification.
+    expect(backend.calls.map((c) => [c.method, c.url])).toEqual([['POST', '/api/refresh']]);
   });
 });

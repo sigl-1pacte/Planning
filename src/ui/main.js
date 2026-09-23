@@ -16,7 +16,7 @@ import { resolveConflicts } from './conflictResolution.js';
 import { renderLoadChart } from './render/loadChart.js';
 import { renderIssueBar } from './render/board.js';
 
-const api = createApi();
+const api = createApi({ getDomain: () => controller.state.snapshot?.domain ?? null });
 const root = document.getElementById('app');
 const overlay = document.getElementById('key-overlay');
 let prefs = loadPrefs();

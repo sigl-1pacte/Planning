@@ -1,3 +1,5 @@
+import { createLinearWrites } from './linearWrites.js';
+
 const KEY_STORAGE = 'planning.linearKey';
 
 // Vide par défaut : le back sert alors les mêmes chemins relatifs /api/...
@@ -16,7 +18,7 @@ export class ApiError extends Error {
   }
 }
 
-export function createApi({ fetchImpl = (...args) => fetch(...args), storage = globalThis.localStorage } = {}) {
+export function createApi({ fetchImpl = (...args) => fetch(...args), storage = globalThis.localStorage, getDomain = () => null, linearOpts } = {}) {
   const readKey = () => {
     try { return storage.getItem(KEY_STORAGE); } catch { return null; }
   };
@@ -37,9 +39,16 @@ export function createApi({ fetchImpl = (...args) => fetch(...args), storage = g
 
   const person = (id) => `/api/people/${encodeURIComponent(id)}`;
   const issue = (id) => `/api/issues/${encodeURIComponent(id)}`;
-  const project = (id) => `/api/projects/${encodeURIComponent(id)}`;
+
+  // Écritures vers Linear : depuis le navigateur, avec la clé de l'utilisateur
+  // (voir linearWrites.js) — jamais via le backend, qui ne fait que lire.
+  const linearWrites = createLinearWrites({
+    getKey: readKey, getDomain, AuthError, ApiError, opts: linearOpts,
+    resync: () => request('POST', '/api/refresh'),
+  });
 
   return {
+    ...linearWrites,
     getKey: readKey,
     async saveKey(key) {
       const { user } = await request('POST', '/api/key/validate', undefined, key);
@@ -60,18 +69,5 @@ export function createApi({ fetchImpl = (...args) => fetch(...args), storage = g
     clearContributions: (issueId) => request('DELETE', `${issue(issueId)}/contributions`),
     addHoliday: (day, label) => request('POST', '/api/holidays', { day, label }),
     deleteHoliday: (day) => request('DELETE', `/api/holidays/${day}`),
-    updateIssue: (id, patch) => request('PUT', issue(id), patch),
-    reschedule: (id, dates) => request('POST', `${issue(id)}/reschedule`, dates),
-    setDependencies: (id, blockedBy) => request('PUT', `${issue(id)}/dependencies`, { blockedBy }),
-    setContributors: (id, contributorIds) => request('PUT', `${issue(id)}/contributors`, { contributorIds }),
-    createIssue: (input) => request('POST', '/api/issues', input),
-    // `confirm` : identifiant de la tâche / nom du projet, que le serveur compare à Linear.
-    deleteIssue: (id, confirm) => request('DELETE', issue(id), { confirm }),
-    updateProject: (id, patch) => request('PUT', project(id), patch),
-    createProject: (input) => request('POST', '/api/projects', input),
-    deleteProject: (id, confirm) => request('DELETE', project(id), { confirm }),
-    createTeam: (input) => request('POST', '/api/teams', input),
-    createMilestone: (input) => request('POST', '/api/milestones', input),
-    updateMilestone: (id, targetDate) => request('PUT', `/api/milestones/${encodeURIComponent(id)}`, { targetDate }),
   };
 }

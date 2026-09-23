@@ -12,9 +12,19 @@ let domain;
 let calls;
 let handlers;
 
+// Les écritures partent directement vers Linear (clé de l'utilisateur) : on les
+// enregistre comme des appels « LINEAR » ; le backend ne reçoit que la relecture.
 function fakeFetch(url, init = {}) {
   const method = init.method ?? 'GET';
   const body = init.body ? JSON.parse(init.body) : undefined;
+  if (url.includes('api.linear.app')) {
+    const op = /mutation\s+(\w+)/.exec(body.query)?.[1];
+    calls.push({ method: 'LINEAR', op, variables: body.variables });
+    return Promise.resolve({ status: 200, json: async () => ({ data: {
+      issueUpdate: { success: true, issue: {} },
+      projectMilestoneUpdate: { success: true, projectMilestone: {} },
+    } }) });
+  }
   calls.push({ method, url, body });
   const key = `${method} ${url.split('?')[0]}`;
   const handler = Object.entries(handlers).find(([k]) => (k.endsWith('*') ? key.startsWith(k.slice(0, -1)) : k === key));
@@ -52,13 +62,7 @@ beforeEach(() => {
       settings: { hoursPerPoint: 5, loadCeilingPct: 80, defaultWeeklyHours: 28 },
       holidays: [], people: [], weeklyCapacities: [], contributions: [],
     }),
-    'POST /api/issues/*': () => ({ domain, changes: [] }),
-    'PUT /api/issues/*': () => ({ domain }),
-    'PUT /api/milestones/*': (body) => {
-      const moved = structuredClone(domain);
-      moved.projects[0].milestones[0].date = body.targetDate;
-      return { domain: moved };
-    },
+    'POST /api/refresh': () => ({ version: 2, fetchedAt: 'x', stale: false, lastError: null, domain }),
   };
   vi.stubGlobal('fetch', fakeFetch);
 });
@@ -76,10 +80,11 @@ describe('jalons — glisser-déposer dans l\'application montée', () => {
     pointer('pointermove', diamond, { x: 100 + 3 * 60 });
     pointer('pointerup', diamond, { x: 100 + 3 * 60 });
     await flush();
-    const put = calls.find((c) => c.method === 'PUT' && c.url.startsWith('/api/milestones/m-1'));
+    const put = calls.find((c) => c.op === 'ProjectMilestoneUpdate' && c.variables.id === 'm-1');
     expect(put, JSON.stringify(calls)).toBeDefined();
-    expect(put.body.targetDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(put.body.targetDate).not.toBe('2026-11-05');
+    expect(put.variables.input.targetDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(put.variables.input.targetDate).not.toBe('2026-11-05');
+    expect(calls.some((c) => c.method === 'PUT' && c.url.startsWith('/api/milestones'))).toBe(false);
   });
 
   it('« Annuler » après un déplacement remet l\'ancienne date chez Linear', async () => {
@@ -93,9 +98,9 @@ describe('jalons — glisser-déposer dans l\'application montée', () => {
     expect(undoButton, 'le bandeau d\'annulation doit apparaître').not.toBeNull();
     undoButton.click();
     await flush();
-    const puts = calls.filter((c) => c.method === 'PUT' && c.url.startsWith('/api/milestones/m-1'));
+    const puts = calls.filter((c) => c.op === 'ProjectMilestoneUpdate' && c.variables.id === 'm-1');
     expect(puts).toHaveLength(2);
-    expect(puts[1].body.targetDate).toBe('2026-11-05');
+    expect(puts[1].variables.input.targetDate).toBe('2026-11-05');
   });
 
   it('pendant le glisser, le losange garde sa rotation (il reste un losange)', async () => {
@@ -115,12 +120,13 @@ describe('jalons — glisser-déposer dans l\'application montée', () => {
     pointer('pointermove', bar, { x: 100 + 2 * 60 });
     pointer('pointerup', bar, { x: 100 + 2 * 60 });
     await flush();
-    const first = calls.filter((c) => c.method === 'POST' && c.url === '/api/issues/i-11/reschedule');
-    expect(first).toHaveLength(1);
+    const ofI11 = () => calls.filter((c) => c.op === 'IssueUpdate' && c.variables.id === 'i-11');
+    expect(ofI11()).toHaveLength(1);
     document.querySelector('[data-action="undo"]').click();
     await flush();
-    const all = calls.filter((c) => c.method === 'POST' && c.url === '/api/issues/i-11/reschedule');
+    const all = ofI11();
     expect(all).toHaveLength(2);
-    expect(all[1].body).toEqual({ start: '2026-09-16', end: '2026-09-25' });
+    expect(all[1].variables.input.dueDate).toBe('2026-09-25');
+    expect(all[1].variables.input.description).toMatch(/Starting date: 16\/09\/2026/);
   });
 });

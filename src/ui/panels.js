@@ -605,8 +605,19 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     title.textContent = milestone.name;
     body.innerHTML = `
       ${ro('Projet', project.name)}
+      <div class="fg"><label for="f-mname">Nom du jalon</label>
+        <input id="f-mname" data-field="mname" value="${esc(milestone.name)}"></div>
       <div class="fg"><label for="f-mdate">Date</label><div class="dfield">
         <input id="f-mdate" type="date" data-field="mdate" value="${milestone.date ?? ''}"></div></div>`;
+    body.querySelector('[data-field="mname"]').addEventListener('blur', (e) => {
+      const value = e.target.value.trim();
+      if (!value || value === milestone.name) return;
+      onWrite(
+        (api) => api.updateMilestone(milestoneId, { name: value }),
+        `Jalon « ${milestone.name} » renommé`,
+        (api) => api.updateMilestone(milestoneId, { name: milestone.name }),
+      );
+    });
     body.querySelector('[data-field="mdate"]').addEventListener('change', (e) => {
       const value = e.target.value;
       if (!value) return;

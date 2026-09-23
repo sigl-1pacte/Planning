@@ -469,6 +469,18 @@ describe('création', () => {
     expect(t.api.updateMilestone).toHaveBeenCalledWith('m-1', '2026-11-12');
   });
 
+  it('renomme un jalon (avec annulation vers l\'ancien nom)', async () => {
+    const t = setup();
+    t.panels.openMilestone('m-1');
+    const input = t.body.querySelector('[data-field="mname"]');
+    expect(input.value).toBe('Objet construit');
+    input.value = 'Objet livré';
+    input.dispatchEvent(new Event('blur'));
+    await flush();
+    expect(t.api.updateMilestone).toHaveBeenCalledWith('m-1', { name: 'Objet livré' });
+    expect(t.onWrite.mock.calls.at(-1)[1]).toMatch(/renommé/);
+  });
+
   it('signale un jalon disparu', () => {
     const t = setup();
     t.panels.openMilestone('m-inconnu');

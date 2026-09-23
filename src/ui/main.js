@@ -165,6 +165,10 @@ function draw() {
   } else if (toast) {
     toast.remove();
   }
+  // Hauteur réelle du bandeau (il passe sur deux lignes sur un écran étroit) :
+  // les éléments ancrés juste dessous s'y calent.
+  const rail = root.querySelector('.rail');
+  if (rail) document.documentElement.style.setProperty('--rail-h', `${rail.offsetHeight}px`);
   refreshLoadChart();
 }
 

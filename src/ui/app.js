@@ -42,7 +42,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
   } else {
     const conflicts = scopedConflicts(domain, view.teamId);
     if (conflicts.length) {
-      banners.push(`<div class="banner act"><span>${conflicts.length} conflit${conflicts.length > 1 ? 's' : ''} de dépendances${team ? ` pour ${esc(team.name)}` : ''} : une dépendante démarre avant la fin de sa bloqueuse.</span>
+      banners.push(`<div class="banner act"><span>${conflicts.length} conflit${conflicts.length > 1 ? 's' : ''} de dépendances${team ? ` pour ${esc(team.name)}` : ''} : une dépendante démarre avant la fin de sa bloqueuse (terminées et annulées exclues).</span>
         <button class="btn" type="button" data-action="resolve-conflicts">Résoudre automatiquement</button></div>`);
     }
   }

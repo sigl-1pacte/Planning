@@ -1,11 +1,18 @@
+// Une tâche terminée ou annulée ne fait plus de conflit : ni comme bloquante
+// (elle ne retient plus personne, même si ses dates débordent) ni comme
+// dépendante (son ordre est de l'histoire ancienne). Un passage de relais le
+// jour même — la dépendante commence le jour où finit sa bloqueuse — n'en est
+// pas un non plus : il n'y a conflit que si elle commence strictement avant.
+const settled = (i) => i.status === 'done' || i.status === 'canceled';
+
 export function dependencyConflicts(issues) {
   const byId = new Map(issues.map((i) => [i.id, i]));
   const out = [];
   for (const issue of issues) {
-    if (!issue.start) continue;
+    if (!issue.start || settled(issue)) continue;
     for (const blockerId of issue.blockedBy) {
       const blocker = byId.get(blockerId);
-      if (blocker?.end && issue.start <= blocker.end) out.push({ issueId: issue.id, blockerId });
+      if (blocker?.end && !settled(blocker) && issue.start < blocker.end) out.push({ issueId: issue.id, blockerId });
     }
   }
   return out;

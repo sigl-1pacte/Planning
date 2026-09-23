@@ -76,6 +76,8 @@ button,select,input{font-family:inherit;font-size:inherit;color:inherit}
 .banner.err{background:linear-gradient(90deg,#FBF2F2,#FDF7F7);border-left-color:var(--block);color:#6A1B20}
 .banner.act{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .banner.act .btn{flex:0 0 auto}
+/* Ancré juste sous le bandeau supérieur, visible pendant tout le défilement. */
+.banner.act{position:sticky;top:var(--rail-h,64px);z-index:55;box-shadow:var(--sh-md)}
 
 /* plateau */
 .board{display:flex;border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--sh-sm)}

@@ -24,7 +24,10 @@ export function planIssueFix(domain, issueId) {
   const byId = new Map(domain.issues.map((i) => [i.id, i]));
   const issue = byId.get(issueId);
   if (!issue) return null;
-  const blockers = issue.blockedBy.map((id) => byId.get(id)).filter(Boolean);
+  // Mêmes règles que dependencyConflicts : une bloqueuse terminée/annulée ou sans
+  // date ne retient personne.
+  const blockers = issue.blockedBy.map((id) => byId.get(id))
+    .filter((b) => b && b.end && b.status !== 'done' && b.status !== 'canceled');
   if (!blockers.length) return null;
   const requiredStart = blockers.reduce((latest, b) => {
     const next = addDays(b.end, 1);

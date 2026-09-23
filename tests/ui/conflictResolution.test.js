@@ -47,6 +47,16 @@ describe('planIssueFix', () => {
     expect(planIssueFix(domain, 'b')).toEqual({ issueId: 'b', start: '2026-09-19', end: '2026-09-24' });
   });
 
+  it('ignore une bloqueuse annulée ou terminée : rien à décaler pour elle', () => {
+    const domain = {
+      issues: [
+        issue({ id: 'a', start: '2026-09-14', end: '2026-09-30', status: 'canceled' }),
+        issue({ id: 'b', start: '2026-09-15', end: '2026-09-20', blockedBy: ['a'] }),
+      ],
+    };
+    expect(planIssueFix(domain, 'b')).toBeNull();
+  });
+
   it('avec plusieurs bloqueuses, se cale sur la plus tardive en un seul décalage', () => {
     const domain = {
       issues: [

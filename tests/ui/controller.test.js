@@ -157,19 +157,39 @@ describe('controller', () => {
     expect(t.c.state.snapshot.domain).toEqual(after);
   });
 
-  it('retient la modification commencée en dernier entre deux modifications concurrentes', async () => {
+  it('exécute les modifications l\'une après l\'autre, dans l\'ordre', async () => {
     const api = { getKey: () => 'k', snapshot: vi.fn(async () => snap(1)), planning: vi.fn(async () => ({ v: 0 })) };
     const t = setup(api);
     await t.c.start();
+    t.render.mockClear();
     const first = deferred();
-    const second = deferred();
+    const secondCall = vi.fn(async () => ({ v: 2 }));
     const m1 = t.c.mutate(() => first.promise);
-    const m2 = t.c.mutate(() => second.promise);
-    second.resolve({ v: 2 });
-    await m2;
+    const m2 = t.c.mutate(secondCall);
+    expect(t.c.queuedWrites()).toBe(2);
+    await Promise.resolve();
+    expect(secondCall).not.toHaveBeenCalled();
     first.resolve({ v: 1 });
-    await m1;
+    await Promise.all([m1, m2]);
+    expect(secondCall).toHaveBeenCalledTimes(1);
     expect(t.c.state.planning).toEqual({ v: 2 });
+    // Seule la dernière de la file redessine.
+    expect(t.render).toHaveBeenCalledTimes(1);
+    expect(t.c.queuedWrites()).toBe(0);
+  });
+
+  it('poursuit la file après un échec et garde son erreur affichée', async () => {
+    const api = { getKey: () => 'k', snapshot: vi.fn(async () => snap(1)), planning: vi.fn(async () => ({ v: 0 })) };
+    const t = setup(api);
+    await t.c.start();
+    const m1 = t.c.mutate(async () => { throw new ApiError('Linear injoignable', 503); });
+    const m2 = t.c.mutate(async () => ({ v: 2 }));
+    expect(await m1).toBe(false);
+    expect(await m2).toBe(true);
+    expect(t.c.state.planning).toEqual({ v: 2 });
+    expect(t.c.state.error).toBe('Linear injoignable');
+    await t.c.mutate(async () => ({ v: 3 }));
+    expect(t.c.state.error).toBeNull();
   });
 
   it('force un rafraîchissement', async () => {

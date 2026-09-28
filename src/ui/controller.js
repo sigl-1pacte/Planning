@@ -78,28 +78,47 @@ export function createController({
     }
   }
 
+  // Les écritures passent une par une, dans l'ordre où l'utilisateur les a
+  // faites : chacune calcule ce qu'elle envoie (ex. la description Linear, qui
+  // porte aussi date de début, points réels et contributeurs) à partir du
+  // domaine relu après la précédente. En parallèle, la seconde repartait de
+  // l'ancien texte et effaçait la première dans Linear.
+  let queue = Promise.resolve();
+  let queuedFailed = false;
+
   // Résout à true si l'écriture a abouti, false si elle a échoué (l'erreur est
   // alors déjà affichée) : permet à l'appelant de ne fermer un formulaire de
   // création qu'en cas de succès.
-  async function mutate(call) {
-    const revision = ++planningRevision;
+  function mutate(call) {
+    planningRevision += 1;
     pendingWrites += 1;
     writeSeq += 1;
-    try {
-      const planning = await call(api);
-      if (revision !== planningRevision) return true;
-      state.planning = planning;
-      state.error = null;
-      render(state);
-      return true;
-    } catch (err) {
-      fail(err);
-      return false;
-    } finally {
-      pendingWrites -= 1;
-      writeSeq += 1;
-    }
+    const run = queue.then(async () => {
+      try {
+        state.planning = await call(api);
+        // L'erreur d'une écriture précédente de la même file reste affichée.
+        if (!queuedFailed) state.error = null;
+        // Une écriture attend encore : redessiner maintenant, avec un domaine
+        // qui ne la contient pas, ramènerait à l'ancienne valeur ce que
+        // l'utilisateur vient de changer. La dernière de la file redessine.
+        if (pendingWrites === 1) render(state);
+        return true;
+      } catch (err) {
+        queuedFailed = true;
+        fail(err);
+        return false;
+      } finally {
+        pendingWrites -= 1;
+        writeSeq += 1;
+        if (pendingWrites === 0) queuedFailed = false;
+      }
+    });
+    queue = run;
+    return run;
   }
+
+  // Nombre d'écritures en cours ou en attente (celle qui s'exécute comprise).
+  const queuedWrites = () => pendingWrites;
 
   async function refresh() {
     try {
@@ -111,5 +130,5 @@ export function createController({
     }
   }
 
-  return { state, start, stop, poll, mutate, refresh };
+  return { state, start, stop, poll, mutate, refresh, queuedWrites };
 }

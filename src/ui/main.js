@@ -68,8 +68,16 @@ async function applyWriteResult(api, result) {
   // Le nouveau domaine (dates, statut, jalons...) est déjà là : on l'affiche
   // tout de suite plutôt que d'attendre le second aller-retour réseau
   // (/api/planning) qui ne concerne que les parts/capacités dérivées.
-  draw();
+  drawIfLast();
   controller.state.planning = await api.planning();
+}
+
+// Redessin depuis une écriture : sauté si d'autres attendent leur tour
+// derrière elle (le domaine qu'on vient de relire ne les contient pas encore,
+// l'écran reviendrait un instant sur les anciennes valeurs). La dernière de
+// la file redessine.
+function drawIfLast() {
+  if (controller.queuedWrites() <= 1) draw();
 }
 
 const panels = createPanels({
@@ -91,10 +99,10 @@ const panels = createPanels({
       if (restore) {
         undo.arm(label, async () => {
           await applyWriteResult(api, await restore(api));
-          draw();
+          drawIfLast();
         });
       }
-      draw();
+      drawIfLast();
       return controller.state.planning;
     });
     if (ok && warnings.length) {
@@ -139,7 +147,7 @@ function draw() {
     onPlan: (issueId, dates) => {
       controller.mutate(async (api) => {
         await applyWriteResult(api, await api.reschedule(issueId, dates));
-        draw();
+        drawIfLast();
         return controller.state.planning;
       });
     },
@@ -230,7 +238,11 @@ root.addEventListener('click', (event) => {
     panels.openProject(el('[data-open-project]').dataset.openProject);
     draw();
   } else if (el('[data-action="undo"]')) {
-    undo.trigger();
+    // L'annulation est une écriture : elle prend sa place dans la file.
+    controller.mutate(async () => {
+      await undo.trigger();
+      return controller.state.planning;
+    });
   } else if (el('[data-action="resolve-conflicts"]')) {
     resolveConflictsInScope();
   } else if (el('[data-action="load-chart"]')) {
@@ -261,9 +273,9 @@ function resolveConflictsInScope() {
       }
       controller.state.snapshot = { ...controller.state.snapshot, domain: current };
       controller.state.planning = await api.planning();
-      draw();
+      drawIfLast();
     });
-    draw();
+    drawIfLast();
     return controller.state.planning;
   });
 }
@@ -453,9 +465,9 @@ function endDrag(commit) {
     await applyWriteResult(api, await api.reschedule(issueId, { start, end }));
     undo.arm(`${identifier} déplacée`, async () => {
       await applyWriteResult(api, await api.reschedule(issueId, { start: origStart, end: origEnd }));
-      draw();
+      drawIfLast();
     });
-    draw();
+    drawIfLast();
     return controller.state.planning;
   });
 }
@@ -475,9 +487,9 @@ function endMilestoneDrag(commit) {
     await applyWriteResult(api, await api.updateMilestone(milestoneId, newDate));
     undo.arm(`Jalon « ${name} » déplacé`, async () => {
       await applyWriteResult(api, await api.updateMilestone(milestoneId, origDate));
-      draw();
+      drawIfLast();
     });
-    draw();
+    drawIfLast();
     return controller.state.planning;
   });
 }
@@ -519,9 +531,9 @@ function endResizeDrag(commit) {
     undo.arm(`${identifier} : ${edge === 'start' ? 'début' : 'échéance'} modifié`, async () => {
       await applyWriteResult(api, await api.updateIssue(issueId, { [field]: origValue }));
       for (const s of shifts) await applyWriteResult(api, await api.updateIssue(s.id, { start: s.origStart, end: s.origEnd }));
-      draw();
+      drawIfLast();
     });
-    draw();
+    drawIfLast();
     return controller.state.planning;
   }).then(() => {
     if (edge === 'end') resolveConflictsInScope();
@@ -574,7 +586,7 @@ function closeLoadChart() {
 function applyRecommendation(reco) {
   controller.mutate(async (api) => {
     await applyWriteResult(api, await reco.apply(api));
-    draw();
+    drawIfLast();
     refreshLoadChart();
     return controller.state.planning;
   });

@@ -47,7 +47,9 @@ export function mapWorkspace(raw) {
   return { teams, users, projects, workflowStates, issues };
 }
 
-function mapIssue(i, users, blockedBy) {
+// Exportée pour l'aperçu local des écritures (src/ui/optimistic.js) : une
+// tâche modifiée dans le navigateur est relue exactement comme depuis Linear.
+export function mapIssue(i, users, blockedBy) {
   const start = parseStartingDate(i.description);
   const end = isoDay(i.dueDate);
   let unplannedReason = null;

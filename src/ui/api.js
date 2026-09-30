@@ -42,10 +42,7 @@ export function createApi({ fetchImpl = (...args) => fetch(...args), storage = g
 
   // Écritures vers Linear : depuis le navigateur, avec la clé de l'utilisateur
   // (voir linearWrites.js) — jamais via le backend, qui ne fait que lire.
-  const linearWrites = createLinearWrites({
-    getKey: readKey, getDomain, AuthError, ApiError, opts: linearOpts,
-    resync: () => request('POST', '/api/refresh'),
-  });
+  const linearWrites = createLinearWrites({ getKey: readKey, getDomain, AuthError, ApiError, opts: linearOpts });
 
   return {
     ...linearWrites,
@@ -60,6 +57,9 @@ export function createApi({ fetchImpl = (...args) => fetch(...args), storage = g
     },
     snapshot: (since) => request('GET', since == null ? '/api/snapshot' : `/api/snapshot?since=${since}`),
     refresh: () => request('POST', '/api/refresh'),
+    // Relecture après des écritures : incrémentale (issues modifiées seulement)
+    // sauf si l'une d'elles touche ce que l'incrémentale ne voit pas.
+    resync: ({ full }) => request('POST', full ? '/api/refresh' : '/api/refresh?full=0'),
     planning: () => request('GET', '/api/planning'),
     updateSettings: (settings) => request('PUT', '/api/settings', settings),
     updatePerson: (id, data) => request('PUT', person(id), data),

@@ -42,28 +42,36 @@ afterEach(() => app.close());
 const milestoneDate = (res) => res.domain.projects[0].milestones.find((m) => m.id === 'm-1')?.date;
 
 describe('jalons — tout le trajet, écritures depuis le client, avec un Linear qui garde son état', () => {
-  it('déplacer un jalon : Linear est modifié ET la réponse rend la nouvelle date', async () => {
-    const res = await client.updateMilestone('m-1', '2026-11-12');
+  it('déplacer un jalon : Linear est modifié ET la relecture demandée rend la nouvelle date', async () => {
+    const { sync } = await client.updateMilestone('m-1', '2026-11-12');
     expect(linearApi.raw.projects[0].projectMilestones.nodes[0].targetDate).toBe('2026-11-12');
-    expect(milestoneDate(res)).toBe('2026-11-12');
+    expect(milestoneDate(await client.resync(sync))).toBe('2026-11-12');
+  });
+
+  it('un jalon ne se relit qu\'en synchronisation complète : l\'incrémentale ne relit que les issues', async () => {
+    const { sync } = await client.updateMilestone('m-1', '2026-11-12');
+    expect(sync.full).toBe(true);
+    expect(milestoneDate(await client.resync({ full: false }))).toBe('2026-11-05');
   });
 
   it('la date déplacée reste après un nouveau chargement de l\'instantané', async () => {
-    await client.updateMilestone('m-1', '2026-11-12');
+    await client.resync((await client.updateMilestone('m-1', '2026-11-12')).sync);
     const again = await client.snapshot();
     expect(milestoneDate(again)).toBe('2026-11-12');
   });
 
   it('créer un jalon : il existe dans Linear ET apparaît dans la réponse et à la relecture', async () => {
-    const { milestoneId, domain: after } = await client.createMilestone({ projectId: 'p-poc1', name: 'Livraison', targetDate: '2026-12-01' });
+    const { milestoneId, sync } = await client.createMilestone({ projectId: 'p-poc1', name: 'Livraison', targetDate: '2026-12-01' });
     expect(linearApi.raw.projects[0].projectMilestones.nodes.map((m) => m.name)).toContain('Livraison');
+    const { domain: after } = await client.resync(sync);
+    expect(sync.reflected(after)).toBe(true);
     expect(after.projects[0].milestones).toContainEqual({ id: milestoneId, name: 'Livraison', date: '2026-12-01' });
     const again = await client.snapshot();
     expect(again.domain.projects[0].milestones.map((m) => m.id)).toContain(milestoneId);
   });
 
   it('un jalon sans date est créé, sans date', async () => {
-    const res = await client.createMilestone({ projectId: 'p-poc1', name: 'À dater' });
+    const res = await client.resync((await client.createMilestone({ projectId: 'p-poc1', name: 'À dater' })).sync);
     expect(res.domain.projects[0].milestones.find((m) => m.name === 'À dater').date).toBeNull();
   });
 

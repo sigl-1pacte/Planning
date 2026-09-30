@@ -15,8 +15,9 @@ import { dayDeltaFromPixels, shiftedDates, transitiveDependents } from './dragRe
 import { resolveConflicts } from './conflictResolution.js';
 import { renderLoadChart } from './render/loadChart.js';
 import { renderIssueBar } from './render/board.js';
+import { previewOf, previews } from './optimistic.js';
 
-const api = createApi({ getDomain: () => controller.state.snapshot?.domain ?? null });
+const api = createApi({ getDomain: () => controller.writeDomain() });
 const root = document.getElementById('app');
 const overlay = document.getElementById('key-overlay');
 let prefs = loadPrefs();
@@ -56,28 +57,20 @@ const controller = createController({ api, render: draw, showKeyScreen: showKey 
 
 // Point de passage unique pour toute écriture qui touche Linear (édition de
 // champ, replanification, dépendances, contributeurs, glisser-déposer…) :
-// applique le domaine à jour renvoyé par la route (le serveur a déjà forcé
-// un rafraîchissement Linear avant de répondre, inutile d'attendre jusqu'à
-// 30 s le prochain sondage), et recharge aussi la planification (parts,
-// capacités, réglages) — certaines écritures Linear purgent des données
-// côté base (ex. retirer un contributeur), qui doivent apparaître à jour
-// tout de suite plutôt qu'au prochain sondage. Utilisé après une écriture
-// ET après son annulation, puisque l'annulation est elle-même une écriture.
-async function applyWriteResult(api, result) {
-  if (result?.domain) controller.state.snapshot = { ...controller.state.snapshot, domain: result.domain };
-  // Le nouveau domaine (dates, statut, jalons...) est déjà là : on l'affiche
-  // tout de suite plutôt que d'attendre le second aller-retour réseau
-  // (/api/planning) qui ne concerne que les parts/capacités dérivées.
-  drawIfLast();
-  controller.state.planning = await api.planning();
-}
-
-// Redessin depuis une écriture : sauté si d'autres attendent leur tour
-// derrière elle (le domaine qu'on vient de relire ne les contient pas encore,
-// l'écran reviendrait un instant sur les anciennes valeurs). La dernière de
-// la file redessine.
-function drawIfLast() {
-  if (controller.queuedWrites() <= 1) draw();
+// l'écran la montre tout de suite (aperçu local, optimistic.js), puis elle
+// part dans la file du contrôleur, qui relit Linear une fois la file vide.
+// `restore` (une écriture elle aussi) est proposée en annulation tant que le
+// bandeau reste affiché ; retirée si l'écriture échoue. Résout comme
+// controller.mutate : au résultat, ou à false en cas d'échec.
+function write(call, label, restore) {
+  const armed = restore ? undo.arm(label, () => write(restore)) : null;
+  const done = controller.mutate(call, { preview: previewOf(call) });
+  if (armed) {
+    done.then((result) => {
+      if (result === false && undo.disarm(armed)) draw();
+    });
+  }
+  return done;
 }
 
 const panels = createPanels({
@@ -88,28 +81,16 @@ const panels = createPanels({
   onMutate: (call) => controller.mutate(call),
   onWrite: async (call, label, restore) => {
     // Une écriture peut réussir en partie (tâche créée, mais une dépendance
-    // ou une notification refusée par Linear) : le serveur le signale dans
+    // ou une notification refusée par Linear) : elle le signale dans
     // `warnings`. On l'affiche après coup, car mutate() efface l'erreur en
     // cas de succès.
-    let warnings = [];
-    const ok = await controller.mutate(async (api) => {
-      const result = await call(api);
-      warnings = result?.warnings ?? [];
-      await applyWriteResult(api, result);
-      if (restore) {
-        undo.arm(label, async () => {
-          await applyWriteResult(api, await restore(api));
-          drawIfLast();
-        });
-      }
-      drawIfLast();
-      return controller.state.planning;
-    });
-    if (ok && warnings.length) {
-      controller.state.error = `${label}, mais : ${warnings.join(' ; ')}.`;
+    const result = await write(call, label, restore);
+    if (result === false) return false;
+    if (result.warnings?.length) {
+      controller.state.error = `${label}, mais : ${result.warnings.join(' ; ')}.`;
       draw();
     }
-    return ok;
+    return true;
   },
   lastError: () => controller.state.error,
   onPrefs: (patch) => setPrefs(patch),
@@ -145,11 +126,7 @@ function draw() {
     today,
     viewportWidth,
     onPlan: (issueId, dates) => {
-      controller.mutate(async (api) => {
-        await applyWriteResult(api, await api.reschedule(issueId, dates));
-        drawIfLast();
-        return controller.state.planning;
-      });
+      write((api) => api.reschedule(issueId, dates));
     },
   });
   lastAxis = result.axis;
@@ -239,10 +216,8 @@ root.addEventListener('click', (event) => {
     draw();
   } else if (el('[data-action="undo"]')) {
     // L'annulation est une écriture : elle prend sa place dans la file.
-    controller.mutate(async () => {
-      await undo.trigger();
-      return controller.state.planning;
-    });
+    undo.trigger();
+    draw();
   } else if (el('[data-action="resolve-conflicts"]')) {
     resolveConflictsInScope();
   } else if (el('[data-action="load-chart"]')) {
@@ -251,33 +226,25 @@ root.addEventListener('click', (event) => {
 });
 
 // Résolution automatique des conflits de dépendances, limitée à la team
-// affichée (ou au workspace entier en vue globale). Rejoue chaque conflit
-// un par un via la même route de replanification en cascade que le
-// glisser-déposer et le panneau, en relisant l'état entre chaque décalage
+// affichée (ou au workspace entier en vue globale). Chaque conflit est
+// corrigé un par un par la même replanification en cascade que le
+// glisser-déposer et le panneau, simulée localement sur le domaine affiché
 // (un décalage peut en révéler ou en résoudre d'autres plus loin dans la
-// chaîne). Une seule annulation couvre tout le lot, dans l'ordre inverse.
-function resolveConflictsInScope() {
-  controller.mutate(async (api) => {
-    const teamId = lastTeamId;
-    const { domain, fixed, originals, blockedByCycle } = await resolveConflicts(
-      controller.state.snapshot.domain, teamId, (id, dates) => api.reschedule(id, dates),
-    );
-    if (blockedByCycle || fixed === 0) return controller.state.planning;
-    controller.state.snapshot = { ...controller.state.snapshot, domain };
-    controller.state.planning = await api.planning();
-    undo.arm(`${fixed} conflit${fixed > 1 ? 's' : ''} résolu${fixed > 1 ? 's' : ''}`, async () => {
-      let current = controller.state.snapshot.domain;
-      for (const o of [...originals].reverse()) {
-        const result = await api.reschedule(o.issueId, { start: o.start, end: o.end });
-        current = result.domain;
-      }
-      controller.state.snapshot = { ...controller.state.snapshot, domain: current };
-      controller.state.planning = await api.planning();
-      drawIfLast();
-    });
-    drawIfLast();
-    return controller.state.planning;
+// chaîne), puis chaque décalage part dans la file d'écriture. Une seule
+// annulation couvre tout le lot, dans l'ordre inverse.
+async function resolveConflictsInScope() {
+  const fixes = [];
+  let simulated = controller.state.snapshot.domain;
+  const { fixed, originals, blockedByCycle } = await resolveConflicts(simulated, lastTeamId, async (issueId, dates) => {
+    fixes.push({ issueId, dates });
+    simulated = previews.reschedule(simulated, issueId, dates);
+    return { domain: simulated };
   });
+  if (blockedByCycle || fixed === 0) return;
+  undo.arm(`${fixed} conflit${fixed > 1 ? 's' : ''} résolu${fixed > 1 ? 's' : ''}`, () => {
+    for (const o of [...originals].reverse()) write((api) => api.reschedule(o.issueId, { start: o.start, end: o.end }));
+  });
+  for (const { issueId, dates } of fixes) write((api) => api.reschedule(issueId, dates));
 }
 
 // Glisser-déposer d'une barre : décale début et échéance du même nombre de
@@ -461,15 +428,11 @@ function endDrag(commit) {
   // limite selon navigateur) : ne bloque pas indéfiniment le clic suivant.
   setTimeout(() => { suppressNextClick = false; }, 0);
   const { start, end } = shiftedDates(origStart, origEnd, dayDelta);
-  controller.mutate(async (api) => {
-    await applyWriteResult(api, await api.reschedule(issueId, { start, end }));
-    undo.arm(`${identifier} déplacée`, async () => {
-      await applyWriteResult(api, await api.reschedule(issueId, { start: origStart, end: origEnd }));
-      drawIfLast();
-    });
-    drawIfLast();
-    return controller.state.planning;
-  });
+  write(
+    (api) => api.reschedule(issueId, { start, end }),
+    `${identifier} déplacée`,
+    (api) => api.reschedule(issueId, { start: origStart, end: origEnd }),
+  );
 }
 
 function endMilestoneDrag(commit) {
@@ -483,15 +446,11 @@ function endMilestoneDrag(commit) {
   suppressNextClick = true;
   setTimeout(() => { suppressNextClick = false; }, 0);
   const newDate = addDays(origDate, dayDelta);
-  controller.mutate(async (api) => {
-    await applyWriteResult(api, await api.updateMilestone(milestoneId, newDate));
-    undo.arm(`Jalon « ${name} » déplacé`, async () => {
-      await applyWriteResult(api, await api.updateMilestone(milestoneId, origDate));
-      drawIfLast();
-    });
-    drawIfLast();
-    return controller.state.planning;
-  });
+  write(
+    (api) => api.updateMilestone(milestoneId, newDate),
+    `Jalon « ${name} » déplacé`,
+    (api) => api.updateMilestone(milestoneId, origDate),
+  );
 }
 
 // Glisser un bord de barre ne modifie que cette date-là pour l'issue
@@ -525,19 +484,14 @@ function endResizeDrag(commit) {
       id: dep.id, origStart: dep.start, origEnd: dep.end,
       newStart: addDays(dep.start, dayDelta), newEnd: addDays(dep.end, dayDelta),
     })) : [];
-  controller.mutate(async (api) => {
-    await applyWriteResult(api, await api.updateIssue(issueId, { [field]: newValue }));
-    for (const s of shifts) await applyWriteResult(api, await api.updateIssue(s.id, { start: s.newStart, end: s.newEnd }));
-    undo.arm(`${identifier} : ${edge === 'start' ? 'début' : 'échéance'} modifié`, async () => {
-      await applyWriteResult(api, await api.updateIssue(issueId, { [field]: origValue }));
-      for (const s of shifts) await applyWriteResult(api, await api.updateIssue(s.id, { start: s.origStart, end: s.origEnd }));
-      drawIfLast();
-    });
-    drawIfLast();
-    return controller.state.planning;
-  }).then(() => {
-    if (edge === 'end') resolveConflictsInScope();
+  undo.arm(`${identifier} : ${edge === 'start' ? 'début' : 'échéance'} modifié`, () => {
+    write((api) => api.updateIssue(issueId, { [field]: origValue }));
+    for (const s of shifts) write((api) => api.updateIssue(s.id, { start: s.origStart, end: s.origEnd }));
   });
+  write((api) => api.updateIssue(issueId, { [field]: newValue }));
+  for (const s of shifts) write((api) => api.updateIssue(s.id, { start: s.newStart, end: s.newEnd }));
+  // Sur le domaine affiché, qui contient déjà ces décalages (aperçus).
+  if (edge === 'end') resolveConflictsInScope();
 }
 
 root.addEventListener('pointerup', () => { endDrag(true); endMilestoneDrag(true); endResizeDrag(true); });
@@ -584,12 +538,7 @@ function closeLoadChart() {
 // disponibilité changeait ailleurs (réglages d'une personne, replanification…)
 // pendant qu'elle était affichée.
 function applyRecommendation(reco) {
-  controller.mutate(async (api) => {
-    await applyWriteResult(api, await reco.apply(api));
-    drawIfLast();
-    refreshLoadChart();
-    return controller.state.planning;
-  });
+  write(reco.apply);
 }
 
 // La recherche de recommandations (shared/recommendations.js) simule chaque

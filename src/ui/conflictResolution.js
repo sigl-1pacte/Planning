@@ -52,7 +52,8 @@ export function conflictingIssueIds(domain, teamId) {
 // décalage peut faire apparaître ou disparaître d'autres conflits plus loin
 // dans la chaîne, donc on relit l'état après chaque écriture plutôt que de
 // calculer tous les décalages à l'avance). `reschedule(issueId, dates)` doit
-// renvoyer { domain }, comme la route d'écriture réelle. Bloqué net par un
+// renvoyer { domain } : le domaine après ce décalage (main.js le simule
+// localement avec l'aperçu de la replanification). Bloqué net par un
 // cycle de dépendances n'importe où dans le workspace (computeReschedule
 // refuse toute replanification tant qu'il en existe un) — mieux vaut le
 // signaler que de laisser échouer chaque tentative une par une.

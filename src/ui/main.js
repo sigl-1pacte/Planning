@@ -16,13 +16,18 @@ import { resolveConflicts } from './conflictResolution.js';
 import { renderLoadChart } from './render/loadChart.js';
 import { renderIssueBar } from './render/board.js';
 import { previewOf, previews } from './optimistic.js';
+import { planPrintColumns, printTimelineWidth, buildPrintPages, clearPrintPages } from './print.js';
 
 const api = createApi({ getDomain: () => controller.writeDomain() });
 const root = document.getElementById('app');
 const overlay = document.getElementById('key-overlay');
 let prefs = loadPrefs();
 let recenter = true;
-let printOverride = null;
+// Pendant une impression : largeur de jour et colonnes de période choisies
+// pour le papier (voir print.js), appliquées à chaque draw() jusqu'à
+// afterprint — y compris si une actualisation de fond survient pendant que
+// la boîte d'impression est ouverte.
+let printLayout = null;
 const undo = createUndo();
 let lastAxis = null;
 let lastTeamId = null;
@@ -117,7 +122,7 @@ function draw() {
   const previousScroll = root.querySelector('.pr')?.scrollLeft ?? 0;
   const today = todayISO();
   const viewportWidth = root.querySelector('.pr')?.clientWidth || Math.max(300, Math.min(window.innerWidth, 1540) - 676);
-  const effective = printOverride ? { ...prefs, ...printOverride } : prefs;
+  const effective = printLayout ? { ...prefs, zoom: 'custom', dayWidth: printLayout.dayWidth, collapsed: [] } : prefs;
   const result = renderApp(root, {
     state,
     route: parseRoute(location.hash),
@@ -155,6 +160,11 @@ function draw() {
   const rail = root.querySelector('.rail');
   if (rail) document.documentElement.style.setProperty('--rail-h', `${rail.offsetHeight}px`);
   refreshLoadChart();
+  if (printLayout) {
+    buildPrintPages(root.querySelector('.sheet'), {
+      axis: result.axis, columns: printLayout.columns, title: root.querySelector('.rail h1')?.textContent ?? '',
+    });
+  }
 }
 
 root.addEventListener('click', (event) => {
@@ -187,18 +197,7 @@ root.addEventListener('click', (event) => {
     panels.openTeam();
     draw();
   } else if (el('[data-action="print"]')) {
-    if (printOverride) return;
-    printOverride = { zoom: 'all', collapsed: [] };
-    draw();
-    fitSheetToOnePage();
-    const restore = () => {
-      const sheet = root.querySelector('.sheet');
-      if (sheet) sheet.style.zoom = '';
-      printOverride = null;
-      recenter = true;
-      draw();
-    };
-    window.addEventListener('afterprint', restore, { once: true });
+    preparePrint();
     window.print();
   } else if (el('[data-action="add-milestone"]')) {
     panels.openMilestone(null, { projectId: el('[data-action="add-milestone"]').dataset.project });
@@ -382,37 +381,28 @@ root.addEventListener('pointermove', (event) => {
   if (label) label.textContent = dayDelta === 0 ? label.textContent : `${shortDay(start)} → ${shortDay(end)}`;
 });
 
-// Réduit la feuille (la frise du planning) pour qu'elle tienne sur une seule
-// page A4 paysage : une échelle uniforme calculée à partir de la largeur ET
-// de la hauteur imprimables réelles (cohérent avec @page dans styles.css),
-// jamais d'agrandissement. Le zoom d'écran est fixé à 'tout' avant
-// l'impression (voir data-action="print") pour que toute la plage de dates
-// soit présente avant la mise à l'échelle — indispensable pour tenir sur une
-// seule page : avec un zoom plus étroit, tout ce qui dépasse la largeur de
-// l'écran manquerait purement et simplement à l'impression plutôt que
-// d'être capturé puis réduit.
-//
-// Utilise style.zoom (non standard, mais géré par Chrome/Edge/Safari et par
-// Firefox depuis 2024) plutôt que transform:scale() : un transform ne change
-// que le rendu, pas la place réservée dans la mise en page, donc l'impression
-// découperait quand même les pages à la hauteur d'origine, blanc compris. zoom
-// reflow réellement l'élément à la taille réduite, ce qui est indispensable
-// ici.
-const PRINT_PAGE_MM = { width: 297, height: 210, margin: 10 };
-const MIN_PRINT_SCALE = 0.12;
-
-function fitSheetToOnePage() {
-  const sheet = root.querySelector('.sheet');
-  if (!sheet) return;
-  sheet.style.zoom = '';
-  const pxPerMm = 96 / 25.4;
-  const maxWidth = (PRINT_PAGE_MM.width - 2 * PRINT_PAGE_MM.margin) * pxPerMm;
-  const maxHeight = (PRINT_PAGE_MM.height - 2 * PRINT_PAGE_MM.margin) * pxPerMm;
-  const rect = sheet.getBoundingClientRect();
-  if (!rect.width || !rect.height) return;
-  const scale = Math.max(MIN_PRINT_SCALE, Math.min(1, maxWidth / rect.width, maxHeight / rect.height));
-  if (scale < 1) sheet.style.zoom = String(scale);
+// Impression : la frise est redessinée à une largeur de jour pensée pour le
+// papier, toutes les lignes dépliées, puis découpée en pages (print.js).
+// Branché aussi sur beforeprint pour qu'un Ctrl+P donne le même résultat
+// que le bouton.
+function preparePrint() {
+  if (printLayout || !lastAxis) return;
+  const leftPane = root.querySelector('.board:not([hidden]) .pl');
+  if (!leftPane) return;
+  printLayout = planPrintColumns(lastAxis, printTimelineWidth(leftPane.getBoundingClientRect().width));
+  draw();
 }
+
+function restoreAfterPrint() {
+  if (!printLayout) return;
+  printLayout = null;
+  clearPrintPages(root.querySelector('.sheet'));
+  recenter = true;
+  draw();
+}
+
+window.addEventListener('beforeprint', preparePrint);
+window.addEventListener('afterprint', restoreAfterPrint);
 
 function endDrag(commit) {
   if (!drag) return;

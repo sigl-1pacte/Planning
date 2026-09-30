@@ -40,6 +40,9 @@ describe('renderApp', () => {
     const { root } = draw();
     expect(root.querySelector('.slide-chart svg')).not.toBeNull();
     expect(root.querySelector('.cols.page-slide')).not.toBeNull();
+    // Les courbes de charge ferment le document imprimé, après les tableaux.
+    const sections = [...root.querySelectorAll('.cols.page-slide, .slide-chart')];
+    expect(sections.map((el) => el.className)).toEqual(['cols page-slide', 'slide-chart print-only']);
   });
 
   it('bascule sur l’onglet des tâches non planifiées', () => {

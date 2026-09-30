@@ -94,10 +94,6 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
       </div>
       <div class="lg"></div>
       <section class="unp"></section>
-      <section class="slide-chart print-only">
-        <h2>Charge vs disponibilité ${esc(team ? `— ${team.name}` : '— toutes les teams')}</h2>
-        ${buildChartSvg(load, view.people, planning.settings.loadCeilingPct) || ''}
-      </section>
       <div class="cols page-slide">
         <div class="blk"><h3>Répartition par personne</h3><div class="tbl"><table>
           <thead><tr><th>Personne</th><th class="r">Points</th><th class="r">Heures</th><th class="r">Sem. actives</th><th class="r">Heures / sem.</th><th class="r">Taux moyen</th><th class="r">Pic</th></tr></thead>
@@ -106,6 +102,10 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
           <thead><tr><th>Projet</th><th>Période</th><th class="r">Tâches</th><th class="r">Points</th><th class="r">Heures</th><th class="r">Terminé</th><th>Jalons</th></tr></thead>
           <tbody data-projects></tbody></table></div></div>
       </div>
+      <section class="slide-chart print-only">
+        <h2>Charge vs disponibilité ${esc(team ? `— ${team.name}` : '— toutes les teams')}</h2>
+        ${buildChartSvg(load, view.people, planning.settings.loadCeilingPct) || ''}
+      </section>
       <div class="ft"><span>Planning connecté à Linear · lecture et écriture</span><span>Édition du ${longDay(today)}</span></div>
     </section>`;
 

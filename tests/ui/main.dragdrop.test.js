@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { mapWorkspace } from '../../src/server/linear/mapper.js';
 import { rawWorkspace } from '../fixtures/workspace.js';
+import { shortDay } from '../../src/ui/render/format.js';
 
 const html = readFileSync(resolve(process.cwd(), 'src/ui/index.html'), 'utf8');
 const bodyHtml = html.match(/<body>([\s\S]*)<\/body>/)[1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -11,6 +12,8 @@ const bodyHtml = html.match(/<body>([\s\S]*)<\/body>/)[1].replace(/<script[\s\S]
 let domain;
 let calls;
 let handlers;
+// Écritures Linear laissées sans réponse, pour voir l'écran avant qu'elles aboutissent.
+let holdLinear;
 
 // Les écritures partent directement vers Linear (clé de l'utilisateur) : on les
 // enregistre comme des appels « LINEAR » ; le backend ne reçoit que la relecture.
@@ -20,6 +23,7 @@ function fakeFetch(url, init = {}) {
   if (url.includes('api.linear.app')) {
     const op = /mutation\s+(\w+)/.exec(body.query)?.[1];
     calls.push({ method: 'LINEAR', op, variables: body.variables });
+    if (holdLinear) return new Promise(() => {});
     return Promise.resolve({ status: 200, json: async () => ({ data: {
       issueUpdate: { success: true, issue: {} },
       projectMilestoneUpdate: { success: true, projectMilestone: {} },
@@ -56,6 +60,7 @@ async function boot() {
 beforeEach(() => {
   domain = mapWorkspace(rawWorkspace());
   calls = [];
+  holdLinear = false;
   handlers = {
     'GET /api/snapshot': () => ({ version: 1, fetchedAt: 'x', stale: false, lastError: null, domain }),
     'GET /api/planning': () => ({
@@ -128,5 +133,21 @@ describe('jalons — glisser-déposer dans l\'application montée', () => {
     expect(all).toHaveLength(2);
     expect(all[1].variables.input.dueDate).toBe('2026-09-25');
     expect(all[1].variables.input.description).toMatch(/Starting date: 16\/09\/2026/);
+  });
+
+  it('une tâche déplacée affiche ses nouvelles dates avant même la réponse de Linear', async () => {
+    await boot();
+    const dates = () => [...document.querySelectorAll('.r.tk[data-t="i-11"] .dt')].map((el) => el.textContent);
+    const before = dates();
+    holdLinear = true;
+    const bar = document.querySelector('.r.tk[data-t="i-11"] .bar');
+    pointer('pointerdown', bar, { x: 100 });
+    pointer('pointermove', bar, { x: 100 + 2 * 60 });
+    pointer('pointerup', bar, { x: 100 + 2 * 60 });
+    await flush();
+    const sent = calls.find((c) => c.op === 'IssueUpdate' && c.variables.id === 'i-11').variables.input;
+    const [, d, m, y] = /Starting date: (\d+)\/(\d+)\/(\d+)/.exec(sent.description);
+    expect(dates()).not.toEqual(before);
+    expect(dates()).toEqual([shortDay(`${y}-${m}-${d}`), shortDay(sent.dueDate)]);
   });
 });

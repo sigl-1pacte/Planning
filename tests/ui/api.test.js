@@ -66,7 +66,7 @@ describe('api', () => {
   });
 
   it('n\'envoie jamais une écriture Linear au backend : elles partent directement vers Linear, avec la clé de l\'utilisateur', async () => {
-    const backend = fakeFetch([jsonResponse({ domain: {} })]);
+    const backend = fakeFetch([]);
     const linearCalls = [];
     const linearFetch = async (url, init) => {
       const { query } = JSON.parse(init.body);
@@ -78,7 +78,15 @@ describe('api', () => {
     const api = createApi({ fetchImpl: backend, storage, getDomain: () => null, linearOpts: { fetchImpl: linearFetch } });
     await api.updateMilestone('m1', '2026-11-05');
     expect(linearCalls).toEqual([{ url: 'https://api.linear.app/graphql', auth: 'lin_perso', op: 'ProjectMilestoneUpdate' }]);
-    // Côté backend : uniquement la relecture (POST /api/refresh), jamais la modification.
-    expect(backend.calls.map((c) => [c.method, c.url])).toEqual([['POST', '/api/refresh']]);
+    // Rien côté backend : la relecture est demandée à part (resync), une fois la file vide.
+    expect(backend.calls).toEqual([]);
+  });
+
+  it('relit en incrémental, ou en entier si demandé', async () => {
+    const f = fakeFetch([jsonResponse({ version: 1 }), jsonResponse({ version: 2 })]);
+    const api = createApi({ fetchImpl: f, storage: memoryStorage() });
+    await api.resync({ full: false });
+    await api.resync({ full: true });
+    expect(f.calls.map((c) => [c.method, c.url])).toEqual([['POST', '/api/refresh?full=0'], ['POST', '/api/refresh']]);
   });
 });

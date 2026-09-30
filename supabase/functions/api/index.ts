@@ -165,7 +165,8 @@ app.get('/api/snapshot', async (c) => {
   return c.json(since === snap.version ? { ...snap, domain: null } : snap);
 });
 
-app.post('/api/refresh', async (c) => c.json(await store.forceRefresh(c.get('linearKey'), { full: true })));
+// Complet par défaut ; ?full=0 : incrémental (voir src/server/app.js).
+app.post('/api/refresh', async (c) => c.json(await store.forceRefresh(c.get('linearKey'), { full: c.req.query('full') !== '0' })));
 
 app.get('/api/planning', async (c) => c.json(await withDatabase(() => repo.getPlanning(db))));
 

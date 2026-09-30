@@ -128,7 +128,10 @@ export function buildApp({ db, store, validateKey, staticDir = null, logger = fa
     return since === snap.version ? { ...snap, domain: null } : snap;
   });
 
-  app.post('/api/refresh', async (req) => store.forceRefresh(req.linearKey, { full: true }));
+  // Complet par défaut (bouton « Actualiser ») ; ?full=0 après des écritures
+  // qui ne touchent que des tâches : seules les issues modifiées depuis le
+  // dernier cycle sont relues, en une requête Linear au lieu du workspace entier.
+  app.post('/api/refresh', async (req) => store.forceRefresh(req.linearKey, { full: req.query.full !== '0' }));
 
   app.get('/api/planning', withDatabase(async () => repo.getPlanning(db)));
 

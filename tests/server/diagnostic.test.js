@@ -58,7 +58,9 @@ describe('buildDiagnostic', () => {
     expect((await app.inject({ method: 'GET', url: '/%61pi/diagnostic' })).statusCode).toBe(401);
     expect(fetchDiagnosticSample).not.toHaveBeenCalled();
     await app.close();
-  });
+    // Démarre une vraie base PGlite : déjà ~4,5 s quand toute la suite tourne
+    // en parallèle, au ras des 5 s par défaut.
+  }, 20_000);
 
   it('ajoute la requête d\'échantillon aux requêtes contrôlées', () => {
     expect(QUERIES).toHaveLength(7);

@@ -14,13 +14,11 @@ const snap = {
 };
 
 let linear;
-let resync;
 let domainNow;
 let writes;
 
 beforeEach(() => {
   domainNow = snap.domain;
-  resync = vi.fn(async () => snap);
   linear = {
     updateIssue: vi.fn(async () => ({})),
     createIssue: vi.fn(async () => ({ id: 'i-new', identifier: 'IOT-99' })),
@@ -38,7 +36,7 @@ beforeEach(() => {
     subscribeToIssue: vi.fn(async () => {}),
   };
   writes = createLinearWrites({
-    getKey: () => 'good', getDomain: () => domainNow, resync, AuthError, ApiError, delayMs: 0, linear,
+    getKey: () => 'good', getDomain: () => domainNow, AuthError, ApiError, linear,
   });
 });
 
@@ -70,12 +68,11 @@ async function call(method, url, payload = {}) {
 }
 
 describe('écritures Linear depuis le client', () => {
-  it('modifie une issue puis force un rafraîchissement', async () => {
+  it('modifie une issue sans relire Linear : la relecture (incrémentale) revient au contrôleur', async () => {
     const res = await call('PUT', '/api/issues/i-11', { title: 'Nouveau titre' });
     expect(res.statusCode).toBe(200);
     expect(linear.updateIssue).toHaveBeenCalledWith('good', 'i-11', { title: 'Nouveau titre' });
-    expect(resync).toHaveBeenCalled();
-    expect(res.json().domain.issues).toHaveLength(4);
+    expect(res.json()).toEqual({ sync: { full: false } });
   });
 
   it('modifie le début (sans cascade) via la description, et l\'échéance via dueDate natif', async () => {
@@ -233,21 +230,21 @@ describe('écritures Linear depuis le client', () => {
     expect((await call('POST', '/api/teams', { key: 'NEW', name: 'Nouvelle team' })).statusCode).toBe(200);
   });
 
-  it('relit Linear en synchronisation complète après avoir créé ou modifié un projet, une team, une tâche', async () => {
-    await call('POST', '/api/projects', { teamIds: ['t-iot'], name: 'X' });
-    expect(resync).toHaveBeenCalled();
-    resync.mockClear();
-    await call('POST', '/api/teams', { key: 'NEW', name: 'Nouvelle team' });
-    expect(resync).toHaveBeenCalled();
-    resync.mockClear();
-    await call('POST', '/api/issues', { teamId: 't-iot', title: 'T' });
-    expect(resync).toHaveBeenCalled();
-    resync.mockClear();
-    await call('PUT', '/api/projects/p-poc1', { name: 'Renommé' });
-    expect(resync).toHaveBeenCalled();
-    resync.mockClear();
-    await call('PUT', '/api/milestones/m-1', { targetDate: '2026-11-12' });
-    expect(resync).toHaveBeenCalled();
+  it('demande une synchronisation complète pour ce que l\'incrémentale ne voit pas (projets, teams, jalons, dépendances)', async () => {
+    const full = async (...args) => (await call(...args)).json().sync.full;
+    expect(await full('POST', '/api/projects', { teamIds: ['t-iot'], name: 'X' })).toBe(true);
+    expect(await full('POST', '/api/teams', { key: 'NEW', name: 'Nouvelle team' })).toBe(true);
+    expect(await full('PUT', '/api/projects/p-poc1', { name: 'Renommé' })).toBe(true);
+    expect(await full('PUT', '/api/milestones/m-1', { targetDate: '2026-11-12' })).toBe(true);
+    expect(await full('PUT', '/api/issues/i-12/dependencies', { blockedBy: [] })).toBe(true);
+    expect(await full('POST', '/api/issues', { teamId: 't-iot', title: 'T' })).toBe(false);
+    expect(await full('POST', '/api/issues/i-11/reschedule', { start: '2026-09-18', end: '2026-09-27' })).toBe(false);
+  });
+
+  it('reconnaît une création à la présence de ce qui est créé', async () => {
+    const { reflected } = (await call('POST', '/api/projects', { teamIds: ['t-iot'], name: 'X' })).json().sync;
+    expect(reflected(snap.domain)).toBe(false);
+    expect(reflected({ ...snap.domain, projects: [...snap.domain.projects, { id: 'p-new', milestones: [] }] })).toBe(true);
   });
 
   it('modifie les dates et la couleur d\'un projet', async () => {
@@ -256,12 +253,13 @@ describe('écritures Linear depuis le client', () => {
     expect(linear.updateProject).toHaveBeenCalledWith('good', 'p-poc1', { startDate: '2026-09-20', targetDate: '2026-11-20', color: '#ff0000' });
   });
 
-  it('crée un jalon dans un projet et relit Linear en entier', async () => {
+  it('crée un jalon dans un projet et demande une relecture complète', async () => {
     const res = await call('POST', '/api/milestones', { projectId: 'p-poc1', name: 'Livraison', targetDate: '2026-12-01' });
     expect(res.statusCode).toBe(200);
     expect(res.json().milestoneId).toBe('m-new');
     expect(linear.createMilestone).toHaveBeenCalledWith('good', { projectId: 'p-poc1', name: 'Livraison', targetDate: '2026-12-01' });
-    expect(resync).toHaveBeenCalled();
+    expect(res.json().sync.full).toBe(true);
+    expect(res.json().sync.reflected(snap.domain)).toBe(false);
   });
 
   it('refuse un jalon invalide sans appeler Linear', async () => {
@@ -284,11 +282,12 @@ describe('écritures Linear depuis le client', () => {
     const issue = snap.domain.issues.find((i) => i.id === 'i-11');
     const project = snap.domain.projects.find((p) => p.id === 'p-poc1');
 
-    it('supprime une tâche quand son identifiant exact est confirmé, puis relit Linear en entier', async () => {
+    it('supprime une tâche quand son identifiant exact est confirmé, et demande une relecture complète', async () => {
       const res = await call('DELETE', '/api/issues/i-11', { confirm: issue.identifier });
       expect(res.statusCode).toBe(200);
       expect(linear.deleteIssue).toHaveBeenCalledWith('good', 'i-11');
-      expect(resync).toHaveBeenCalled();
+      // L'incrémentale ne voit pas une issue partie à la corbeille.
+      expect(res.json().sync.full).toBe(true);
     });
 
     it('supprime un projet quand son nom exact est confirmé', async () => {
@@ -352,11 +351,9 @@ describe('description', () => {
 });
 
 describe('jalons', () => {
-  it('renomme un jalon sans toucher à sa date, et attend que le nom soit relu', async () => {
-    resync.mockResolvedValue({ ...snap, domain: { ...snap.domain, projects: snap.domain.projects.map((p) => ({ ...p, milestones: p.milestones.map((m) => ({ ...m, name: 'Nouveau' })) })) } });
+  it('renomme un jalon sans toucher à sa date', async () => {
     await writes.updateMilestone('m-1', { name: 'Nouveau' });
     expect(linear.updateMilestone).toHaveBeenCalledWith('good', 'm-1', { name: 'Nouveau' });
-    expect(resync).toHaveBeenCalledTimes(1);
   });
 });
 

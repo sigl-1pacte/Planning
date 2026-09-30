@@ -114,6 +114,11 @@ describe('instantané', () => {
     expect((await call('POST', '/api/refresh')).statusCode).toBe(200);
     expect(store.forceRefresh).toHaveBeenCalledWith('good', { full: true });
   });
+
+  it('rafraîchit en incrémental avec ?full=0', async () => {
+    expect((await call('POST', '/api/refresh?full=0')).statusCode).toBe(200);
+    expect(store.forceRefresh).toHaveBeenCalledWith('good', { full: false });
+  });
 });
 
 describe('planification', () => {

@@ -17,6 +17,7 @@ import { renderLoadChart } from './render/loadChart.js';
 import { renderIssueBar } from './render/board.js';
 import { previewOf, previews } from './optimistic.js';
 import { weekBreakdown } from '../shared/load.js';
+import { applyTheme, createEasterEgg } from './theme.js';
 import { weekCardHtml } from './render/weekCard.js';
 import { planPrintColumns, printTimelineWidth, buildPrintPages, clearPrintPages } from './print.js';
 
@@ -137,11 +138,48 @@ const panels = createPanels({
   },
 });
 
+// Thème : appliqué au démarrage, à chaque changement de réglage, et quand le
+// système passe de clair à sombre (choix « automatique »).
+const systemDark = window.matchMedia?.('(prefers-color-scheme: dark)');
+const syncTheme = () => applyTheme(prefs, { systemDark: Boolean(systemDark?.matches) });
+syncTheme();
+systemDark?.addEventListener?.('change', syncTheme);
+
 function setPrefs(patch) {
   prefs = { ...prefs, ...patch };
   savePrefs(prefs);
+  syncTheme();
   draw();
 }
+
+// Mode rose : une floraison part du logo, et un mot (qui dit aussi comment
+// revenir) s'efface tout seul.
+const easterEgg = createEasterEgg({
+  onTrigger: () => {
+    const pink = !prefs.pink;
+    setPrefs({ pink, pinkFound: true });
+    const logo = root.querySelector('.rail .logo')?.getBoundingClientRect();
+    if (pink && logo) {
+      const bloom = document.createElement('div');
+      bloom.className = 'bloom';
+      bloom.style.left = `${logo.left + logo.width / 2}px`;
+      bloom.style.top = `${logo.top + logo.height / 2}px`;
+      document.body.appendChild(bloom);
+      bloom.addEventListener('animationend', () => bloom.remove());
+      setTimeout(() => bloom.remove(), 1500);
+    }
+    document.querySelector('.egg-toast')?.remove();
+    const toast = document.createElement('div');
+    toast.className = 'egg-toast';
+    toast.setAttribute('role', 'status');
+    toast.innerHTML = pink
+      ? 'Mode rose activé<span>· cinq clics sur le logo pour revenir</span>'
+      : 'Mode rose désactivé<span>· il reste dans les réglages</span>';
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; }, 2600);
+    setTimeout(() => toast.remove(), 3100);
+  },
+});
 
 function draw() {
   const { state } = controller;
@@ -216,6 +254,10 @@ root.addEventListener('click', (event) => {
   } else if (el('[data-open]')) {
     panels.openIssue(el('[data-open]').dataset.open);
     draw();
+  } else if (el('.rail .logo')) {
+    easterEgg.logoClick();
+  } else if (el('[data-action="theme"]')) {
+    setPrefs({ theme: document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark' });
   } else if (el('[data-pw]')) {
     openWeekCard(el('[data-pw]'));
   } else if (el('[data-org-roles]')) {
@@ -681,6 +723,7 @@ document.addEventListener('scroll', (event) => {
 window.addEventListener('resize', closeWeekCard);
 
 document.addEventListener('keydown', (event) => {
+  easterEgg.key(event);
   if ((event.key === 'Enter' || event.key === ' ') && event.target.matches?.('[data-pw]')) {
     event.preventDefault();
     openWeekCard(event.target);

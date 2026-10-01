@@ -10,8 +10,19 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
-<!-- Fond posé avant même la feuille de style : pas d'éclair blanc au rechargement. -->
-<style>html{background-color:#D6DCEE}</style>
+<meta name="theme-color" content="#D6DCEE">
+<!-- Thème et fond posés avant même la feuille de style : pas d'éclair de
+     l'autre thème au rechargement (même calcul que src/ui/theme.js). -->
+<script>
+try {
+  var p = JSON.parse(localStorage.getItem('planning.prefs') || '{}');
+  var dark = p.theme === 'dark' || (p.theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  if (p.pink) document.documentElement.setAttribute('data-pink', '');
+} catch (e) { /* préférences illisibles : thème clair */ }
+</script>
+<style>html{background-color:#D6DCEE}html[data-theme=dark]{background-color:#121A30}
+html[data-pink]{background-color:#F6DCE8}html[data-theme=dark][data-pink]{background-color:#22121F}</style>
 </head>
 <body>
 <!-- Squelette affiché jusqu'au premier rendu (remplacé par main.js). -->

@@ -3,11 +3,14 @@ import { dayIndex } from './layout.js';
 import { esc, initials, personColor, fr1 } from './format.js';
 import { personStats } from '../../shared/load.js';
 
+// Paliers de charge : couleurs portées par le thème (styles.css, --load-N).
+const level = (n) => ({ background: `var(--load-${n})`, color: `var(--load-${n}-ink)` });
+
 export function tint(pct, ceiling) {
-  if (pct > 100) return { background: '#B23A3A', color: '#fff' };
-  if (pct > ceiling) return { background: '#E5B274', color: '#3A2405' };
-  if (pct >= ceiling * 0.62) return { background: '#9CC9B2', color: '#12301F' };
-  return { background: '#DEECE4', color: '#1D3B2C' };
+  if (pct > 100) return level(4);
+  if (pct > ceiling) return level(3);
+  if (pct >= ceiling * 0.62) return level(2);
+  return level(1);
 }
 
 const pctText = (pct) => (Number.isFinite(pct) ? `${Math.round(pct)} %` : '∞');
@@ -48,7 +51,7 @@ export function renderLoadRows(sink, { people, load, planning, axis, users, team
     left.innerHTML = `<span class="ini" style="background-color:${personColor(user.id, users)}">${esc(initials(user))}</span>
       <span class="who" data-person="${esc(user.id)}"><b>${esc(user.name)}</b><span>${esc(role || 'rôle à préciser')}</span></span>
       <span class="sm">${Math.round(stats.total)} h sur ${stats.activeWeeks} sem.<br>
-        <span style="color:${stats.peakPct > ceiling ? '#B9700A' : 'var(--ink3)'}">pic ${pctText(stats.peakPct)} · moy. ${Math.round(stats.avgPct)} %</span></span>`;
+        <span style="color:${stats.peakPct > ceiling ? 'var(--hot)' : 'var(--ink3)'}">pic ${pctText(stats.peakPct)} · moy. ${Math.round(stats.avgPct)} %</span></span>`;
 
     for (const week of weeks) {
       const hasReal = week.realHours > 0.01;
@@ -71,8 +74,8 @@ export function renderLoadRows(sink, { people, load, planning, axis, users, team
         cell.style.color = t.color;
         cell.innerHTML = wide ? `<b>${fr1(week.realHours)} h</b><u>${Math.round(pct)} %</u>` : `<b>${Math.round(pct)}%</b>`;
       } else if (week.unavailable) {
-        cell.style.backgroundColor = '#B23A3A';
-        cell.style.color = '#fff';
+        cell.style.backgroundColor = 'var(--load-4)';
+        cell.style.color = 'var(--load-4-ink)';
         cell.innerHTML = '<b>indispo.</b>';
       } else {
         const t = tint(week.pct, ceiling);

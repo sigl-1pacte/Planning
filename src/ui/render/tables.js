@@ -71,7 +71,7 @@ export function renderPeopleTable(tbody, { view, load, planning, domain }) {
       <td class="r">${stats.activeWeeks}</td>
       <td class="r">${fr1(stats.activeWeeks ? stats.total / stats.activeWeeks : 0)} h</td>
       <td class="r">${Math.round(stats.avgPct)} %</td>
-      <td class="r" style="color:${hot ? '#B9700A' : 'inherit'};font-weight:${hot ? 600 : 400}">${pctText(stats.peakPct)}</td>
+      <td class="r" style="color:${hot ? 'var(--hot)' : 'inherit'};font-weight:${hot ? 600 : 400}">${pctText(stats.peakPct)}</td>
     </tr>`;
   });
   // Un total n'apporte rien avec une seule personne : il ne redirait que sa ligne.
@@ -85,7 +85,7 @@ export function renderPeopleTable(tbody, { view, load, planning, domain }) {
       <td class="r">${t.activeWeeks}</td>
       <td class="r">${fr1(t.perWeek)} h</td>
       <td class="r">${Math.round(t.avgPct)} %</td>
-      <td class="r" style="color:${hot ? '#B9700A' : 'inherit'}">${pctText(t.peakPct)}</td>
+      <td class="r" style="color:${hot ? 'var(--hot)' : 'inherit'}">${pctText(t.peakPct)}</td>
     </tr>`);
   }
   tbody.innerHTML = rows.join('') || '<tr><td colspan="7">Personne n\'a de charge dans cette vue.</td></tr>';
@@ -127,15 +127,15 @@ export function renderLegend(el, { view, planning }) {
   const ceiling = planning.settings.loadCeilingPct;
   el.innerHTML = [
     ...projects.map((p) => `<span><i style="background:${esc(p.color)}"></i>${esc(p.name)}</span>`),
-    '<span><i style="background:#6A6F76;background-image:repeating-linear-gradient(115deg,rgba(255,255,255,.55) 0 3px,transparent 3px 6px)"></i>En cours</span>',
-    '<span><i style="background:#6A6F76;opacity:.34"></i>Terminé</span>',
+    '<span><i style="background:var(--no-project);background-image:repeating-linear-gradient(115deg,rgba(255,255,255,.55) 0 3px,transparent 3px 6px)"></i>En cours</span>',
+    '<span><i style="background:var(--no-project);opacity:.34"></i>Terminé</span>',
     `<span><i style="background:${STATUS.blocked.color}"></i>Bloqué (conflit de dépendance)</span>`,
     '<span><i style="background:var(--off)"></i>Jour non ouvré</span>',
-    '<span><i style="background:#DEECE4;border:1px solid rgba(16,29,40,.15)"></i>charge légère</span>',
-    '<span><i style="background:#9CC9B2;border:1px solid rgba(16,29,40,.15)"></i>rythme normal</span>',
-    `<span><i style="background:#E5B274;border:1px solid rgba(16,29,40,.15)"></i>au-dessus de ${ceiling} %</span>`,
-    '<span><i style="background:#B23A3A"></i>surcharge</span>',
-    '<span><i style="background:#fff;box-shadow:inset 0 -3px 0 #101D28;border:1px solid rgba(16,29,40,.15)"></i>capacité ajustée</span>',
-    '<span><i style="background:#DEECE4;box-shadow:inset 0 -3px 0 rgba(16,29,40,.72);border:1px solid rgba(16,29,40,.15)"></i>filet : charge réelle</span>',
+    '<span><i style="background:var(--load-1);border:1px solid rgb(var(--ink-rgb) / .15)"></i>charge légère</span>',
+    '<span><i style="background:var(--load-2);border:1px solid rgb(var(--ink-rgb) / .15)"></i>rythme normal</span>',
+    `<span><i style="background:var(--load-3);border:1px solid rgb(var(--ink-rgb) / .15)"></i>au-dessus de ${ceiling} %</span>`,
+    '<span><i style="background:var(--load-4)"></i>surcharge</span>',
+    '<span><i style="background:var(--surface);box-shadow:inset 0 -3px 0 var(--ink);border:1px solid rgb(var(--ink-rgb) / .15)"></i>capacité ajustée</span>',
+    '<span><i style="background:var(--load-1);box-shadow:inset 0 -3px 0 rgb(var(--ink-rgb) / .72);border:1px solid rgb(var(--ink-rgb) / .15)"></i>filet : charge réelle</span>',
   ].join('');
 }

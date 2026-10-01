@@ -59,7 +59,10 @@ button,select,input,textarea{font-family:inherit;font-size:inherit;color:inherit
 :focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 
 /* bandeau : capsule de verre flottante */
-.rail{position:sticky;top:10px;z-index:60;margin:10px var(--gutter) 0;color:var(--ink)}
+.rail{position:sticky;top:10px;z-index:60;margin:10px var(--gutter) 0;color:var(--ink);
+  transition:transform .42s cubic-bezier(.2,.85,.25,1),opacity .3s ease}
+/* Effacé vers le haut pendant qu'on descend dans la page (main.js). */
+.rail-tucked .rail{transform:translateY(calc(-100% - 16px));opacity:0;pointer-events:none}
 .rail .in{display:flex;gap:10px 18px;align-items:center;
   padding:8px 10px 8px 12px;flex-wrap:wrap;border-radius:24px;
   background:var(--glass);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
@@ -130,7 +133,7 @@ button,select,input,textarea{font-family:inherit;font-size:inherit;color:inherit
 .banner.act .btn{flex:0 0 auto}
 /* Ancré juste sous le bandeau supérieur (qui flotte à 10 px du haut),
    visible pendant tout le défilement. */
-.banner.act{position:sticky;top:calc(var(--rail-h,64px) + 18px);z-index:55;
+.banner.act{position:sticky;top:calc(var(--rail-h,64px) + 18px);z-index:55;transition:top .42s cubic-bezier(.2,.85,.25,1);
   backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);box-shadow:inset 3px 0 0 var(--doing),var(--sh-md)}
 
 /* plateau */
@@ -489,6 +492,8 @@ th:first-child,td:first-child{padding-left:0}
    de l'écran, sous le bandeau, plutôt que suivre le curseur. Verre sombre :
    fond translucide (rgba, pas opacity) pour que le texte reste totalement
    lisible — l'opacity de l'élément ne sert qu'au fondu montré/caché. */
+.rail-tucked .banner.act{top:10px}
+.rail-tucked .tip{top:24px}
 .tip{position:fixed;top:calc(var(--rail-h,64px) + 24px);left:50%;transform:translateX(-50%);z-index:95;
   background:rgba(15,27,51,.72);backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);
   color:#E8EDF7;padding:13px 22px;border-radius:20px;font-size:14px;max-width:420px;text-align:center;pointer-events:none;

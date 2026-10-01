@@ -55,7 +55,12 @@ function setup(ctx = context(), { lastError } = {}) {
     setManager: vi.fn(async () => ({})),
   };
   const onMutate = vi.fn((call) => call(api));
-  const onWrite = vi.fn((call) => call(api));
+  // Un enregistrement peut envoyer une liste d'écritures (main.js les enchaîne).
+  const onWrite = vi.fn(async (call) => {
+    if (!Array.isArray(call)) return call(api);
+    for (const c of call) await c(api);
+    return true;
+  });
   const onPrefs = vi.fn();
   const onForgetKey = vi.fn();
   const panels = createPanels({ drawer, title, body, closeButton, onMutate, onPrefs, onForgetKey, onWrite, lastError });
@@ -64,6 +69,13 @@ function setup(ctx = context(), { lastError } = {}) {
 }
 
 const submit = (form) => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+// Pied de panneau ancré : « Enregistrer » (ou « Créer… ») et sa zone d'erreur.
+const saveButton = (t) => t.drawer.querySelector('[data-foot="save"]');
+const save = async (t) => {
+  saveButton(t).click();
+  await flush();
+};
+const footError = (t) => t.drawer.querySelector('[data-foot-error]');
 const change = (input, value) => {
   input.value = value;
   input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -102,24 +114,25 @@ describe('panneau de tâche', () => {
     const t = setup();
     t.panels.openIssue('i-11');
     const [sacha, louis] = t.body.querySelectorAll('form[data-form="shares"] input');
-    expect(t.body.querySelector('form[data-form="shares"] button[type="submit"]')).toBeNull();
     sacha.value = '70';
     louis.value = '30';
-    change(sacha, '70'); // s'enregistre à la sortie du champ, sans bouton
-    await flush();
+    change(sacha, '70');
+    expect(t.api.setContributions).not.toHaveBeenCalled(); // rien ne part avant « Enregistrer »
+    await save(t);
     expect(t.api.setContributions).toHaveBeenCalledWith('i-11', [
       { linearUserId: 'u-sacha', share: 70 },
       { linearUserId: 'u-louis', share: 30 },
     ]);
   });
 
-  it('refuse des parts toutes nulles sans rien envoyer', () => {
+  it('refuse des parts toutes nulles sans rien envoyer', async () => {
     const t = setup();
     t.panels.openIssue('i-11');
     for (const input of t.body.querySelectorAll('form[data-form="shares"] input')) input.value = '0';
     change(t.body.querySelector('form[data-form="shares"] input'), '0');
+    await save(t);
     expect(t.onMutate).not.toHaveBeenCalled();
-    const error = t.body.querySelector('[data-error]');
+    const error = footError(t);
     expect(error.hidden).toBe(false);
     expect(error.textContent).toBe('Les parts doivent être positives et leur somme non nulle.');
   });
@@ -178,28 +191,37 @@ describe('panneau de tâche', () => {
 });
 
 describe('champs éditables', () => {
-  it('modifie le titre au blur', async () => {
+  it('n’envoie rien avant « Enregistrer », qui reste inactif tant que rien ne change', async () => {
     const t = setup();
     t.panels.openIssue('i-11');
+    expect(saveButton(t).disabled).toBe(true);
     const input = t.body.querySelector('[data-field="title"]');
     input.value = 'Titre corrigé';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('blur', { bubbles: true }));
     await flush();
+    expect(t.onWrite).not.toHaveBeenCalled();
+    expect(saveButton(t).disabled).toBe(false);
+    expect(t.drawer.querySelector('.drw-foot').textContent).toContain('Modifications non enregistrées');
+    await save(t);
     expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { title: 'Titre corrigé' });
   });
 
-  it('change l’assigné et l’estimation', async () => {
+  it('enregistre en une fois tous les champs modifiés, avec une seule annulation', async () => {
     const t = setup();
     t.panels.openIssue('i-11');
     change(t.body.querySelector('[data-field="assignee"]'), 'u-louis');
-    await flush();
-    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { assigneeId: 'u-louis' });
     change(t.body.querySelector('[data-field="estimate"]'), '5');
-    await flush();
-    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { estimate: 5 });
     change(t.body.querySelector('[data-field="state"]'), 'st-iot-completed');
-    await flush();
-    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { stateId: 'st-iot-completed' });
+    change(t.body.querySelector('[data-field="end"]'), '2026-09-30');
+    await save(t);
+    expect(t.onWrite).toHaveBeenCalledTimes(1);
+    const [calls, label, restores] = t.onWrite.mock.calls[0];
+    expect(calls).toHaveLength(2);
+    expect(restores).toHaveLength(2);
+    expect(label).toBe('IOT-11 modifiée');
+    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { assigneeId: 'u-louis', estimate: 5, stateId: 'st-iot-completed' });
+    expect(t.api.reschedule).toHaveBeenCalledWith('i-11', { start: '2026-09-16', end: '2026-09-30' });
   });
 
   it('saisit la charge réelle d\'une tâche (vide = aucune)', async () => {
@@ -208,7 +230,7 @@ describe('champs éditables', () => {
     const real = t.body.querySelector('[data-field="real"]');
     expect(real.value).toBe('');
     change(real, '3.5');
-    await flush();
+    await save(t);
     expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { realPoints: 3.5 });
   });
 
@@ -218,8 +240,8 @@ describe('champs éditables', () => {
     const area = t.body.querySelector('[data-field="description"]');
     expect(area.value).not.toMatch(/Starting date|Contributors/);
     area.value = 'Nouvelle description';
-    area.dispatchEvent(new Event('blur'));
-    await flush();
+    area.dispatchEvent(new Event('input', { bubbles: true }));
+    await save(t);
     expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { description: 'Nouvelle description' });
   });
 
@@ -230,19 +252,19 @@ describe('champs éditables', () => {
     const louisBox = [...container.querySelectorAll('input')].find((i) => i.value === 'u-louis');
     louisBox.checked = false;
     louisBox.dispatchEvent(new Event('change', { bubbles: true }));
-    await flush();
+    await save(t);
     expect(t.api.setContributors).toHaveBeenCalledWith('i-11', ['u-sacha']);
   });
 
-  it('enregistre une date dès qu\'elle change (replanification en cascade), sans bouton', async () => {
+  it('replanifie (en cascade) à l\'enregistrement, une fois début et échéance renseignés', async () => {
     const t = setup();
     t.panels.openIssue('i-13');
-    expect(t.body.querySelector('[data-action="reschedule"]')).toBeNull();
     change(t.body.querySelector('[data-field="start"]'), '2026-10-01');
-    await flush();
-    expect(t.api.reschedule).not.toHaveBeenCalled(); // pas d'échéance encore : on attend
+    await save(t);
+    expect(t.api.reschedule).not.toHaveBeenCalled(); // pas d'échéance : refusé
+    expect(footError(t).textContent).toMatch(/aucun des deux/);
     change(t.body.querySelector('[data-field="end"]'), '2026-10-05');
-    await flush();
+    await save(t);
     expect(t.api.reschedule).toHaveBeenCalledWith('i-13', { start: '2026-10-01', end: '2026-10-05' });
   });
 
@@ -251,9 +273,9 @@ describe('champs éditables', () => {
     t.panels.openIssue('i-13');
     change(t.body.querySelector('[data-field="start"]'), '2026-10-10');
     change(t.body.querySelector('[data-field="end"]'), '2026-10-05');
-    await flush();
+    await save(t);
     expect(t.api.reschedule).not.toHaveBeenCalled();
-    expect(t.body.querySelector('[data-date-error]').hidden).toBe(false);
+    expect(footError(t).textContent).toMatch(/précède/);
   });
 
   it('modifie les dépendances', async () => {
@@ -262,7 +284,7 @@ describe('champs éditables', () => {
     const box = [...t.body.querySelectorAll('[data-field="deps"] input')].find((i) => i.value === 'i-20');
     box.checked = true;
     box.dispatchEvent(new Event('change', { bubbles: true }));
-    await flush();
+    await save(t);
     // i-12 dépend déjà de i-11 (fixture) : cocher i-20 en plus doit garder i-11.
     expect(t.api.setDependencies).toHaveBeenCalledWith('i-12', ['i-11', 'i-20']);
   });
@@ -289,7 +311,7 @@ describe('création', () => {
     t.body.querySelector('[data-field="title"]').value = 'Nouvelle tâche';
     t.body.querySelector('[data-field="start"]').value = '2026-09-28';
     t.body.querySelector('[data-field="end"]').value = '2026-10-02';
-    t.body.querySelector('[data-action="create-issue"]').click();
+    t.drawer.querySelector('[data-action="create-issue"]').click();
     await flush();
     expect(t.api.createIssue).toHaveBeenCalledWith({
       teamId: 't-iot', projectId: 'p-poc1', title: 'Nouvelle tâche', start: '2026-09-28', end: '2026-10-02',
@@ -322,7 +344,7 @@ describe('création', () => {
     f('deps').querySelector('input').checked = true;
     const blocker = f('deps').querySelector('input').value;
     f('contributors').querySelector('input[value="u-sacha"]').checked = true;
-    t.body.querySelector('[data-action="create-issue"]').click();
+    t.drawer.querySelector('[data-action="create-issue"]').click();
     await flush();
     const arg = t.api.createIssue.mock.calls[0][0];
     expect(arg).toMatchObject({
@@ -338,7 +360,7 @@ describe('création', () => {
     t.body.querySelector('[data-field="title"]').value = 'Sans dates';
     t.body.querySelector('[data-field="start"]').value = '';
     t.body.querySelector('[data-field="end"]').value = '';
-    t.body.querySelector('[data-action="create-issue"]').click();
+    t.drawer.querySelector('[data-action="create-issue"]').click();
     await flush();
     expect(t.api.createIssue).toHaveBeenCalledWith({ teamId: 't-iot', title: 'Sans dates' });
   });
@@ -348,13 +370,13 @@ describe('création', () => {
     t.panels.openIssue(null, { teamId: 't-iot' });
     t.body.querySelector('[data-field="title"]').value = 'X';
     t.body.querySelector('[data-field="end"]').value = '';
-    t.body.querySelector('[data-action="create-issue"]').click();
-    expect(t.body.querySelector('[data-error]').hidden).toBe(false);
+    t.drawer.querySelector('[data-action="create-issue"]').click();
+    expect(footError(t).hidden).toBe(false);
     t.body.querySelector('[data-field="start"]').value = '2026-10-02';
     t.body.querySelector('[data-field="end"]').value = '2026-09-28';
-    t.body.querySelector('[data-action="create-issue"]').click();
+    t.drawer.querySelector('[data-action="create-issue"]').click();
     await flush();
-    expect(t.body.querySelector('[data-error]').textContent).toMatch(/précède/);
+    expect(footError(t).textContent).toMatch(/précède/);
     expect(t.api.createIssue).not.toHaveBeenCalled();
   });
 
@@ -364,7 +386,7 @@ describe('création', () => {
     t.onWrite.mockImplementation((call) => new Promise((resolve) => { release = () => resolve(call(t.api)); }));
     t.panels.openIssue(null, { teamId: 't-iot' });
     t.body.querySelector('[data-field="title"]').value = 'Une seule';
-    const button = t.body.querySelector('[data-action="create-issue"]');
+    const button = t.drawer.querySelector('[data-action="create-issue"]');
     button.click();
     button.click();
     t.body.querySelector('[data-field="title"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
@@ -380,7 +402,7 @@ describe('création', () => {
     t.onWrite.mockImplementation(async () => false);
     t.panels.openIssue(null, { teamId: 't-iot' });
     t.body.querySelector('[data-field="title"]').value = 'Échec';
-    const button = t.body.querySelector('[data-action="create-issue"]');
+    const button = t.drawer.querySelector('[data-action="create-issue"]');
     button.click();
     await flush();
     expect(t.drawer.classList.contains('on')).toBe(true);
@@ -400,14 +422,11 @@ describe('création', () => {
     const t = setup();
     t.panels.openProject('p-poc1');
     change(t.body.querySelector('[data-field="pstart"]'), '2026-09-20');
-    await flush();
-    expect(t.api.updateProject).toHaveBeenCalledWith('p-poc1', { startDate: '2026-09-20' });
     change(t.body.querySelector('[data-field="ptarget"]'), '2026-11-20');
-    await flush();
-    expect(t.api.updateProject).toHaveBeenCalledWith('p-poc1', { targetDate: '2026-11-20' });
     change(t.body.querySelector('[data-field="pcolor"]'), '#ff0000');
-    await flush();
-    expect(t.api.updateProject).toHaveBeenCalledWith('p-poc1', { color: '#ff0000' });
+    await save(t);
+    expect(t.api.updateProject).toHaveBeenCalledWith('p-poc1', { startDate: '2026-09-20', targetDate: '2026-11-20', color: '#ff0000' });
+    expect(t.api.updateProject).toHaveBeenCalledTimes(1);
   });
 
   it('ouvre un panneau de projet vide, préchoisit la team demandée et le crée', async () => {
@@ -416,7 +435,7 @@ describe('création', () => {
     const boxes = [...t.body.querySelectorAll('[data-field="pteams"] input')];
     expect(boxes.filter((b) => b.checked).map((b) => b.value)).toEqual(['t-web']);
     t.body.querySelector('[data-field="pname"]').value = 'Nouveau projet';
-    t.body.querySelector('[data-action="create-project"]').click();
+    t.drawer.querySelector('[data-action="create-project"]').click();
     await flush();
     expect(t.api.createProject).toHaveBeenCalledWith({ teamIds: ['t-web'], name: 'Nouveau projet' });
   });
@@ -431,7 +450,7 @@ describe('création', () => {
     const color = t.body.querySelector('[data-field="pcolor"]');
     color.value = '#ff0000';
     color.dispatchEvent(new Event('input', { bubbles: true }));
-    t.body.querySelector('[data-action="create-project"]').click();
+    t.drawer.querySelector('[data-action="create-project"]').click();
     await flush();
     const arg = t.api.createProject.mock.calls[0][0];
     expect(arg.teamIds.length).toBeGreaterThan(1);
@@ -443,13 +462,13 @@ describe('création', () => {
     t.panels.openProject(null, { teamId: 't-web' });
     t.body.querySelector('[data-field="pname"]').value = 'P';
     for (const b of t.body.querySelectorAll('[data-field="pteams"] input')) b.checked = false;
-    t.body.querySelector('[data-action="create-project"]').click();
-    expect(t.body.querySelector('[data-error]').textContent).toMatch(/team/);
+    t.drawer.querySelector('[data-action="create-project"]').click();
+    expect(footError(t).textContent).toMatch(/team/);
     t.body.querySelector('[data-field="pteams"] input').checked = true;
     t.body.querySelector('[data-field="pstart"]').value = '2026-12-01';
     t.body.querySelector('[data-field="ptarget"]').value = '2026-10-01';
-    t.body.querySelector('[data-action="create-project"]').click();
-    expect(t.body.querySelector('[data-error]').textContent).toMatch(/précède/);
+    t.drawer.querySelector('[data-action="create-project"]').click();
+    expect(footError(t).textContent).toMatch(/précède/);
     expect(t.api.createProject).not.toHaveBeenCalled();
   });
 
@@ -458,7 +477,7 @@ describe('création', () => {
     t.panels.openTeam();
     t.body.querySelector('[data-field="tkey"]').value = 'new';
     t.body.querySelector('[data-field="tname"]').value = 'Nouvelle team';
-    t.body.querySelector('[data-action="create-team"]').click();
+    t.drawer.querySelector('[data-action="create-team"]').click();
     await flush();
     expect(t.api.createTeam).toHaveBeenCalledWith({ key: 'NEW', name: 'Nouvelle team' });
   });
@@ -466,9 +485,9 @@ describe('création', () => {
   it('refuse de créer une team sans clé ou sans nom', () => {
     const t = setup();
     t.panels.openTeam();
-    t.body.querySelector('[data-action="create-team"]').click();
+    t.drawer.querySelector('[data-action="create-team"]').click();
     expect(t.api.createTeam).not.toHaveBeenCalled();
-    expect(t.body.querySelector('[data-error]').hidden).toBe(false);
+    expect(footError(t).hidden).toBe(false);
   });
 
   it('ouvre un panneau de jalon et modifie sa date', async () => {
@@ -477,8 +496,8 @@ describe('création', () => {
     expect(t.title.textContent).toBe('Objet construit');
     expect(t.body.querySelector('[data-field="mdate"]').value).toBe('2026-11-05');
     change(t.body.querySelector('[data-field="mdate"]'), '2026-11-12');
-    await flush();
-    expect(t.api.updateMilestone).toHaveBeenCalledWith('m-1', '2026-11-12');
+    await save(t);
+    expect(t.api.updateMilestone).toHaveBeenCalledWith('m-1', { targetDate: '2026-11-12' });
   });
 
   it('renomme un jalon (avec annulation vers l\'ancien nom)', async () => {
@@ -487,10 +506,12 @@ describe('création', () => {
     const input = t.body.querySelector('[data-field="mname"]');
     expect(input.value).toBe('Objet construit');
     input.value = 'Objet livré';
-    input.dispatchEvent(new Event('blur'));
-    await flush();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await save(t);
     expect(t.api.updateMilestone).toHaveBeenCalledWith('m-1', { name: 'Objet livré' });
-    expect(t.onWrite.mock.calls.at(-1)[1]).toMatch(/renommé/);
+    expect(t.onWrite.mock.calls.at(-1)[1]).toMatch(/modifié/);
+    t.onWrite.mock.calls.at(-1)[2](t.api);
+    expect(t.api.updateMilestone).toHaveBeenLastCalledWith('m-1', { name: 'Objet construit' });
   });
 
   it('signale un jalon disparu', () => {
@@ -519,11 +540,11 @@ describe('panneau de personne', () => {
     const weeks = t.body.querySelectorAll('input[data-week]');
     expect(weeks).toHaveLength(4);
     change(weeks[0], '0');
-    await flush();
+    change(weeks[1], '3');
+    await save(t);
     expect(t.api.setCapacity).toHaveBeenCalledWith('u-louis', '2026-09-14', 0);
-    change(weeks[1], '');
-    await flush();
-    expect(t.api.clearCapacity).toHaveBeenCalledWith('u-louis', '2026-09-21');
+    expect(t.api.setCapacity).toHaveBeenCalledWith('u-louis', '2026-09-21', 3);
+    expect(t.api.updatePerson).not.toHaveBeenCalled();
   });
 
   it('signale une capacité hebdomadaire invalide sans rien envoyer', async () => {
@@ -531,15 +552,14 @@ describe('panneau de personne', () => {
     t.panels.openPerson('u-louis');
     const weeks = t.body.querySelectorAll('input[data-week]');
     change(weeks[0], '-3');
-    await flush();
+    await save(t);
     expect(t.onMutate).not.toHaveBeenCalled();
-    const error = t.body.querySelector('[data-capacity-error]');
+    const error = footError(t);
     expect(error.hidden).toBe(false);
-    expect(error.textContent).toBe('La capacité doit être un nombre positif.');
+    expect(error.textContent).toBe('La capacité de la semaine du 14/09 doit être un nombre positif.');
     change(weeks[0], '5');
-    await flush();
+    await save(t);
     expect(t.api.setCapacity).toHaveBeenCalledWith('u-louis', '2026-09-14', 5);
-    expect(error.hidden).toBe(true);
   });
 });
 
@@ -550,7 +570,9 @@ describe('panneau des réglages', () => {
     const form = t.body.querySelector('form[data-form="settings"]');
     form.querySelector('[name="loadCeilingPct"]').value = '5';
     submit(form);
+    await flush();
     expect(t.onMutate).not.toHaveBeenCalled();
+    expect(footError(t).textContent).toMatch(/plafond/);
     form.querySelector('[name="hoursPerPoint"]').value = '4';
     form.querySelector('[name="loadCeilingPct"]').value = '85';
     form.querySelector('[name="defaultWeeklyHours"]').value = '30';
@@ -588,15 +610,16 @@ describe('panneau des réglages', () => {
     sm.dispatchEvent(new Event('change', { bubbles: true }));
     po.value = '';
     po.dispatchEvent(new Event('change', { bubbles: true }));
-    await flush();
-    expect(t.api.setTeamRole.mock.calls).toEqual([['t-web', 'scrum_master', 'u-sacha'], ['t-web', 'product_owner', null]]);
+    expect(t.api.setTeamRole).not.toHaveBeenCalled();
+    await save(t);
+    expect(t.api.setTeamRole.mock.calls).toEqual([['t-web', 'product_owner', null], ['t-web', 'scrum_master', 'u-sacha']]);
 
     t.body.querySelector('[data-action="org-all"]').click();
     const manager = t.body.querySelector('[data-org-manager]');
     expect(t.body.querySelectorAll('[data-team-role]')).toHaveLength(4);
     manager.value = 'u-sacha';
     manager.dispatchEvent(new Event('change', { bubbles: true }));
-    await flush();
+    await save(t);
     expect(t.api.setManager).toHaveBeenCalledWith('u-sacha');
   });
 
@@ -631,8 +654,13 @@ describe('cycle de vie', () => {
     expect(t.body.querySelector('input')).toBe(input);
     expect(input.value).toBe('12');
     input.blur();
+    // Saisie non enregistrée : un rafraîchissement ne l'efface pas non plus…
     t.panels.update(context());
+    expect(t.body.querySelector('input')).toBe(input);
+    // …mais « Annuler » revient aux valeurs de Linear.
+    t.drawer.querySelector('[data-foot="revert"]').click();
     expect(t.body.querySelector('input')).not.toBe(input);
+    expect(t.body.querySelector('input').value).toBe('Conception');
   });
 
   it('redessine tout de suite après une case à cocher (contributeurs)', () => {
@@ -652,6 +680,78 @@ describe('cycle de vie', () => {
     const input = t.body.querySelector('input');
     t.panels.update(context());
     expect(t.body.querySelector('input')).not.toBe(input);
+  });
+});
+
+describe('modifications non enregistrées', () => {
+  const dirtyTitle = (t) => {
+    const input = t.body.querySelector('[data-field="title"]');
+    input.value = 'Autre titre';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const dialog = () => document.querySelector('.confirm-overlay');
+
+  it('ferme sans rien demander quand rien n’a changé', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    t.closeButton.click();
+    expect(dialog()).toBeNull();
+    expect(t.drawer.classList.contains('on')).toBe(false);
+  });
+
+  it('demande avant de fermer, et « Continuer l’édition » garde la saisie', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    dirtyTitle(t);
+    t.closeButton.click();
+    expect(dialog().textContent).toContain('Abandonner les modifications ?');
+    expect(t.drawer.classList.contains('on')).toBe(true);
+    dialog().querySelector('[data-cf="keep"]').click();
+    expect(dialog()).toBeNull();
+    expect(t.body.querySelector('[data-field="title"]').value).toBe('Autre titre');
+  });
+
+  it('« Abandonner » ferme sans rien envoyer', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    dirtyTitle(t);
+    t.panels.requestClose();
+    dialog().querySelector('[data-cf="discard"]').click();
+    expect(t.drawer.classList.contains('on')).toBe(false);
+    expect(t.onWrite).not.toHaveBeenCalled();
+  });
+
+  it('demande aussi avant d’ouvrir une autre tâche, et Échap garde la saisie', () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    dirtyTitle(t);
+    t.panels.openIssue('i-12');
+    expect(t.title.textContent).toBe('IOT-11');
+    dialog().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(dialog()).toBeNull();
+    t.panels.openIssue('i-12');
+    dialog().querySelector('[data-cf="discard"]').click();
+    expect(t.title.textContent).toBe('IOT-12');
+  });
+
+  it('Ctrl/Cmd+S enregistre', async () => {
+    const t = setup();
+    t.panels.openIssue('i-11');
+    dirtyTitle(t);
+    t.body.querySelector('[data-field="title"]').dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }));
+    await flush();
+    expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { title: 'Autre titre' });
+  });
+
+  it('garde la saisie et affiche la raison si l’enregistrement échoue', async () => {
+    const t = setup(context(), { lastError: () => 'Linear indisponible' });
+    t.onWrite.mockImplementation(async () => false);
+    t.panels.openIssue('i-11');
+    dirtyTitle(t);
+    await save(t);
+    expect(footError(t).textContent).toBe('Linear indisponible');
+    expect(t.body.querySelector('[data-field="title"]').value).toBe('Autre titre');
+    expect(saveButton(t).disabled).toBe(false);
   });
 });
 
@@ -867,7 +967,7 @@ describe('sélecteur de tâches bloquantes', () => {
     box.checked = true;
     setControl(t, 'q', 'zzzz-inexistant');
     expect(visibleIds(t)).toEqual([]);
-    t.body.querySelector('[data-action="create-issue"]').click();
+    t.drawer.querySelector('[data-action="create-issue"]').click();
     await flush();
     expect(t.api.createIssue.mock.calls[0][0].blockedBy).toEqual([box.value]);
   });
@@ -940,7 +1040,7 @@ describe('déplacer une tâche', () => {
     const project = t.body.querySelector('[data-field="project"]');
     project.value = '';
     project.dispatchEvent(new Event('change', { bubbles: true }));
-    await flush();
+    await save(t);
     expect(t.api.updateIssue).toHaveBeenCalledWith('i-11', { projectId: null });
   });
 });
@@ -1023,7 +1123,7 @@ describe('ajouter un jalon', () => {
     t.body.querySelector('[data-action="add-milestone"]').click();
     t.body.querySelector('[data-field="mname"]').value = '  Livraison ';
     t.body.querySelector('[data-field="mdate"]').value = '2026-12-01';
-    t.body.querySelector('[data-action="create-milestone"]').click();
+    t.drawer.querySelector('[data-action="create-milestone"]').click();
     await flush();
     expect(t.api.createMilestone).toHaveBeenCalledWith({ projectId: 'p-poc1', name: 'Livraison', targetDate: '2026-12-01' });
     expect(t.onWrite.mock.calls.at(-1)[1]).toMatch(/Jalon « Livraison » créé/);
@@ -1036,7 +1136,7 @@ describe('ajouter un jalon', () => {
     t.body.querySelector('[data-action="add-milestone"]').click();
     t.body.querySelector('[data-field="mname"]').value = 'À dater';
     t.body.querySelector('[data-field="mdate"]').value = '';
-    t.body.querySelector('[data-action="create-milestone"]').click();
+    t.drawer.querySelector('[data-action="create-milestone"]').click();
     await flush();
     expect(t.api.createMilestone).toHaveBeenCalledWith({ projectId: 'p-poc1', name: 'À dater' });
   });
@@ -1045,9 +1145,9 @@ describe('ajouter un jalon', () => {
     const t = setup();
     t.panels.openProject('p-poc1');
     t.body.querySelector('[data-action="add-milestone"]').click();
-    const button = t.body.querySelector('[data-action="create-milestone"]');
+    const button = t.drawer.querySelector('[data-action="create-milestone"]');
     button.click();
-    expect(t.body.querySelector('[data-error]').textContent).toMatch(/nom/);
+    expect(footError(t).textContent).toMatch(/nom/);
     expect(t.api.createMilestone).not.toHaveBeenCalled();
     let release;
     t.onWrite.mockImplementation((call) => new Promise((resolve) => { release = () => resolve(call(t.api)); }));
@@ -1074,8 +1174,8 @@ describe('ajouter un jalon', () => {
     expect(text.value).toBe('05/11/2026');
     text.value = '12112026';
     text.dispatchEvent(new Event('input', { bubbles: true }));
-    await flush();
-    expect(t.api.updateMilestone).toHaveBeenCalledWith('m-1', '2026-11-12');
+    await save(t);
+    expect(t.api.updateMilestone).toHaveBeenCalledWith('m-1', { targetDate: '2026-11-12' });
     expect(typeof t.onWrite.mock.calls.at(-1)[2]).toBe('function');
   });
 });

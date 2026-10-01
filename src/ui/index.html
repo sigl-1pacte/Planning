@@ -10,9 +10,28 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Fond posé avant même la feuille de style : pas d'éclair blanc au rechargement. -->
+<style>html{background:#E8ECF3}</style>
 </head>
 <body>
-<div id="app"></div>
+<!-- Squelette affiché jusqu'au premier rendu (remplacé par main.js). -->
+<div id="app" aria-busy="true">
+  <div class="rail"><div class="in">
+    <img class="logo" src="/logo-96.png" alt="1pacte" width="44" height="44">
+    <div><h1>1PACTE Planning Dashboard</h1><div class="sb">Chargement…</div></div>
+    <div class="sk sk-nav skeleton"></div>
+  </div></div>
+  <section class="sheet skeleton">
+    <div class="sk sk-title"></div>
+    <div class="sk sk-sub"></div>
+    <div class="sk-board">
+      <div class="sk sk-row"></div><div class="sk sk-row"></div><div class="sk sk-row"></div>
+      <div class="sk sk-row"></div><div class="sk sk-row"></div><div class="sk sk-row"></div>
+      <div class="sk sk-row"></div><div class="sk sk-row"></div><div class="sk sk-row"></div>
+    </div>
+    <p class="sk-note">Lecture du planning depuis Linear…</p>
+  </section>
+</div>
 <div id="key-overlay" class="overlay" hidden></div>
 <aside class="drw" id="drw" aria-hidden="true">
   <header><h3 id="dwT">Détail</h3><button class="x" id="dwX" aria-label="Fermer">×</button></header>

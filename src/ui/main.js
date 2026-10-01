@@ -67,9 +67,33 @@ const controller = createController({ api, render: draw, showKeyScreen: showKey 
 // `restore` (une écriture elle aussi) est proposée en annulation tant que le
 // bandeau reste affiché ; retirée si l'écriture échoue. Résout comme
 // controller.mutate : au résultat, ou à false en cas d'échec.
+//
+// `call` peut aussi être une liste (l'enregistrement d'un panneau qui touche
+// plusieurs choses) : une écriture de la file par élément, dans l'ordre, pour
+// que chacune parte du résultat de la précédente (ex. la description puis les
+// dates, qui réécrivent toutes deux la description). `restore` est alors la
+// liste des retours en arrière, rejoués en sens inverse par une seule
+// annulation. Résout à false si l'une échoue, sinon au dernier résultat avec
+// les avertissements de toutes.
 function write(call, label, restore) {
+  if (Array.isArray(call)) return writeAll(call, label, restore);
   const armed = restore ? undo.arm(label, () => write(restore)) : null;
   const done = controller.mutate(call, { preview: previewOf(call) });
+  if (armed) {
+    done.then((result) => {
+      if (result === false && undo.disarm(armed)) draw();
+    });
+  }
+  return done;
+}
+
+function writeAll(calls, label, restores) {
+  const back = restores?.length ? [...restores].reverse() : null;
+  const armed = back ? undo.arm(label, () => writeAll(back)) : null;
+  const done = Promise.all(calls.map((call) => controller.mutate(call, { preview: previewOf(call) })))
+    .then((results) => (results.includes(false)
+      ? false
+      : { ...results.at(-1), warnings: results.flatMap((r) => r?.warnings ?? []) }));
   if (armed) {
     done.then((result) => {
       if (result === false && undo.disarm(armed)) draw();
@@ -121,7 +145,9 @@ function draw() {
   }
   const previousScroll = root.querySelector('.pr')?.scrollLeft ?? 0;
   const today = todayISO();
-  const viewportWidth = root.querySelector('.pr')?.clientWidth || Math.max(300, Math.min(window.innerWidth, 1540) - 676);
+  // Avant le premier rendu (squelette), la frise n'existe pas encore : largeur
+  // estimée d'après la fenêtre (marges, feuille et colonne des tâches).
+  const viewportWidth = root.querySelector('.pr')?.clientWidth || Math.max(300, window.innerWidth - 686);
   const effective = printLayout ? { ...prefs, zoom: 'custom', dayWidth: printLayout.dayWidth, collapsed: [] } : prefs;
   const result = renderApp(root, {
     state,
@@ -134,6 +160,7 @@ function draw() {
       write((api) => api.reschedule(issueId, dates));
     },
   });
+  root.removeAttribute('aria-busy');
   lastAxis = result.axis;
   lastTeamId = result.view.teamId;
   lastLoad = result.load;
@@ -509,11 +536,13 @@ window.addEventListener('resize', () => {
 });
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') {
+  if (event.key !== 'Escape') return;
+  if (document.querySelector('.chart-overlay')) {
     closeLoadChart();
-    panels.close();
-    draw();
+    return;
   }
+  // Modifications non enregistrées : le panneau demande d'abord confirmation.
+  panels.requestClose(draw);
 });
 
 // Popup « Charge vs disponibilité », ouvert depuis le bouton du bandeau de

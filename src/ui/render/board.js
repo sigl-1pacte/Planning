@@ -85,7 +85,7 @@ function renderProjectMilestones(right, project, axis) {
     const diamond = positioned('jd', x);
     diamond.style.color = project.color;
     diamond.dataset.milestone = milestone.id;
-    diamond.title = `${milestone.name} · ${shortDay(milestone.date)} — cliquer ou glisser pour déplacer`;
+    diamond.title = `${milestone.name} · ${shortDay(milestone.date)}. Cliquer ou glisser pour déplacer`;
     const label = document.createElement('div');
     label.className = 'jt';
     label.style.color = project.color;
@@ -270,7 +270,7 @@ function teamSummary(issue, info, users) {
     return `<i>${people.length} pers.</i> · ${Math.min(...rates)}–${Math.max(...rates)} %`;
   }
   return people
-    .map((p) => `<i>${esc(initials(p.user))}</i> <span class="${(p.rate ?? 0) > 100 ? 'ov' : ''}">${p.rate ?? '—'}%</span>`)
+    .map((p) => `<i>${esc(initials(p.user))}</i> <span class="${(p.rate ?? 0) > 100 ? 'ov' : ''}">${p.rate ?? '?'}%</span>`)
     .join(' · ');
 }
 
@@ -350,13 +350,13 @@ function renderIssueRow(sink, issue, { color, status, axis, holidays, load, user
   // La couleur reste celle du type de statut (ou rouge si conflit de
   // dépendance) ; le texte est le nom réel du statut dans Linear.
   const pillLabel = stateName ?? STATUS[status].label;
-  const pillTitle = status === 'blocked' ? `${pillLabel} — bloquée : conflit de dépendance` : pillLabel;
+  const pillTitle = status === 'blocked' ? `${pillLabel}, bloquée par un conflit de dépendance` : pillLabel;
   left.innerHTML = `<span class="pill" style="background-color:${STATUS[status].color}" title="${esc(pillTitle)}">${esc(pillLabel)}</span>
     <span class="id"${depth > 0 ? ` style="padding-left:${depth * 14}px"` : ''}>${esc(issue.identifier)}</span>
     <span class="nmw" title="${esc(issue.title)}">${esc(issue.title)}</span>
     <span class="flag" title="${warn ? 'Contributeurs à vérifier' : ''}">${warn ? '!' : ''}</span>
     <span class="tm" data-open="${esc(issue.id)}" title="Répartition">${teamSummary(issue, info, users)}</span>
-    <span class="pts${noEstimate ? ' none' : ''}" title="${noEstimate ? 'Sans estimation' : 'Points'}">${noEstimate ? '—' : issue.estimate}</span>
+    <span class="pts${noEstimate ? ' none' : ''}" title="${noEstimate ? 'Sans estimation' : 'Points'}">${noEstimate ? '?' : issue.estimate}</span>
     <span class="dt">${shortDay(issue.start)}</span><span class="dt">${shortDay(issue.end)}</span>`;
 
   renderIssueBar(right, issue, { color, status, axis, holidays });

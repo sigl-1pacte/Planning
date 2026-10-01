@@ -51,10 +51,10 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
   root.innerHTML = `
     <div class="rail"><div class="in">
       <img class="logo" src="/logo-96.png" alt="1pacte" width="44" height="44">
-      <div><h1>1PACTE Planning Dashboard — ${esc(team ? team.name : 'toutes les teams')}</h1>
+      <div><h1>1PACTE Planning Dashboard · ${esc(team ? team.name : 'toutes les teams')}</h1>
         <div class="sb">${longDay(axis.from)} → ${longDay(axis.to)}</div></div>
       <nav class="nav">
-        <a href="#/" class="${route.view === 'global' && route.tab !== 'org' ? 'on' : ''}">Vue globale</a>
+        <a href="#/" class="${route.view === 'global' && !route.tab ? 'on' : ''}">Vue globale</a>
         ${domain.teams.map((t) => `<a href="#/team/${encodeURIComponent(t.key)}" class="${team?.id === t.id ? 'on' : ''}">${esc(t.key)}</a>`).join('')}
         <a href="#/unplanned" class="${route.tab === 'unplanned' ? 'on' : ''}">Non planifiées (${domain.issues.filter((i) => !i.start).length})</a>
         <a href="#/org" class="${route.tab === 'org' ? 'on' : ''}">Organisation</a>
@@ -107,7 +107,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
           <tbody data-projects></tbody></table></div></div>
       </div>
       <section class="slide-chart print-only">
-        <h2>Charge vs disponibilité ${esc(team ? `— ${team.name}` : '— toutes les teams')}</h2>
+        <h2>Charge vs disponibilité · ${esc(team ? team.name : 'toutes les teams')}</h2>
         ${buildChartSvg(load, view.people, planning.settings.loadCeilingPct) || ''}
       </section>
       <div class="ft"><span>Planning connecté à Linear · lecture et écriture</span><span>Édition du ${longDay(today)}</span></div>

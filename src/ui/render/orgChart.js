@@ -117,7 +117,7 @@ function personNode({ user, roles, cx, cy }, { users, teamKeysOf, teamKey, radiu
   }
   const others = teamKey ? (teamKeysOf.get(user.id) ?? []).filter((k) => k !== teamKey) : [];
   return `<g class="org-node" data-person="${esc(user.id)}">
-    <title>${esc(user.name)}${roleText ? ` — ${roleText}` : ''}</title>
+    <title>${esc(user.name)}${roleText ? ` (${roleText})` : ''}</title>
     <circle cx="${cx}" cy="${cy}" r="${radius}" fill="${personColor(user.id, users)}"/>
     <text class="ini" x="${cx}" y="${cy + 4}" text-anchor="middle">${esc(initials(user))}</text>
     <text class="nm" x="${cx}" y="${cy + radius + 15}" text-anchor="middle">${esc(fit(user.name, NODE_W - 10, 11))}</text>

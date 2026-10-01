@@ -191,7 +191,7 @@ describe('board', () => {
     const l = d.row(d.leftRows, 'i-20');
     expect(l.querySelector('.flag').textContent).toBe('!');
     expect(l.querySelector('.pill').textContent).toBe('Terminé');
-    expect(l.querySelector('.pts').textContent).toBe('—');
+    expect(l.querySelector('.pts').textContent).toBe('?');
     expect(l.querySelector('.pts').classList.contains('none')).toBe(true);
     expect(d.row(d.rightRows, 'i-20').querySelector('.bl').textContent.startsWith('✓ ')).toBe(true);
     expect(d.row(d.leftRows, 'i-11').querySelector('.flag').textContent).toBe('');

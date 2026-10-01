@@ -67,6 +67,8 @@ describe('renderApp', () => {
     const route = { view: 'global', teamKey: null, tab: 'unplanned' };
     renderApp(root, { state, route, prefs, selectedIssueId: null, today: '2026-09-17', viewportWidth: 560, onPlan });
     expect(root.querySelector('.nav a[href="#/unplanned"]').classList.contains('on')).toBe(true);
+    // Un seul onglet actif : « Vue globale » ne l'est pas en même temps.
+    expect([...root.querySelectorAll('.nav a.on')].map((a) => a.textContent)).toEqual(['Non planifiées (1)']);
     expect(root.querySelector('.board').hidden).toBe(true);
     expect(root.querySelector('.cols').hidden).toBe(true);
     expect(root.querySelector('.unp').hidden).toBe(false);
@@ -76,7 +78,7 @@ describe('renderApp', () => {
   it('restreint la page à une team', () => {
     const { root } = draw({ route: { view: 'team', teamKey: 'IOT' } });
     expect(root.querySelector('.nav a.on').textContent).toBe('IOT');
-    expect(root.querySelector('h1').textContent).toBe('1PACTE Planning Dashboard — IoT');
+    expect(root.querySelector('h1').textContent).toBe('1PACTE Planning Dashboard · IoT');
     expect(root.querySelector('.r.band').textContent).toContain('de la team');
   });
 

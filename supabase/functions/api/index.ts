@@ -113,6 +113,11 @@ const holidayBody = {
   properties: { day: { type: 'string' }, label: { type: 'string', minLength: 1 } },
 };
 
+const userRefBody = {
+  type: 'object', required: ['linearUserId'], additionalProperties: false,
+  properties: { linearUserId: { type: ['string', 'null'], minLength: 1 } },
+};
+
 type Vars = { linearKey: string; viewer: unknown };
 // Supabase retire le préfixe /functions/v1 avant de transmettre la requête
 // à la fonction, mais garde son propre nom en premier segment du chemin
@@ -237,6 +242,26 @@ app.delete('/api/holidays/:day', async (c) => c.json(await withDatabase(async ()
   await repo.deleteHoliday(db, c.req.param('day'));
   return repo.getPlanning(db);
 })));
+
+app.put('/api/teams/:teamId/roles/:role', async (c) => {
+  const body: any = await c.req.json();
+  assertValid(userRefBody, body);
+  const { teamId, role } = c.req.param();
+  if (!repo.TEAM_ROLES.includes(role)) throw badRequest(`Rôle inconnu : ${role}`);
+  return c.json(await withDatabase(async () => {
+    await repo.setTeamRole(db, teamId, role, body.linearUserId);
+    return repo.getPlanning(db);
+  }));
+});
+
+app.put('/api/org/manager', async (c) => {
+  const body: any = await c.req.json();
+  assertValid(userRefBody, body);
+  return c.json(await withDatabase(async () => {
+    await repo.setManager(db, body.linearUserId);
+    return repo.getPlanning(db);
+  }));
+});
 
 // Aucune route n'écrit vers Linear : les écritures partent du navigateur, avec la
 // clé personnelle de l'utilisateur (src/ui/linearWrites.js). Cette fonction ne lit

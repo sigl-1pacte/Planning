@@ -25,7 +25,7 @@ function draw({ route = { view: 'global', teamKey: null }, snapshotOver = {}, er
 describe('renderApp', () => {
   it('assemble navigation, plateau, charge et tableaux', () => {
     const { root, out } = draw();
-    expect([...root.querySelectorAll('.nav a')].map((a) => a.textContent)).toEqual(['Vue globale', 'IOT', 'WEB', 'Non planifiées (1)']);
+    expect([...root.querySelectorAll('.nav a')].map((a) => a.textContent)).toEqual(['Vue globale', 'IOT', 'WEB', 'Non planifiées (1)', 'Organisation']);
     expect(root.querySelector('.nav a.on').textContent).toBe('Vue globale');
     expect(root.querySelectorAll('[data-left] .r.tk')).toHaveLength(3);
     expect(root.querySelectorAll('[data-left] .r.ld')).toHaveLength(2);
@@ -43,6 +43,16 @@ describe('renderApp', () => {
     // Les courbes de charge ferment le document imprimé, après les tableaux.
     const sections = [...root.querySelectorAll('.cols.page-slide, .slide-chart')];
     expect(sections.map((el) => el.className)).toEqual(['cols page-slide', 'slide-chart print-only']);
+  });
+
+  it('bascule sur la vue Organisation', () => {
+    const { root } = draw({ route: { view: 'global', teamKey: null, tab: 'org' } });
+    expect(root.querySelector('.nav a.on').textContent).toBe('Organisation');
+    expect(root.querySelector('.board').hidden).toBe(true);
+    expect(root.querySelector('.zoom').hidden).toBe(true);
+    expect(root.querySelector('.org').hidden).toBe(false);
+    expect(root.querySelectorAll('.org .org-team')).toHaveLength(2);
+    expect(root.querySelector('.hd h2').textContent).toBe('Organisation des teams');
   });
 
   it('bascule sur l’onglet des tâches non planifiées', () => {

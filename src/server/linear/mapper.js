@@ -12,7 +12,9 @@ export function mapWorkspace(raw) {
   const users = raw.users
     .map((u) => ({ id: u.id, name: u.name, displayName: u.displayName ?? null, email: u.email, active: u.active, url: u.url }))
     .sort(byId);
-  const teams = raw.teams.map((t) => ({ id: t.id, key: t.key, name: t.name })).sort(byId);
+  const teams = raw.teams.map((t) => ({
+    id: t.id, key: t.key, name: t.name, memberIds: (t.members?.nodes ?? []).map((m) => m.id).sort(),
+  })).sort(byId);
   const workflowStates = raw.workflowStates
     .map((s) => ({ id: s.id, name: s.name, type: s.type, position: s.position, teamId: s.team.id }))
     .sort((a, b) => a.teamId.localeCompare(b.teamId) || a.position - b.position);

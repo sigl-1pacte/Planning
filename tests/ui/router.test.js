@@ -13,6 +13,11 @@ describe('router', () => {
     expect(parseRoute('#/team/%E0')).toEqual({ view: 'global', teamKey: null, tab: null });
   });
 
+  it('reconnaît la vue Organisation', () => {
+    expect(parseRoute('#/org')).toEqual({ view: 'global', teamKey: null, tab: 'org' });
+    expect(routeHash({ view: 'global', teamKey: null, tab: 'org' })).toBe('#/org');
+  });
+
   it('reconstruit le fragment', () => {
     expect(routeHash({ view: 'team', teamKey: 'IOT', tab: null })).toBe('#/team/IOT');
     expect(routeHash({ view: 'global', teamKey: null, tab: null })).toBe('#/');

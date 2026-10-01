@@ -2,7 +2,7 @@ const num = (v) => (v === null ? null : Number(v));
 
 export async function getPlanning(db) {
   const settings = (await db.query(
-    'select hours_per_point, load_ceiling_pct, default_weekly_hours from settings',
+    'select hours_per_point, load_ceiling_pct, default_weekly_hours, manager_user_id from settings',
   )).rows[0];
   const holidays = await db.query(
     "select to_char(day, 'YYYY-MM-DD') as day, label from holiday order by day",
@@ -15,6 +15,9 @@ export async function getPlanning(db) {
   );
   const contributions = await db.query(
     'select issue_id, linear_user_id, share from contribution order by issue_id, linear_user_id',
+  );
+  const teamRoles = await db.query(
+    'select team_id, role, linear_user_id from team_role order by team_id, role',
   );
   return {
     settings: {
@@ -32,7 +35,30 @@ export async function getPlanning(db) {
     contributions: contributions.rows.map((r) => ({
       issueId: r.issue_id, linearUserId: r.linear_user_id, share: num(r.share),
     })),
+    org: {
+      managerUserId: settings.manager_user_id,
+      teamRoles: teamRoles.rows.map((r) => ({ teamId: r.team_id, role: r.role, linearUserId: r.linear_user_id })),
+    },
   };
+}
+
+export const TEAM_ROLES = ['product_owner', 'scrum_master'];
+
+// null retire le rôle.
+export async function setTeamRole(db, teamId, role, userId) {
+  if (userId === null) {
+    await db.query('delete from team_role where team_id = $1 and role = $2', [teamId, role]);
+    return;
+  }
+  await db.query(
+    `insert into team_role (team_id, role, linear_user_id) values ($1, $2, $3)
+     on conflict (team_id, role) do update set linear_user_id = excluded.linear_user_id`,
+    [teamId, role, userId],
+  );
+}
+
+export async function setManager(db, userId) {
+  await db.query('update settings set manager_user_id = $1, updated_at = now()', [userId]);
 }
 
 export async function updateSettings(db, { hoursPerPoint, loadCeilingPct, defaultWeeklyHours }) {

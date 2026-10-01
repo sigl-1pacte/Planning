@@ -69,5 +69,8 @@ export function createApi({ fetchImpl = (...args) => fetch(...args), storage = g
     clearContributions: (issueId) => request('DELETE', `${issue(issueId)}/contributions`),
     addHoliday: (day, label) => request('POST', '/api/holidays', { day, label }),
     deleteHoliday: (day) => request('DELETE', `/api/holidays/${day}`),
+    // linearUserId null retire le rôle.
+    setTeamRole: (teamId, role, linearUserId) => request('PUT', `/api/teams/${encodeURIComponent(teamId)}/roles/${role}`, { linearUserId }),
+    setManager: (linearUserId) => request('PUT', '/api/org/manager', { linearUserId }),
   };
 }

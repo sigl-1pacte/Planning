@@ -128,6 +128,25 @@ describe('planification', () => {
     expect(res.json().settings).toEqual({ hoursPerPoint: 4, loadCeilingPct: 85, defaultWeeklyHours: 30 });
   });
 
+  it('nomme et retire le PO, le Scrum Master et le manager', async () => {
+    let res = await call('PUT', '/api/teams/t-iot/roles/product_owner', { linearUserId: 'u-sacha' });
+    expect(res.json().org.teamRoles).toEqual([{ teamId: 't-iot', role: 'product_owner', linearUserId: 'u-sacha' }]);
+    await call('PUT', '/api/teams/t-iot/roles/scrum_master', { linearUserId: 'u-sacha' });
+    res = await call('PUT', '/api/teams/t-iot/roles/product_owner', { linearUserId: null });
+    expect(res.json().org.teamRoles).toEqual([{ teamId: 't-iot', role: 'scrum_master', linearUserId: 'u-sacha' }]);
+    res = await call('PUT', '/api/org/manager', { linearUserId: 'u-louis' });
+    expect(res.json().org.managerUserId).toBe('u-louis');
+    expect(res.json().settings).toEqual({ hoursPerPoint: 5, loadCeilingPct: 80, defaultWeeklyHours: 28 });
+    expect((await call('PUT', '/api/org/manager', { linearUserId: null })).json().org.managerUserId).toBeNull();
+  });
+
+  it('refuse un rôle inconnu ou un corps invalide', async () => {
+    expect((await call('PUT', '/api/teams/t-iot/roles/boss', { linearUserId: 'u-sacha' })).statusCode).toBe(400);
+    expect((await call('PUT', '/api/teams/t-iot/roles/scrum_master', {})).statusCode).toBe(400);
+    expect((await call('PUT', '/api/org/manager', { linearUserId: '' })).statusCode).toBe(400);
+    expect((await call('PUT', '/api/org/manager', { linearUserId: 'u-louis' }, {})).statusCode).toBe(401);
+  });
+
   it('refuse des réglages hors bornes', async () => {
     const res = await call('PUT', '/api/settings', { hoursPerPoint: 5, loadCeilingPct: 5, defaultWeeklyHours: 28 });
     expect(res.statusCode).toBe(400);

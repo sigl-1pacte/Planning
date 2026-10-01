@@ -25,6 +25,10 @@ const root = document.getElementById('app');
 const overlay = document.getElementById('key-overlay');
 let prefs = loadPrefs();
 let recenter = true;
+// Zoom au curseur : jour (fractionnaire) au centre de la frise avant le
+// changement, recentré après — comme un pincement sur une carte.
+let zoomAnchor = null;
+let keepRail = false;
 // Pendant une impression : largeur de jour et colonnes de période choisies
 // pour le papier (voir print.js), appliquées à chaque draw() jusqu'à
 // afterprint — y compris si une actualisation de fond survient pendant que
@@ -158,6 +162,7 @@ function draw() {
     selectedIssueId: panels.selectedIssueId(),
     today,
     viewportWidth,
+    keepRail,
     onPlan: (issueId, dates) => {
       write((api) => api.reschedule(issueId, dates));
     },
@@ -168,8 +173,11 @@ function draw() {
   lastLoad = result.load;
   lastPeople = result.view.people;
   const pane = root.querySelector('.pr');
-  pane.scrollLeft = recenter ? scrollLeftForToday(result.axis, today, pane.clientWidth) : previousScroll;
+  if (recenter) pane.scrollLeft = scrollLeftForToday(result.axis, today, pane.clientWidth);
+  else if (zoomAnchor !== null) pane.scrollLeft = zoomAnchor * result.axis.dayWidth - pane.clientWidth / 2;
+  else pane.scrollLeft = previousScroll;
   recenter = false;
+  zoomAnchor = null;
   panels.update({ domain: state.snapshot.domain, planning: state.planning, load: result.load, view: result.view, prefs });
   const pending = undo.current();
   let toast = root.querySelector('.undo-toast');
@@ -520,9 +528,37 @@ function endResizeDrag(commit) {
 root.addEventListener('pointerup', () => { endDrag(true); endMilestoneDrag(true); endResizeDrag(true); });
 root.addEventListener('pointercancel', () => { endDrag(false); endMilestoneDrag(false); endResizeDrag(false); });
 
+// Curseur de zoom : la frise suit en direct pendant le glissement (une mise à
+// jour par image au plus, bandeau conservé), puis le réglage est enregistré
+// au relâchement.
+let zoomFrame = 0;
+function anchorZoom() {
+  const pane = root.querySelector('.pr');
+  if (pane && lastAxis) zoomAnchor = (pane.scrollLeft + pane.clientWidth / 2) / lastAxis.dayWidth;
+}
+
+root.addEventListener('input', (event) => {
+  if (!event.target.matches('[data-zoom-range]')) return;
+  const dayWidth = Number(event.target.value);
+  cancelAnimationFrame(zoomFrame);
+  zoomFrame = requestAnimationFrame(() => {
+    zoomFrame = 0;
+    anchorZoom();
+    prefs = { ...prefs, zoom: 'custom', dayWidth };
+    keepRail = true;
+    try {
+      draw();
+    } finally {
+      keepRail = false;
+    }
+  });
+});
+
 root.addEventListener('change', (event) => {
   if (!event.target.matches('[data-zoom-range]')) return;
-  recenter = true;
+  cancelAnimationFrame(zoomFrame);
+  zoomFrame = 0;
+  anchorZoom();
   setPrefs({ zoom: 'custom', dayWidth: Number(event.target.value) });
 });
 

@@ -16,6 +16,8 @@ import { resolveConflicts } from './conflictResolution.js';
 import { renderLoadChart } from './render/loadChart.js';
 import { renderIssueBar } from './render/board.js';
 import { previewOf, previews } from './optimistic.js';
+import { weekBreakdown } from '../shared/load.js';
+import { weekCardHtml } from './render/weekCard.js';
 import { planPrintColumns, printTimelineWidth, buildPrintPages, clearPrintPages } from './print.js';
 
 const api = createApi({ getDomain: () => controller.writeDomain() });
@@ -206,6 +208,8 @@ root.addEventListener('click', (event) => {
   } else if (el('[data-open]')) {
     panels.openIssue(el('[data-open]').dataset.open);
     draw();
+  } else if (el('[data-pw]')) {
+    openWeekCard(el('[data-pw]'));
   } else if (el('[data-org-roles]')) {
     panels.openRoles(el('[data-org-roles]').dataset.orgRoles || null);
   } else if (el('[data-person]')) {
@@ -535,8 +539,87 @@ window.addEventListener('resize', () => {
   resizeTimer = setTimeout(draw, 150);
 });
 
+// Carte « reçu de la semaine » (render/weekCard.js) : ouverte d'un clic sur
+// une cellule de la bande de charge, posée juste sous la cellule (ou dessus,
+// faute de place), hors de #app pour survivre aux redessins. Un second clic
+// sur la même cellule, Échap, un clic ailleurs, un défilement ou un
+// redimensionnement la ferment.
+let weekCard = null;
+
+function closeWeekCard() {
+  if (!weekCard) return;
+  weekCard.el.remove();
+  weekCard.cell.classList.remove('picked');
+  weekCard = null;
+}
+
+function openWeekCard(cell) {
+  const key = cell.dataset.pw;
+  const again = weekCard?.key === key;
+  closeWeekCard();
+  if (again || !controller.state.snapshot || !lastLoad) return;
+  const [userId, weekStart] = key.split('|');
+  const { domain } = controller.state.snapshot;
+  const { planning } = controller.state;
+  const user = domain.users.find((u) => u.id === userId);
+  const week = lastLoad.people[userId]?.find((w) => w.weekStart === weekStart);
+  if (!user || !week) return;
+  const el = document.createElement('div');
+  el.className = 'weekcard';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', `Charge de ${user.name}`);
+  el.innerHTML = weekCardHtml({
+    user, users: domain.users, weekStart, capacity: week.capacity,
+    rows: weekBreakdown(domain, planning, lastLoad, { userId, weekStart, teamId: lastTeamId }),
+    ceiling: planning.settings.loadCeilingPct, projects: domain.projects,
+    holidays: new Set(planning.holidays.map((h) => h.day)),
+  });
+  document.body.appendChild(el);
+  // Sous la cellule si la carte y tient, sinon du côté le plus spacieux —
+  // jamais sous le bandeau flottant ; la liste des tâches rétrécit au besoin.
+  const r = cell.getBoundingClientRect();
+  const top0 = (root.querySelector('.rail')?.getBoundingClientRect().bottom ?? 0) + 8;
+  const room = { below: window.innerHeight - 12 - (r.bottom + 10), above: r.top - 10 - top0 };
+  const below = el.offsetHeight <= room.below || room.below >= room.above;
+  const list = el.querySelector('.wc-list');
+  const excess = el.offsetHeight - (below ? room.below : room.above);
+  if (excess > 0) list.style.maxHeight = `${Math.max(90, list.offsetHeight - excess)}px`;
+  const { offsetWidth: w, offsetHeight: h } = el;
+  const left = Math.min(Math.max(12, r.left + r.width / 2 - w / 2), window.innerWidth - w - 12);
+  el.style.left = `${left}px`;
+  el.style.top = `${below ? r.bottom + 10 : Math.max(top0, r.top - 10 - h)}px`;
+  // L'animation d'ouverture part de la cellule.
+  el.style.transformOrigin = `${r.left + r.width / 2 - left}px ${below ? 0 : h}px`;
+  el.addEventListener('click', (event) => {
+    const row = event.target.closest('[data-open]');
+    if (!row) return;
+    closeWeekCard();
+    panels.openIssue(row.dataset.open);
+    draw();
+  });
+  cell.classList.add('picked');
+  weekCard = { el, cell, key };
+}
+
+document.addEventListener('pointerdown', (event) => {
+  if (weekCard && !weekCard.el.contains(event.target) && !event.target.closest?.('[data-pw]')) closeWeekCard();
+}, true);
+document.addEventListener('scroll', (event) => {
+  if (weekCard && !weekCard.el.contains(event.target)) closeWeekCard();
+}, true);
+window.addEventListener('resize', closeWeekCard);
+
 document.addEventListener('keydown', (event) => {
+  if ((event.key === 'Enter' || event.key === ' ') && event.target.matches?.('[data-pw]')) {
+    event.preventDefault();
+    openWeekCard(event.target);
+    return;
+  }
   if (event.key !== 'Escape') return;
+  if (weekCard) {
+    closeWeekCard();
+    return;
+  }
   if (document.querySelector('.chart-overlay')) {
     closeLoadChart();
     return;

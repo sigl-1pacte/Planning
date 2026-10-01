@@ -57,6 +57,9 @@ export function renderLoadRows(sink, { people, load, planning, axis, users, team
       const cell = document.createElement('div');
       cell.className = 'cell';
       cell.dataset.pw = `${user.id}|${week.weekStart}`;
+      // Cliquable (et atteignable au clavier) : ouvre le détail de la semaine.
+      cell.tabIndex = 0;
+      cell.setAttribute('role', 'button');
       cell.style.left = `${dayIndex(axis, week.weekStart) * axis.dayWidth}px`;
       cell.style.width = `${7 * axis.dayWidth - 1.5}px`;
       cell.title = `Prévu ${fr1(week.hours)} h${week.unassignedHours ? ` (dont ${fr1(week.unassignedHours)} h de tâches sans personne, réparties dans la team)` : ''} · réel ${fr1(week.realHours ?? 0)} h`;

@@ -45,16 +45,15 @@ describe('renderLoadRows', () => {
     expect(d.sink.top).toBe(30 + 34 * 2);
   });
 
-  it('ajoute la part des tâches sans personne, signalée et comptée dans le résumé', () => {
+  it('ajoute la part des tâches sans personne, sans la distinguer visuellement, et la compte dans le résumé', () => {
     const plain = draw();
     const d = draw(basePlanning(), false, 'planned', undefined, { 'u-louis': { '2026-11-02': 14 } });
     const row = d.right.querySelectorAll('.r.ld')[0];
-    const cell = row.querySelector('.cell.ua');
-    expect(cell.dataset.pw).toBe('u-louis|2026-11-02');
+    const cell = row.querySelector('.cell[data-pw="u-louis|2026-11-02"]');
+    expect(cell.className).toBe('cell');
     expect(cell.textContent).toBe('14,0 h50 %');
     expect(cell.title).toContain('dont 14,0 h de tâches sans personne');
     expect(d.left.querySelector('.r.ld .sm').textContent).not.toBe(plain.left.querySelector('.r.ld .sm').textContent);
-    expect(draw(basePlanning(), false, 'real', undefined, { 'u-louis': { '2026-11-02': 14 } }).right.querySelector('.cell.ua')).toBeNull();
   });
 
   it('dessine une cellule par semaine travaillée, avec heures et taux', () => {

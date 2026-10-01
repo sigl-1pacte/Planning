@@ -55,7 +55,7 @@ export function renderLoadRows(sink, { people, load, planning, axis, users, team
       // Vue réelle : pas de cellule sans charge réelle (elle compte pour 0).
       if (mode === 'real' ? !hasReal : (week.hours <= 0.01 && !(mode === 'both' && hasReal))) continue;
       const cell = document.createElement('div');
-      cell.className = week.unassignedHours && mode !== 'real' ? 'cell ua' : 'cell';
+      cell.className = 'cell';
       cell.dataset.pw = `${user.id}|${week.weekStart}`;
       cell.style.left = `${dayIndex(axis, week.weekStart) * axis.dayWidth}px`;
       cell.style.width = `${7 * axis.dayWidth - 1.5}px`;

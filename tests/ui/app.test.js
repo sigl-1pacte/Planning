@@ -45,6 +45,25 @@ describe('renderApp', () => {
     expect(sections.map((el) => el.className)).toEqual(['cols page-slide', 'slide-chart print-only']);
   });
 
+  it('zoom en direct : garde le bandeau (et le curseur que l’on tient), redessine la feuille', () => {
+    const root = document.createElement('div');
+    const state = {
+      snapshot: { version: 1, fetchedAt: '2026-09-14T10:00:00.000Z', stale: false, lastError: null, domain: mapWorkspace(rawWorkspace()) },
+      planning, error: null,
+    };
+    const base = { state, route: { view: 'global', teamKey: null }, selectedIssueId: null, today: '2026-09-17', viewportWidth: 560 };
+    renderApp(root, { ...base, prefs: { zoom: 'all', dayWidth: null, collapsed: new Set(), showCanceled: false } });
+    const rail = root.querySelector('.rail');
+    const sheet = root.querySelector('.sheet');
+    const out = renderApp(root, { ...base, keepRail: true, prefs: { zoom: 'custom', dayWidth: 30, collapsed: new Set(), showCanceled: false } });
+    expect(root.querySelector('.rail')).toBe(rail);
+    expect(root.querySelector('.sheet')).not.toBe(sheet);
+    expect(root.querySelectorAll('.rail')).toHaveLength(1);
+    expect(root.querySelectorAll('.sheet')).toHaveLength(1);
+    expect(out.axis.dayWidth).toBe(30);
+    expect(root.querySelector('[data-zoom="all"]').classList.contains('on')).toBe(false);
+  });
+
   it('bascule sur la vue Organisation', () => {
     const { root } = draw({ route: { view: 'global', teamKey: null, tab: 'org' } });
     expect(root.querySelector('.nav a.on').textContent).toBe('Organisation');

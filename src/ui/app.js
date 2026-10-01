@@ -20,7 +20,7 @@ export function renderLoadError(root, message) {
   root.innerHTML = `<section class="sheet"><div class="banner err">${esc(message)}</div><p class="note">Nouvelle tentative automatique toutes les 30 secondes.</p></section>`;
 }
 
-export function renderApp(root, { state, route, prefs, selectedIssueId, today, viewportWidth, onPlan }) {
+export function renderApp(root, { state, route, prefs, selectedIssueId, today, viewportWidth, onPlan, keepRail = false }) {
   const { snapshot, planning } = state;
   const domain = snapshot.domain;
   const view = buildView(domain, { route, showCanceled: prefs.showCanceled });
@@ -48,7 +48,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
     }
   }
 
-  root.innerHTML = `
+  const railHtml = `
     <div class="rail"><div class="in">
       <img class="logo" src="/logo-96.png" alt="1pacte" width="44" height="44">
       <div><h1>1PACTE Planning Dashboard · ${esc(team ? team.name : 'toutes les teams')}</h1>
@@ -78,6 +78,8 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
           Imprimer / PDF</button>
       </div>
     </div></div>
+`;
+  const sheetHtml = `
     <section class="sheet">
       <div class="hd">
         <div><h2>${route.tab === 'org' ? 'Organisation des teams' : 'Planning, dépendances et charge prévisionnelle'}</h2>
@@ -112,6 +114,17 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
       </section>
       <div class="ft"><span>Planning connecté à Linear · lecture et écriture</span><span>Édition du ${longDay(today)}</span></div>
     </section>`;
+  // Zoom en direct (curseur en cours de glissement) : seule la feuille est
+  // redessinée ; le bandeau, et donc le curseur que l'on tient, reste en
+  // place — le remplacer interromprait le glissement.
+  const keptRail = keepRail ? root.querySelector(':scope > .rail') : null;
+  if (keptRail && root.querySelector(':scope > .sheet')) {
+    root.querySelector(':scope > .sheet').outerHTML = sheetHtml;
+    keptRail.querySelector('.sb').textContent = `${longDay(axis.from)} → ${longDay(axis.to)}`;
+    for (const button of keptRail.querySelectorAll('[data-zoom]')) button.classList.toggle('on', button.dataset.zoom === prefs.zoom);
+  } else {
+    root.innerHTML = railHtml + sheetHtml;
+  }
 
   if (route.tab === 'org') {
     for (const sel of ['.board', '.cols', '.lg', '.unp', '.slide-chart']) root.querySelector(sel).hidden = true;

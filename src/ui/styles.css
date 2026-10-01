@@ -38,6 +38,9 @@ html{scrollbar-width:none;background-color:#D6DCEE;
     linear-gradient(180deg,#E3E8F3,var(--mist) 60%,#EDEFF5);
   background-attachment:fixed}
 html::-webkit-scrollbar{display:none}
+/* Popup ouverte (recommandations, clé Linear, confirmation) : la page derrière
+   ne défile plus. */
+html:has(.overlay:not([hidden])){overflow:hidden}
 /* Barres de défilement : la page et le tiroir n'en montrent pas ; ailleurs
    (frise, listes, tableaux, popups), une fine pastille arrondie sur fond
    transparent, sans flèches, qui fonce au survol. Chrome, Edge et Safari
@@ -472,7 +475,7 @@ th:first-child,td:first-child{padding-left:0}
 
 /* popup graphique charge vs disponibilité, quasi plein écran */
 .chart-overlay{padding:0}
-.chartbox{width:96vw;height:92vh;max-width:none;overflow:auto;padding:22px 30px;border-radius:var(--r-xl);position:relative;
+.chartbox{width:96vw;height:92vh;max-width:none;overflow:auto;overscroll-behavior:contain;padding:22px 30px;border-radius:var(--r-xl);position:relative;
   background:rgba(250,251,254,.88);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
   box-shadow:var(--glass-edge),0 24px 70px rgba(10,18,40,.35)}
 .chartbox h3{margin:20px 0 8px;font-size:16px;font-weight:700;letter-spacing:-.02em}
@@ -586,6 +589,56 @@ tbody tr.tot:hover{background:none}
 .lmode button.on{background:#fff;color:var(--ink);font-weight:600}
 .cell u{white-space:nowrap}
 
+/* ── Verre liquide, seconde couche ─────────────────────────────────────────
+   Vrai verre dépoli (flou de ce qui est derrière) seulement pour ce qui
+   flotte au-dessus d'autre chose : en-tête et pied du tiroir, étiquettes de
+   jalon sur la frise, boutons, chiffres clés, bandeau de conflits. Pour ce
+   qui se répète par centaines (pastilles de statut, barres, cellules de
+   charge), un simple reflet de lentille, sans flou : le flou coûte cher. */
+:root{
+  --sheen:linear-gradient(180deg,rgba(255,255,255,.62),rgba(255,255,255,.14) 52%,rgba(255,255,255,0));
+  --lens:inset 0 1px 0 #fff,inset 0 -1px 1.5px rgba(15,27,51,.08),0 0 0 .5px rgba(15,27,51,.08),
+    0 2px 6px rgba(15,27,51,.14),0 8px 16px -8px rgba(15,27,51,.2);
+}
+.btn{background-image:var(--sheen);backdrop-filter:blur(14px) saturate(170%);-webkit-backdrop-filter:blur(14px) saturate(170%)}
+.btn.pri{background:linear-gradient(180deg,rgba(255,255,255,.18),rgba(255,255,255,0) 55%),var(--ink)}
+.btn.pri:hover{background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0) 55%),#1E2D4F}
+.btn.accent{background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 55%),linear-gradient(180deg,rgba(76,111,209,.9),rgba(36,64,143,.92))}
+.btn.ghost,.btn.danger-ghost{background-image:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+/* Onglet et zoom choisis : une lentille en relief dans leur piste dépolie. */
+.nav,.zoom{backdrop-filter:blur(10px) saturate(160%);-webkit-backdrop-filter:blur(10px) saturate(160%)}
+.nav a.on,.zoom button.on{background:linear-gradient(180deg,#fff,rgba(255,255,255,.84));box-shadow:var(--lens)}
+.lmode button.on{background:linear-gradient(180deg,#fff,rgba(255,255,255,.86));box-shadow:inset 0 1px 0 #fff,0 1px 4px rgba(0,0,0,.3)}
+.fact{background:rgba(255,255,255,.55);background-image:var(--sheen);
+  backdrop-filter:blur(12px) saturate(170%);-webkit-backdrop-filter:blur(12px) saturate(170%)}
+.blk{background-image:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,0) 120px);
+  backdrop-filter:blur(12px) saturate(150%);-webkit-backdrop-filter:blur(12px) saturate(150%)}
+.banner.act{background-color:rgba(255,244,226,.7);background-image:var(--sheen)}
+/* Repère du jour : lentille rouge. */
+.today-tag{background:linear-gradient(180deg,#D24A55,#A82832);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 2px 6px rgba(174,44,52,.4)}
+/* Étiquettes de jalon : pastilles dépolies posées sur les barres. */
+.jt{top:5px;padding:1px 8px;border-radius:999px;background:rgba(255,255,255,.62);
+  backdrop-filter:blur(6px) saturate(170%);-webkit-backdrop-filter:blur(6px) saturate(170%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 0 0 .5px rgba(15,27,51,.1),0 2px 6px rgba(15,27,51,.14)}
+/* Pastilles, barres et cellules : reflet en haut, ombre douce en bas. */
+.pill{background-image:linear-gradient(180deg,rgba(255,255,255,.34),rgba(255,255,255,0) 55%,rgba(0,0,0,.07));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(0,0,0,.08),0 1px 3px rgba(15,27,51,.2)}
+.bar{background-image:linear-gradient(180deg,rgba(255,255,255,.42),rgba(255,255,255,.06) 50%,rgba(0,0,0,.05));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -1.5px 0 rgba(0,0,0,.1),0 1px 3px rgba(15,27,51,.22)}
+.cell{background-image:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,0) 60%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.75),inset 0 -1px 0 rgba(15,27,51,.05),0 0 0 .5px rgba(15,27,51,.08)}
+.ini,.cbo .ci{background-image:linear-gradient(160deg,rgba(255,255,255,.32),rgba(255,255,255,0) 55%)}
+/* Tiroir : en-tête et pied dépolis, posés sur le contenu qui défile dessous. */
+.drw header{position:absolute;top:0;left:0;right:0;z-index:2;background:rgba(250,251,254,.6);
+  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
+.drw .bd{position:absolute;inset:0;padding:76px 20px 112px}
+.drw:has(.drw-foot[hidden]) .bd{padding-bottom:24px}
+.drw-foot{position:absolute;left:0;right:0;bottom:0;z-index:2;background:rgba(255,255,255,.55);
+  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
+.fg input,.fg select,.fg textarea,.cbo input,.chklist{background-color:rgba(255,255,255,.7);
+  box-shadow:inset 0 0 0 1px var(--line),inset 0 1px 2px rgba(15,27,51,.06),0 1px 0 rgba(255,255,255,.8)}
+.fg input:focus,.fg select:focus,.fg textarea:focus{background-color:#fff}
+
 .print-only,.print-pages{display:none}
 /* Bloc mesuré hors écran par print.js avant impression : mêmes tailles de
    titre qu'à l'impression (cf. plus bas), pour une mesure juste. */
@@ -611,7 +664,11 @@ tbody tr.tot:hover{background:none}
   /* La bande de charge, sombre à l'écran, devient un intertitre clair. */
   .r.band{background:#fff;border-top:1.5px solid var(--ink);border-bottom:1px solid var(--line)}
   .pl .r.band{color:var(--ink)}
-  .bar,.cell,.pill,.ini,.today-tag,.sw{box-shadow:none!important}
+  *{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+  .bar,.cell,.pill,.ini,.today-tag,.sw,.jt{box-shadow:none!important}
+  .pill,.cell,.ini{background-image:none!important}
+  .today-tag{background:var(--block)}
+  .jt{background:#fff}
   .bar,.bar.doing,.bar.block{background-image:none}
   .bar.doing{background-image:repeating-linear-gradient(115deg,rgba(255,255,255,.55) 0 3px,transparent 3px 6px)}
   .bar.block{background-image:repeating-linear-gradient(45deg,rgba(174,44,52,.85) 0 4px,rgba(255,255,255,.55) 4px 8px)}

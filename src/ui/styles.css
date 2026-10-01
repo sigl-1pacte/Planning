@@ -400,6 +400,31 @@ th:first-child,td:first-child{padding-left:0}
 .f-move{display:flex;gap:6px}
 .f-move select{flex:1;min-width:0}
 
+/* Vue Organisation (render/orgChart.js) */
+.org{margin-top:14px}
+.org-svg{display:block;width:100%;height:auto;margin:10px auto 0;font-family:"IBM Plex Sans",sans-serif}
+.org-box{fill:#F7FAFB;stroke:var(--line);stroke-width:1}
+.org-head{cursor:pointer}
+.org-head:hover .tn{text-decoration:underline}
+.org-head .tn{font:600 15px "IBM Plex Sans Condensed","IBM Plex Sans",sans-serif;fill:var(--ink)}
+.org-head .tk{font-size:10.5px;fill:var(--ink3)}
+.org-sep{stroke:var(--line2);stroke-dasharray:3 3}
+.org-edge{stroke:var(--accent);stroke-width:3;stroke-linecap:round}
+.org-node{cursor:pointer}
+.org-node circle{stroke:#fff;stroke-width:2;filter:drop-shadow(0 1px 2px rgba(16,29,40,.25))}
+.org-node:hover circle{stroke:var(--accent2)}
+.org-node .ini{font-size:11px;font-weight:600;fill:#fff;pointer-events:none}
+.org-node .nm{font-size:11px;fill:var(--ink)}
+.org-node .also{font-size:9px;fill:var(--ink3)}
+.org-node.empty circle{fill:#fff;stroke:var(--ink3);stroke-dasharray:4 3;filter:none}
+.org-node.empty .ini{fill:var(--ink3)}
+.org-node.empty .nm{fill:var(--ink3);font-style:italic}
+.org-badge rect{fill:var(--ink)}
+.org-badge text{font-size:9.5px;font-weight:600;fill:#fff}
+.org-badge.product_owner rect{fill:var(--accent)}
+.org-badge.scrum_master rect{fill:var(--done)}
+.org-badge.both rect{fill:var(--doing)}
+
 /* Ligne de total des tableaux */
 tbody tr.tot td{border-top:2px solid var(--line);font-weight:600;background:var(--off)}
 tbody tr.tot:hover{background:none}

@@ -10,6 +10,7 @@ import { renderLoadRows } from './render/loadRows.js';
 import { buildChartSvg } from './render/loadChart.js';
 import { summarize, renderFacts, renderPeopleTable, renderProjectsTable, renderLegend } from './render/tables.js';
 import { renderUnplannedTab } from './render/unplannedTab.js';
+import { renderOrgChart } from './render/orgChart.js';
 import { esc, longDay } from './render/format.js';
 import { scopedConflicts } from './conflictResolution.js';
 
@@ -52,12 +53,13 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
       <div><h1>1PACTE Planning Dashboard — ${esc(team ? team.name : 'toutes les teams')}</h1>
         <div class="sb">${longDay(axis.from)} → ${longDay(axis.to)}</div></div>
       <nav class="nav">
-        <a href="#/" class="${route.view === 'global' ? 'on' : ''}">Vue globale</a>
+        <a href="#/" class="${route.view === 'global' && route.tab !== 'org' ? 'on' : ''}">Vue globale</a>
         ${domain.teams.map((t) => `<a href="#/team/${encodeURIComponent(t.key)}" class="${team?.id === t.id ? 'on' : ''}">${esc(t.key)}</a>`).join('')}
         <a href="#/unplanned" class="${route.tab === 'unplanned' ? 'on' : ''}">Non planifiées (${domain.issues.filter((i) => !i.start).length})</a>
+        <a href="#/org" class="${route.tab === 'org' ? 'on' : ''}">Organisation</a>
       </nav>
       <div class="tools">
-        <div class="zoom">
+        <div class="zoom"${route.tab === 'org' ? ' hidden' : ''}>
           ${zoomButton(prefs, 'all', 'Tout')}${zoomButton(prefs, 'quarter', 'Trimestre')}${zoomButton(prefs, 'month', 'Mois')}
           <input type="range" data-zoom-range min="2" max="60" step="1" value="${Math.round(axis.dayWidth)}" aria-label="Largeur d'un jour">
         </div>
@@ -77,7 +79,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
     </div></div>
     <section class="sheet">
       <div class="hd">
-        <div><h2>Planning, dépendances et charge prévisionnelle</h2>
+        <div><h2>${route.tab === 'org' ? 'Organisation des teams' : 'Planning, dépendances et charge prévisionnelle'}</h2>
           <div class="s cd">Données Linear du ${esc(new Date(snapshot.fetchedAt).toLocaleString('fr-FR'))}</div></div>
         <div class="facts"></div>
       </div>
@@ -94,6 +96,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
       </div>
       <div class="lg"></div>
       <section class="unp"></section>
+      <section class="org" hidden></section>
       <div class="cols page-slide">
         <div class="blk"><h3>Répartition par personne</h3><div class="tbl"><table>
           <thead><tr><th>Personne</th><th class="r">Points</th><th class="r">Heures</th><th class="r">Sem. actives</th><th class="r">Heures / sem.</th><th class="r">Taux moyen</th><th class="r">Pic</th></tr></thead>
@@ -108,6 +111,13 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
       </section>
       <div class="ft"><span>Planning connecté à Linear · lecture et écriture</span><span>Édition du ${longDay(today)}</span></div>
     </section>`;
+
+  if (route.tab === 'org') {
+    for (const sel of ['.board', '.cols', '.lg', '.unp', '.slide-chart']) root.querySelector(sel).hidden = true;
+    root.querySelector('.org').hidden = false;
+    renderOrgChart(root.querySelector('.org'), { domain, planning });
+    return { view, axis, load };
+  }
 
   if (route.tab === 'unplanned') {
     root.querySelector('.board').hidden = true;

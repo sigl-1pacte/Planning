@@ -8,6 +8,8 @@ describe('mapWorkspace', () => {
   it('traduit teams, membres, projets et jalons', () => {
     const d = mapWorkspace(rawWorkspace());
     expect(d.teams.map((t) => t.key)).toEqual(['IOT', 'WEB']);
+    expect(d.teams[0].memberIds).toEqual(['u-louis', 'u-sacha']);
+    expect(mapWorkspace({ ...rawWorkspace(), teams: [{ id: 't', key: 'T', name: 'T' }] }).teams[0].memberIds).toEqual([]);
     expect(d.users[0]).toEqual({
       id: 'u-louis', name: 'Louis', displayName: 'louis', email: 'louis@ex.fr', active: true,
       url: 'https://linear.app/1pacte/profiles/louis',

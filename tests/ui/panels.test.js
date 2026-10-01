@@ -51,6 +51,8 @@ function setup(ctx = context(), { lastError } = {}) {
     deleteIssue: vi.fn(async () => ({})),
     deleteProject: vi.fn(async () => ({})),
     updateMilestone: vi.fn(async () => ({})),
+    setTeamRole: vi.fn(async () => ({})),
+    setManager: vi.fn(async () => ({})),
   };
   const onMutate = vi.fn((call) => call(api));
   const onWrite = vi.fn((call) => call(api));
@@ -569,6 +571,33 @@ describe('panneau des réglages', () => {
     t.body.querySelector('[data-action="delete-holiday"]').click();
     await flush();
     expect(t.api.deleteHoliday).toHaveBeenCalledWith('2026-11-11');
+  });
+
+  it('choisit PO, Scrum Master et manager, membres de la team en tête de liste', async () => {
+    const t = setup(context({ planningOver: { org: {
+      managerUserId: null, teamRoles: [{ teamId: 't-web', role: 'product_owner', linearUserId: 'u-louis' }],
+    } } }));
+    t.panels.openRoles('t-web');
+    expect(t.body.querySelector('[data-org-manager]')).toBeNull();
+    const po = t.body.querySelector('[data-team-role="t-web"][data-role="product_owner"]');
+    expect(po.value).toBe('u-louis');
+    expect([...po.querySelectorAll('optgroup')].map((g) => [g.label, [...g.children].map((o) => o.textContent)]))
+      .toEqual([['Membres de la team', ['Louis']], ['Autres personnes', ['Sacha']]]);
+    const sm = t.body.querySelector('[data-team-role="t-web"][data-role="scrum_master"]');
+    sm.value = 'u-sacha';
+    sm.dispatchEvent(new Event('change', { bubbles: true }));
+    po.value = '';
+    po.dispatchEvent(new Event('change', { bubbles: true }));
+    await flush();
+    expect(t.api.setTeamRole.mock.calls).toEqual([['t-web', 'scrum_master', 'u-sacha'], ['t-web', 'product_owner', null]]);
+
+    t.body.querySelector('[data-action="org-all"]').click();
+    const manager = t.body.querySelector('[data-org-manager]');
+    expect(t.body.querySelectorAll('[data-team-role]')).toHaveLength(4);
+    manager.value = 'u-sacha';
+    manager.dispatchEvent(new Event('change', { bubbles: true }));
+    await flush();
+    expect(t.api.setManager).toHaveBeenCalledWith('u-sacha');
   });
 
   it('change la préférence d’affichage et oublie la clé', () => {

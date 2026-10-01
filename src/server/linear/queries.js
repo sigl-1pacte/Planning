@@ -4,7 +4,7 @@ const PAGE_SIZE = 25;
 const PAGE_INFO = 'pageInfo { hasNextPage endCursor }';
 
 const TEAMS = `query Teams($after: String) {
-  teams(first: ${PAGE_SIZE}, after: $after) { nodes { id key name } ${PAGE_INFO} }
+  teams(first: ${PAGE_SIZE}, after: $after) { nodes { id key name members(first: 100) { nodes { id } } } ${PAGE_INFO} }
 }`;
 
 const USERS = `query Users($after: String) {

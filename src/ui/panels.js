@@ -76,6 +76,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     else if (current.kind === 'proj') drawProj(current.id, current.seed);
     else if (current.kind === 'team') drawNewTeam();
     else if (current.kind === 'milestone') drawMilestone(current.id, current.seed);
+    else if (current.kind === 'roles') drawRoles(current.id);
     else drawSettings();
     enhanceDateFields(body);
     wireIssuePicker(body.querySelector('[data-picker]'), pickerState);
@@ -763,6 +764,43 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       }).join('')}`;
   }
 
+  // Manager global et, par team, Product Owner et Scrum Master. `teamId` null :
+  // toute l'organisation ; sinon cette team seulement. Chaque liste enregistre
+  // dès qu'elle change.
+  function drawRoles(teamId) {
+    const { domain, planning } = ctx;
+    const org = planning.org ?? { managerUserId: null, teamRoles: [] };
+    const people = domain.users.filter((u) => u.active).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    const option = (u, selected) => `<option value="${esc(u.id)}"${u.id === selected ? ' selected' : ''}>${esc(u.name)}</option>`;
+    const select = (attrs, selected, team) => {
+      const members = team ? people.filter((u) => (team.memberIds ?? []).includes(u.id)) : [];
+      const others = people.filter((u) => !members.includes(u));
+      // Titulaire inactif ou disparu de Linear : gardé pour ne pas le perdre
+      // en silence à l'enregistrement d'un autre champ.
+      const gone = selected && !people.some((u) => u.id === selected)
+        ? `<option value="${esc(selected)}" selected>${esc(domain.users.find((u) => u.id === selected)?.name ?? 'personne inconnue')} (inactive)</option>` : '';
+      return `<select ${attrs}><option value="">— à définir —</option>${gone}
+        ${members.length ? `<optgroup label="Membres de la team">${members.map((u) => option(u, selected)).join('')}</optgroup>
+          <optgroup label="Autres personnes">${others.map((u) => option(u, selected)).join('')}</optgroup>`
+          : others.map((u) => option(u, selected)).join('')}
+      </select>`;
+    };
+    const holder = (team, role) => org.teamRoles.find((r) => r.teamId === team.id && r.role === role)?.linearUserId ?? null;
+    const teams = teamId ? domain.teams.filter((t) => t.id === teamId) : domain.teams;
+    title.textContent = teamId ? `Rôles — ${teams[0]?.name ?? 'team'}` : 'Organisation';
+    body.innerHTML = `
+      ${teamId ? '' : `<div class="fg"><label for="o-mgr">Manager</label>${select('id="o-mgr" data-org-manager', org.managerUserId, null)}</div>`}
+      ${teams.map((team) => `<div class="sec">${esc(team.name)} · ${esc(team.key)}</div>
+        <div class="f2">
+          <div class="fg"><label for="o-po-${esc(team.id)}">Product Owner</label>
+            ${select(`id="o-po-${esc(team.id)}" data-team-role="${esc(team.id)}" data-role="product_owner"`, holder(team, 'product_owner'), team)}</div>
+          <div class="fg"><label for="o-sm-${esc(team.id)}">Scrum Master</label>
+            ${select(`id="o-sm-${esc(team.id)}" data-team-role="${esc(team.id)}" data-role="scrum_master"`, holder(team, 'scrum_master'), team)}</div>
+        </div>`).join('')}
+      <p class="hint">Une même personne peut tenir plusieurs rôles, dans une ou plusieurs teams.</p>
+      ${teamId ? '<div class="actions"><button class="btn" type="button" data-action="org-all">Toute l\'organisation et le manager</button></div>' : ''}`;
+  }
+
   function drawSettings() {
     const { planning, prefs } = ctx;
     const s = planning.settings;
@@ -858,6 +896,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     if (action === 'equal-shares') onMutate((api) => api.clearContributions(current.id));
     if (action === 'delete-holiday') onMutate((api) => api.deleteHoliday(button.dataset.day));
     if (action === 'forget-key') onForgetKey();
+    if (action === 'org-all') open({ kind: 'roles', id: null });
   });
 
   body.addEventListener('change', (event) => {
@@ -882,6 +921,14 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       onMutate((api) => api.setCapacity(current.id, week, hours));
       return;
     }
+    if (target.dataset.teamRole) {
+      onMutate((api) => api.setTeamRole(target.dataset.teamRole, target.dataset.role, target.value || null));
+      return;
+    }
+    if ('orgManager' in target.dataset) {
+      onMutate((api) => api.setManager(target.value || null));
+      return;
+    }
     if (target.dataset.pref) onPrefs({ [target.dataset.pref]: target.checked });
   });
 
@@ -894,6 +941,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     openSettings: () => open({ kind: 'settings' }),
     openTeam: () => open({ kind: 'team' }),
     openMilestone: (id, seed) => open({ kind: 'milestone', id, seed }),
+    openRoles: (teamId) => open({ kind: 'roles', id: teamId }),
     close,
     update,
     selectedIssueId: () => (current?.kind === 'issue' ? current.id : null),

@@ -12,8 +12,8 @@ function issue(over) {
 export function rawWorkspace() {
   return {
     teams: [
-      { id: 't-iot', key: 'IOT', name: 'IoT' },
-      { id: 't-web', key: 'WEB', name: 'Web' },
+      { id: 't-iot', key: 'IOT', name: 'IoT', members: conn([{ id: 'u-sacha' }, { id: 'u-louis' }]) },
+      { id: 't-web', key: 'WEB', name: 'Web', members: conn([{ id: 'u-louis' }]) },
     ],
     users: [
       { id: 'u-sacha', name: 'Sacha', displayName: 'sacha', email: 'sacha@ex.fr', active: true, url: 'https://linear.app/1pacte/profiles/sacha' },

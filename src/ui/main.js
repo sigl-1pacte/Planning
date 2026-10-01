@@ -179,6 +179,8 @@ root.addEventListener('click', (event) => {
   } else if (el('[data-open]')) {
     panels.openIssue(el('[data-open]').dataset.open);
     draw();
+  } else if (el('[data-org-roles]')) {
+    panels.openRoles(el('[data-org-roles]').dataset.orgRoles || null);
   } else if (el('[data-person]')) {
     panels.openPerson(el('[data-person]').dataset.person);
   } else if (el('[data-milestone]')) {

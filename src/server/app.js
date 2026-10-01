@@ -88,6 +88,13 @@ const holidayBody = {
   },
 };
 
+const userRefBody = {
+  type: 'object',
+  required: ['linearUserId'],
+  additionalProperties: false,
+  properties: { linearUserId: { type: ['string', 'null'], minLength: 1 } },
+};
+
 export function buildApp({ db, store, validateKey, staticDir = null, logger = false }) {
   const app = Fastify({ logger });
 
@@ -180,6 +187,17 @@ export function buildApp({ db, store, validateKey, staticDir = null, logger = fa
   app.delete('/api/holidays/:day', withDatabase(async (req) => {
     assertIsoDay(req.params.day);
     await repo.deleteHoliday(db, req.params.day);
+    return repo.getPlanning(db);
+  }));
+
+  app.put('/api/teams/:teamId/roles/:role', { schema: { body: userRefBody } }, withDatabase(async (req) => {
+    if (!repo.TEAM_ROLES.includes(req.params.role)) throw badRequest(`Rôle inconnu : ${req.params.role}`);
+    await repo.setTeamRole(db, req.params.teamId, req.params.role, req.body.linearUserId);
+    return repo.getPlanning(db);
+  }));
+
+  app.put('/api/org/manager', { schema: { body: userRefBody } }, withDatabase(async (req) => {
+    await repo.setManager(db, req.body.linearUserId);
     return repo.getPlanning(db);
   }));
 

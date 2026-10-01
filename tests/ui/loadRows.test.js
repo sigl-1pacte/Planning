@@ -14,7 +14,7 @@ const basePlanning = (over = {}) => ({
   ...over,
 });
 
-function draw(planning = basePlanning(), teamScoped = false, mode = 'planned', mutate) {
+function draw(planning = basePlanning(), teamScoped = false, mode = 'planned', mutate, unassigned) {
   const raw = rawWorkspace();
   mutate?.(raw);
   const domain = mapWorkspace(raw);
@@ -24,7 +24,7 @@ function draw(planning = basePlanning(), teamScoped = false, mode = 'planned', m
   const left = document.createElement('div');
   const right = document.createElement('div');
   const sink = createRowSink(left, right);
-  renderLoadRows(sink, { people: view.people, load, planning, axis, users: domain.users, teamScoped, mode });
+  renderLoadRows(sink, { people: view.people, load, planning, axis, users: domain.users, teamScoped, mode, unassigned });
   return { left, right, sink };
 }
 
@@ -43,6 +43,18 @@ describe('renderLoadRows', () => {
     expect(d.left.querySelector('.r.band').textContent).toContain('Charge prévisionnelle par personne');
     expect([...d.left.querySelectorAll('.r.ld .who b')].map((e) => e.textContent)).toEqual(['Louis', 'Sacha']);
     expect(d.sink.top).toBe(30 + 34 * 2);
+  });
+
+  it('ajoute la part des tâches sans personne, signalée et comptée dans le résumé', () => {
+    const plain = draw();
+    const d = draw(basePlanning(), false, 'planned', undefined, { 'u-louis': { '2026-11-02': 14 } });
+    const row = d.right.querySelectorAll('.r.ld')[0];
+    const cell = row.querySelector('.cell.ua');
+    expect(cell.dataset.pw).toBe('u-louis|2026-11-02');
+    expect(cell.textContent).toBe('14,0 h50 %');
+    expect(cell.title).toContain('dont 14,0 h de tâches sans personne');
+    expect(d.left.querySelector('.r.ld .sm').textContent).not.toBe(plain.left.querySelector('.r.ld .sm').textContent);
+    expect(draw(basePlanning(), false, 'real', undefined, { 'u-louis': { '2026-11-02': 14 } }).right.querySelector('.cell.ua')).toBeNull();
   });
 
   it('dessine une cellule par semaine travaillée, avec heures et taux', () => {

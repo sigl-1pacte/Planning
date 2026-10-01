@@ -1,6 +1,6 @@
 // src/ui/app.js
 import { buildView, rangeFor } from './view.js';
-import { computeLoad } from '../shared/load.js';
+import { computeLoad, unassignedLoad } from '../shared/load.js';
 import { daysBetween } from '../shared/calendar.js';
 import { createAxis, dayWidthFor } from './render/layout.js';
 import {
@@ -136,7 +136,15 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
     view, axis, holidays, load, users: domain.users, collapsed: prefs.collapsed, selectedIssueId,
     states: domain.workflowStates,
   });
-  renderLoadRows(sink, { people: view.people, load, planning, axis, users: domain.users, teamScoped: Boolean(view.teamId), mode: prefs.loadMode });
+  // Bande de charge seulement : les tâches sans personne y sont réparties
+  // entre les membres de leur team, qui y ont donc une ligne même sans autre
+  // tâche.
+  const unassigned = unassignedLoad(domain, planning, { teamId: view.teamId });
+  const loadPeople = [...view.people, ...domain.users.filter((u) => unassigned[u.id] && !view.people.includes(u))]
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  renderLoadRows(sink, {
+    people: loadPeople, load, planning, axis, users: domain.users, teamScoped: Boolean(view.teamId), mode: prefs.loadMode, unassigned,
+  });
   renderGrid(root.querySelector('[data-grid]'), axis, holidays, today, sink.top);
   renderDependencies(root.querySelector('[data-deps]'), { rowY, colorOf, issues: domain.issues, conflicts: view.conflicts, axis, height: sink.top });
   renderAxis(root.querySelector('[data-axis]'), axis, today);

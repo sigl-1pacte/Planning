@@ -31,7 +31,7 @@ function gauge(pct, ceiling) {
   const { background } = tint(pct, ceiling);
   return `<svg class="wc-gauge" viewBox="0 0 54 54" aria-hidden="true">
     <circle cx="27" cy="27" r="${r}" class="wc-gauge-track"/>
-    <circle cx="27" cy="27" r="${r}" class="wc-gauge-fill" stroke="${background}"
+    <circle cx="27" cy="27" r="${r}" class="wc-gauge-fill" style="stroke:${background}"
       stroke-dasharray="${(c * shown) / 100} ${c}" transform="rotate(-90 27 27)"/>
     <text x="27" y="31" text-anchor="middle">${Number.isFinite(pct) ? `${Math.round(pct)}%` : '∞'}</text>
   </svg>`;

@@ -88,7 +88,8 @@ function renderProjectMilestones(right, project, axis) {
     diamond.title = `${milestone.name} · ${shortDay(milestone.date)}. Cliquer ou glisser pour déplacer`;
     const label = document.createElement('div');
     label.className = 'jt';
-    label.style.color = project.color;
+    // Couleur du projet en variable : le thème sombre l'éclaircit (styles.css).
+    label.style.setProperty('--pc', project.color);
     label.dataset.milestone = milestone.id;
     label.textContent = `${milestone.name} · ${shortDay(milestone.date)}`;
     if (x < axis.width - 180) label.style.left = px(x + 10);

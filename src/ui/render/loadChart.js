@@ -27,25 +27,25 @@ export function buildChartSvg(load, people, ceiling) {
   // le repère le plus direct pour voir "où ça déborde" sans faire le calcul
   // mentalement à partir des trois courbes.
   const overDots = weeks.map((_, i) => (hoursByWeek[i] > ceilingValues[i]
-    ? `<circle cx="${x(i).toFixed(1)}" cy="${y(hoursByWeek[i]).toFixed(1)}" r="3.2" fill="#B23A3A"/>` : '')).join('');
-  const ticks = weeks.map((w, i) => `<text x="${x(i).toFixed(1)}" y="${CHART_H - 4}" font-size="9" text-anchor="middle" fill="var(--ink3)">${esc(w.slice(5))}</text>`).join('');
+    ? `<circle cx="${x(i).toFixed(1)}" cy="${y(hoursByWeek[i]).toFixed(1)}" r="3.2" style="fill:var(--chart-over)"/>` : '')).join('');
+  const ticks = weeks.map((w, i) => `<text x="${x(i).toFixed(1)}" y="${CHART_H - 4}" font-size="9" text-anchor="middle" style="fill:var(--ink3)">${esc(w.slice(5))}</text>`).join('');
   const gridY = [0, 0.5, 1].map((f) => {
     const val = max * f;
-    return `<line x1="${PAD.l}" x2="${CHART_W - PAD.r}" y1="${y(val).toFixed(1)}" y2="${y(val).toFixed(1)}" stroke="var(--line)" stroke-width="1"/>
-      <text x="${PAD.l - 6}" y="${(y(val) + 3).toFixed(1)}" font-size="9" text-anchor="end" fill="var(--ink3)">${Math.round(val)}</text>`;
+    return `<line x1="${PAD.l}" x2="${CHART_W - PAD.r}" y1="${y(val).toFixed(1)}" y2="${y(val).toFixed(1)}" style="stroke:var(--line)" stroke-width="1"/>
+      <text x="${PAD.l - 6}" y="${(y(val) + 3).toFixed(1)}" font-size="9" text-anchor="end" style="fill:var(--ink3)">${Math.round(val)}</text>`;
   }).join('');
 
   return `<svg viewBox="0 0 ${CHART_W} ${CHART_H}" width="${CHART_W}" height="${CHART_H}" class="chsvg">
     ${gridY}
-    <path d="${path(capByWeek)}" fill="none" stroke="#8CA1B2" stroke-width="1.6"/>
-    <path d="${path(ceilingValues)} " fill="none" stroke="#B9700A" stroke-width="1.2" stroke-dasharray="3 3"/>
-    <path d="${path(hoursByWeek)}" fill="none" stroke="#2E5F8A" stroke-width="2"/>
+    <path d="${path(capByWeek)}" fill="none" style="stroke:var(--chart-cap)" stroke-width="1.6"/>
+    <path d="${path(ceilingValues)} " fill="none" style="stroke:var(--chart-ceil)" stroke-width="1.2" stroke-dasharray="3 3"/>
+    <path d="${path(hoursByWeek)}" fill="none" style="stroke:var(--chart-load)" stroke-width="2"/>
     ${overDots}
     ${ticks}
-    <g font-size="10">
-      <circle cx="${CHART_W - 220}" cy="10" r="4" fill="#2E5F8A"/><text x="${CHART_W - 212}" y="13">Charge posée</text>
-      <circle cx="${CHART_W - 130}" cy="10" r="4" fill="#8CA1B2"/><text x="${CHART_W - 122}" y="13">Disponibilité</text>
-      <circle cx="${CHART_W - 40}" cy="10" r="4" fill="#B9700A"/><text x="${CHART_W - 32}" y="13">Plafond</text>
+    <g font-size="10" style="fill:var(--ink)">
+      <circle cx="${CHART_W - 220}" cy="10" r="4" style="fill:var(--chart-load)"/><text x="${CHART_W - 212}" y="13">Charge posée</text>
+      <circle cx="${CHART_W - 130}" cy="10" r="4" style="fill:var(--chart-cap)"/><text x="${CHART_W - 122}" y="13">Disponibilité</text>
+      <circle cx="${CHART_W - 40}" cy="10" r="4" style="fill:var(--chart-ceil)"/><text x="${CHART_W - 32}" y="13">Plafond</text>
     </g>
   </svg>`;
 }

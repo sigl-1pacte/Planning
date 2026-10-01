@@ -30,10 +30,11 @@ function draw(planning = basePlanning(), teamScoped = false, mode = 'planned', m
 
 describe('tint', () => {
   it('suit les paliers de l’original', () => {
-    expect(tint(101, 80).background).toBe('#B23A3A');
-    expect(tint(85, 80).background).toBe('#E5B274');
-    expect(tint(50, 80).background).toBe('#9CC9B2');
-    expect(tint(30, 80).background).toBe('#DEECE4');
+    // Couleurs portées par le thème (styles.css) : un palier par seuil.
+    expect(tint(101, 80)).toEqual({ background: 'var(--load-4)', color: 'var(--load-4-ink)' });
+    expect(tint(85, 80).background).toBe('var(--load-3)');
+    expect(tint(50, 80).background).toBe('var(--load-2)');
+    expect(tint(30, 80).background).toBe('var(--load-1)');
   });
 });
 

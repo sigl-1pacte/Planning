@@ -996,6 +996,14 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         ${errorSlot}
         <div class="actions"><button class="btn" type="submit">Ajouter le jour chômé</button></div>
       </form>
+      <div class="sec">Apparence</div>
+      <div class="seg" role="radiogroup" aria-label="Thème" data-nodirty>
+        ${[['auto', 'Automatique'], ['light', 'Clair'], ['dark', 'Sombre']].map(([value, label]) => `<label>
+          <input type="radio" name="theme" value="${value}" data-pref-theme${(prefs.theme ?? 'auto') === value ? ' checked' : ''}>${label}</label>`).join('')}
+      </div>
+      <p class="hint">Automatique suit le réglage clair ou sombre de votre ordinateur.</p>
+      ${prefs.pinkFound ? `<label class="ro" data-nodirty><span>Mode rose</span>
+        <input type="checkbox" data-pref="pink" ${prefs.pink ? 'checked' : ''}></label>` : ''}
       <div class="sec">Affichage</div>
       <label class="ro" data-nodirty><span>Afficher les issues annulées</span>
         <input type="checkbox" data-pref="showCanceled" ${prefs.showCanceled ? 'checked' : ''}></label>
@@ -1057,6 +1065,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
   body.addEventListener('change', (event) => {
     const target = event.target;
     if (target.dataset.pref) onPrefs({ [target.dataset.pref]: target.checked });
+    if ('prefTheme' in target.dataset) onPrefs({ theme: target.value });
   });
 
   closeButton.addEventListener('click', () => requestClose());

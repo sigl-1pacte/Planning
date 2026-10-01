@@ -30,6 +30,7 @@ button,select,input{font-family:inherit;font-size:inherit;color:inherit}
   background:linear-gradient(90deg,var(--accent2),var(--done) 45%,var(--doing) 75%,var(--block));
   opacity:.85}
 .rail .in{width:var(--W);max-width:100%;margin:0 auto;display:flex;gap:22px;align-items:center;padding:10px 16px;flex-wrap:wrap}
+.rail .logo{width:44px;height:44px;flex:0 0 44px;margin-right:-10px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))}
 .rail h1{font-size:16.5px;color:#fff;font-weight:600;margin:0;line-height:1.15;letter-spacing:.01em}
 .rail .sb{color:#8CA1B2;font-size:10.5px}
 .nav{display:flex;gap:4px;flex-wrap:wrap}

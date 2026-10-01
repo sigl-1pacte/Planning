@@ -50,6 +50,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
 
   root.innerHTML = `
     <div class="rail"><div class="in">
+      <img class="logo" src="/logo-96.png" alt="1pacte" width="44" height="44">
       <div><h1>1PACTE Planning Dashboard — ${esc(team ? team.name : 'toutes les teams')}</h1>
         <div class="sb">${longDay(axis.from)} → ${longDay(axis.to)}</div></div>
       <nav class="nav">

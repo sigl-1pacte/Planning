@@ -539,6 +539,41 @@ window.addEventListener('resize', () => {
   resizeTimer = setTimeout(draw, 150);
 });
 
+// Bandeau qui s'efface vers le haut quand on descend dans la page et revient
+// dès qu'on remonte (comme la barre de Safari), ou quand le pointeur touche
+// le haut de la fenêtre, ou quand le clavier y entre. L'état vit sur <html> :
+// le bandeau lui-même est reconstruit à chaque draw().
+const RAIL_SHOW_ABOVE = 140; // px de défilement sous lesquels il reste affiché
+const RAIL_HYSTERESIS = 8; // px de mouvement avant de changer d'avis
+let railTucked = false;
+let lastScrollY = window.scrollY;
+let railFrame = 0;
+
+function setRailTucked(tucked) {
+  if (tucked === railTucked) return;
+  railTucked = tucked;
+  document.documentElement.classList.toggle('rail-tucked', tucked);
+}
+
+window.addEventListener('scroll', () => {
+  if (railFrame) return;
+  railFrame = requestAnimationFrame(() => {
+    railFrame = 0;
+    const y = window.scrollY;
+    const delta = y - lastScrollY;
+    if (Math.abs(delta) < RAIL_HYSTERESIS) return;
+    lastScrollY = y;
+    const busy = root.querySelector('.rail')?.contains(document.activeElement);
+    setRailTucked(delta > 0 && y > RAIL_SHOW_ABOVE && !busy);
+  });
+}, { passive: true });
+document.addEventListener('mousemove', (event) => {
+  if (railTucked && event.clientY < 18) setRailTucked(false);
+}, { passive: true });
+document.addEventListener('focusin', (event) => {
+  if (railTucked && event.target.closest?.('.rail')) setRailTucked(false);
+});
+
 // Carte « reçu de la semaine » (render/weekCard.js) : ouverte d'un clic sur
 // une cellule de la bande de charge, posée juste sous la cellule (ou dessus,
 // faute de place), hors de #app pour survivre aux redessins. Un second clic

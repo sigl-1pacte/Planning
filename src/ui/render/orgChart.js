@@ -6,7 +6,7 @@
 // liste de ses autres teams sous son nom.
 import { esc, initials, personColor } from './format.js';
 
-const NODE_W = 104;
+const NODE_W = 116;
 const NODE_H = 80;
 const PAD = 16;
 const HEAD = 40;
@@ -91,7 +91,13 @@ export function orgLayout(model, width = LAYOUT_WIDTH) {
   };
 }
 
-const truncate = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+// Coupe un texte pour qu'il tienne dans `width` px, d'après une chasse
+// moyenne (texte SVG : pas de points de suspension automatiques) — sans quoi
+// deux noms voisins se chevauchent.
+function fit(text, width, fontSize) {
+  const max = Math.max(3, Math.floor(width / (fontSize * 0.56)));
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
 
 function badge(cx, cy, text, cls) {
   const w = 10 + text.length * 6.2;
@@ -114,8 +120,8 @@ function personNode({ user, roles, cx, cy }, { users, teamKeysOf, teamKey, radiu
     <title>${esc(user.name)}${roleText ? ` — ${roleText}` : ''}</title>
     <circle cx="${cx}" cy="${cy}" r="${radius}" fill="${personColor(user.id, users)}"/>
     <text class="ini" x="${cx}" y="${cy + 4}" text-anchor="middle">${esc(initials(user))}</text>
-    <text class="nm" x="${cx}" y="${cy + radius + 15}" text-anchor="middle">${esc(truncate(user.name, 17))}</text>
-    ${others.length ? `<text class="also" x="${cx}" y="${cy + radius + 28}" text-anchor="middle">aussi ${esc(others.join(', '))}</text>` : ''}
+    <text class="nm" x="${cx}" y="${cy + radius + 15}" text-anchor="middle">${esc(fit(user.name, NODE_W - 10, 11))}</text>
+    ${others.length ? `<text class="also" x="${cx}" y="${cy + radius + 28}" text-anchor="middle">${esc(fit(`aussi ${others.join(', ')}`, NODE_W - 10, 9))}</text>` : ''}
     ${label ? badge(cx, cy - radius - 4, label, 'mgr') : ''}
     ${roleText ? badge(cx + radius - 2, cy - radius + 2, roleText, roles.length > 1 ? 'both' : roles[0]) : ''}
   </g>`;
@@ -139,8 +145,8 @@ export function renderOrgChart(el, { domain, planning }) {
       <rect class="org-box" x="${x}" y="${y}" width="${width}" height="${height}" rx="10"/>
       <g class="org-head" data-org-roles="${esc(team.id)}"><title>Choisir le PO et le Scrum Master de ${esc(team.name)}</title>
         <rect x="${x}" y="${y}" width="${width}" height="${HEAD - 8}" rx="10" fill="transparent"/>
-        <text class="tn" x="${x + PAD}" y="${y + 22}">${esc(team.name)}</text>
-        <text class="tk" x="${x + width - PAD}" y="${y + 22}" text-anchor="end">${esc(team.key)} · rôles</text>
+        <text class="tn" x="${x + PAD}" y="${y + 24}">${esc(fit(team.name, width - 2 * PAD - (team.key.length + 8) * 6.2 - 12, 15))}</text>
+        <text class="tk" x="${x + width - PAD}" y="${y + 24}" text-anchor="end">${esc(team.key)} · rôles</text>
       </g>
       ${cluster.separatorY ? `<line class="org-sep" x1="${x + PAD}" x2="${x + width - PAD}" y1="${cluster.separatorY}" y2="${cluster.separatorY}"/>` : ''}
       ${cluster.edge ? `<line class="org-edge" x1="${cluster.edge.x1}" x2="${cluster.edge.x2}" y1="${cluster.edge.y}" y2="${cluster.edge.y}"><title>Binôme PO ↔ Scrum Master</title></line>` : ''}

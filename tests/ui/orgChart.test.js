@@ -66,7 +66,7 @@ describe('orgLayout', () => {
 
   it('range les grappes en colonnes selon la largeur', () => {
     const many = { users, teams: Array.from({ length: 5 }, (_, i) => ({ id: `t${i}`, key: `T${i}`, name: `T${i}`, memberIds: [] })) };
-    const wide = orgLayout(orgModel(many, {}), 1496);
+    const wide = orgLayout(orgModel(many, {}), 1700);
     expect(new Set(wide.clusters.map((c) => c.x)).size).toBe(4);
     const narrow = orgLayout(orgModel(many, {}), 400);
     expect(new Set(narrow.clusters.map((c) => c.x)).size).toBe(1);

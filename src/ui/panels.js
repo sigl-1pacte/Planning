@@ -18,6 +18,13 @@ const SOURCE_HINT = {
   none: 'Ni ligne « Contributors » ni assigné : la tâche ne pèse sur personne.',
 };
 
+// Zone de texte à la hauteur de son contenu : ni poignée de redimensionnement
+// ni barre de défilement (cf. styles.css).
+function autoGrow(area) {
+  area.style.height = 'auto';
+  if (area.scrollHeight) area.style.height = `${area.scrollHeight + 2}px`;
+}
+
 function showError(form, message) {
   const slot = form.querySelector('[data-error]');
   slot.textContent = message;
@@ -37,18 +44,181 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
   // repart du haut.
   let lastDrawn = null;
 
+  // Brouillon : dans un panneau d'édition ou de création, rien ne part tant
+  // qu'on n'a pas cliqué « Enregistrer » (ou « Créer… ») dans le pied de
+  // panneau, ancré en bas. `save` renvoie true (fait), false (écriture
+  // refusée) ou 'invalid' (saisie refusée, message déjà affiché). `baseline`
+  // est l'état des champs au dessin : quitter avec des champs différents
+  // demande confirmation.
+  let draft = null;
+  const foot = document.createElement('footer');
+  foot.className = 'drw-foot';
+  foot.hidden = true;
+  drawer.appendChild(foot);
+
+  // Champs qui portent la saisie : pas la recherche ni les filtres du
+  // sélecteur de tâches, pas le texte jj/mm/aaaa (doublé par le champ date
+  // natif), ni ce qui est marqué data-nodirty (actions immédiates).
+  const trackedFields = () => [...body.querySelectorAll('input, select, textarea')]
+    .filter((el) => !el.closest('[data-nodirty]') && !el.matches('[data-pk], .dtxt, [data-field="confirm"]'));
+  const fieldsState = () => JSON.stringify(trackedFields().map((el) => (el.type === 'checkbox' ? el.checked : el.value)));
+  const isDirty = () => Boolean(draft && fieldsState() !== draft.baseline);
+
+  function armDraft({ save, saveLabel = 'Enregistrer', action = null, create = false }) {
+    draft = { save, saveLabel, action, create, baseline: fieldsState() };
+    foot.hidden = false;
+    foot.innerHTML = `<p class="df-err" data-foot-error hidden></p>
+      <span class="df-state"></span>
+      ${create ? '' : '<button class="btn ghost" type="button" data-foot="revert">Annuler</button>'}
+      <button class="btn pri" type="button" data-foot="save"${action ? ` data-action="${action}"` : ''}>${esc(saveLabel)}</button>`;
+    refreshFoot();
+  }
+
+  function refreshFoot() {
+    if (!draft) return;
+    const dirty = isDirty();
+    foot.classList.toggle('dirty', dirty);
+    foot.querySelector('.df-state').textContent = submitting ? '' : dirty ? 'Modifications non enregistrées' : (draft.create ? '' : 'Aucune modification');
+    const save = foot.querySelector('[data-foot="save"]');
+    save.disabled = submitting || (!draft.create && !dirty);
+    save.textContent = submitting ? (draft.create ? 'Création…' : 'Enregistrement…') : draft.saveLabel;
+    const revert = foot.querySelector('[data-foot="revert"]');
+    if (revert) revert.hidden = !dirty || submitting;
+  }
+
+  function footError(message) {
+    const slot = foot.querySelector('[data-foot-error]');
+    if (!slot) return;
+    slot.textContent = message;
+    slot.hidden = !message;
+  }
+
+  // Un seul envoi à la fois : tant que l'écriture n'est pas terminée, le
+  // bouton est inactif et tout autre clic (ou Ctrl/Cmd+S) est ignoré — sinon
+  // chaque clic créerait une tâche de plus dans Linear. Réussie, une création
+  // ferme le panneau et une modification le redessine avec les nouvelles
+  // valeurs ; en cas d'échec, la saisie reste en place avec la raison.
+  // Une saisie refusée (validation) répond tout de suite, sans attendre :
+  // seul un envoi réel bloque le bouton le temps de l'écriture.
+  function runSave() {
+    if (!draft || submitting || (!draft.create && !isDirty())) return;
+    footError('');
+    const opened = current;
+    const { create } = draft;
+    const finish = (ok) => {
+      submitting = false;
+      if (current !== opened) return;
+      if (ok === 'invalid') return refreshFoot();
+      if (ok === false) {
+        footError(lastError() ?? (create ? 'La création a échoué.' : 'L\'enregistrement a échoué.'));
+        return refreshFoot();
+      }
+      if (create) return close();
+      draft = null;
+      draw();
+      foot.classList.add('saved');
+      foot.querySelector('.df-state').textContent = 'Enregistré';
+    };
+    const result = draft.save();
+    if (!(result instanceof Promise)) return finish(result);
+    submitting = true;
+    refreshFoot();
+    result.then(finish, () => finish(false));
+  }
+
+  // Demande avant de perdre une saisie non enregistrée ; `then` s'exécute
+  // si l'on abandonne (ou s'il n'y avait rien à perdre).
+  function confirmDiscard(then) {
+    if (!isDirty()) return then();
+    if (document.querySelector('.confirm-overlay')) return undefined;
+    const name = title.textContent;
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay confirm-overlay';
+    overlay.innerHTML = `<div class="confirmbox" role="alertdialog" aria-modal="true" aria-labelledby="cf-t" aria-describedby="cf-d">
+      <h2 id="cf-t">Abandonner les modifications ?</h2>
+      <p id="cf-d">Les changements apportés à « ${esc(name)} » ne sont pas enregistrés.</p>
+      <div class="actions"><button class="btn" type="button" data-cf="keep">Continuer l'édition</button>
+        <button class="btn danger" type="button" data-cf="discard">Abandonner</button></div></div>`;
+    const done = (discard) => {
+      overlay.remove();
+      if (discard) {
+        draft = null;
+        then();
+      } else {
+        drawer.querySelector('[data-foot="save"]')?.focus();
+      }
+    };
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay || e.target.closest('[data-cf="keep"]')) done(false);
+      else if (e.target.closest('[data-cf="discard"]')) done(true);
+    });
+    // Échap garde la saisie, et ne remonte pas jusqu'au raccourci qui ferme
+    // le panneau.
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      done(false);
+    });
+    document.body.appendChild(overlay);
+    overlay.querySelector('[data-cf="keep"]').focus();
+    return undefined;
+  }
+
+  const sameTarget = (next) => current && next.kind === current.kind && next.id === current.id && next.id !== null;
+
   function open(next) {
-    current = next;
-    pickerState = emptyPickerState();
-    draw();
+    if (sameTarget(next)) return;
+    confirmDiscard(() => {
+      current = next;
+      draft = null;
+      pickerState = emptyPickerState();
+      draw();
+    });
   }
 
   function close() {
     current = null;
     lastDrawn = null;
+    draft = null;
     drawer.classList.remove('on');
     drawer.setAttribute('aria-hidden', 'true');
     body.innerHTML = '';
+    foot.hidden = true;
+    foot.innerHTML = '';
+  }
+
+  function requestClose(then = () => {}) {
+    if (!current) return then();
+    return confirmDiscard(() => {
+      close();
+      then();
+    });
+  }
+
+  foot.addEventListener('click', (e) => {
+    if (e.target.closest('[data-foot="save"]')) runSave();
+    else if (e.target.closest('[data-foot="revert"]')) {
+      draft = null;
+      draw();
+    }
+  });
+  drawer.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      runSave();
+    }
+  });
+  body.addEventListener('input', (e) => {
+    if (e.target.matches('textarea')) autoGrow(e.target);
+    refreshFoot();
+  });
+  body.addEventListener('change', refreshFoot);
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', (e) => {
+      if (!isDirty()) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
   }
 
   function update(nextContext) {
@@ -63,7 +233,9 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     // redessiner (à chaque sondage, ou après une écriture) ne ferait que
     // vider ce qui vient d'être saisi.
     const creating = current?.id === null || current?.kind === 'team' || current?.confirmDelete;
-    if (current && !editing && !creating) draw();
+    // Une saisie en cours (non enregistrée, ou en train de partir) ne doit pas
+    // être effacée par un sondage ou une écriture venue d'ailleurs.
+    if (current && !editing && !creating && !submitting && !isDirty()) draw();
   }
 
   function draw() {
@@ -71,6 +243,9 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     drawer.classList.add('on');
     drawer.setAttribute('aria-hidden', 'false');
     const keep = current === lastDrawn ? captureView() : null;
+    draft = null;
+    foot.hidden = true;
+    foot.classList.remove('dirty', 'saved');
     if (current.kind === 'issue') drawIssue(current.id, current.seed);
     else if (current.kind === 'person') drawPerson(current.id);
     else if (current.kind === 'proj') drawProj(current.id, current.seed);
@@ -80,6 +255,11 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     else drawSettings();
     enhanceDateFields(body);
     wireIssuePicker(body.querySelector('[data-picker]'), pickerState);
+    for (const area of body.querySelectorAll('textarea')) autoGrow(area);
+    if (draft) {
+      draft.baseline = fieldsState();
+      refreshFoot();
+    }
     if (keep) restoreView(keep);
     lastDrawn = current;
   }
@@ -169,9 +349,8 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
             <span class="cx">${person ? `${fr1(person.hours)} h · ${person.ratePct ?? '—'} %` : '—'}</span>
           </div>`;
         }).join('')}
-        <p class="hint">${lastUid !== null ? `La part de ${esc(userOf(lastUid)?.name ?? lastUid)} complète les autres jusqu'à 100 %.` : 'Les parts sont ramenées à 100 %.'} ${rows.length ? 'Répartition ajustée à la main.' : 'Répartition égale par défaut.'} Les parts s\'enregistrent dès que vous quittez un champ.</p>
-        ${errorSlot}
-        <div class="actions">
+        <p class="hint">${lastUid !== null ? `La part de ${esc(userOf(lastUid)?.name ?? lastUid)} complète les autres jusqu'à 100 %.` : 'Les parts sont ramenées à 100 %.'} ${rows.length ? 'Répartition ajustée à la main.' : 'Répartition égale par défaut.'}</p>
+        <div class="actions" data-nodirty>
           ${rows.length ? '<button class="btn" type="button" data-action="equal-shares">Répartition égale</button>' : ''}
         </div>
       </form>` : '';
@@ -179,7 +358,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     body.innerHTML = `
       ${blockers.length ? `<div class="warn">Démarre avant la fin de ${esc(blockers.join(', '))}.</div>` : ''}
       ${issue.unresolvedMentions.length ? `<div class="warn">Mentions non reconnues : ${issue.unresolvedMentions.map((m) => `@${esc(m)}`).join(', ')}.</div>` : ''}
-      <div class="fg"><label for="f-team">Team</label>
+      <div class="fg" data-nodirty><label for="f-team">Team</label>
         <div class="f-move">
           <select id="f-team" data-field="team">
             ${domain.teams.map((t) => `<option value="${esc(t.id)}"${t.id === issue.teamId ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}
@@ -196,7 +375,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       <div class="fg"><label for="f-title">Titre</label>
         <input id="f-title" data-field="title" value="${esc(issue.title)}"></div>
       <div class="fg"><label for="f-desc">Description</label>
-        <textarea id="f-desc" data-field="description" rows="4" placeholder="Texte libre — la date de début et les contributeurs restent gérés par leurs champs">${esc(parseDescriptionText(issue.rawDescription))}</textarea></div>
+        <textarea id="f-desc" data-field="description" rows="3" placeholder="Texte libre — la date de début et les contributeurs restent gérés par leurs champs">${esc(parseDescriptionText(issue.rawDescription))}</textarea></div>
       <div class="fg"><label for="f-state">Statut</label>
         <select id="f-state" data-field="state">
           ${(domain.workflowStates ?? []).filter((s) => s.teamId === issue.teamId)
@@ -221,8 +400,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
           <input id="f-end" type="date" data-field="end" value="${issue.end ?? issue.dueDate ?? ''}"></div></div>
       </div>
       ${issue.unplannedReason ? `<p class="hint">${esc(issue.unplannedReason)}</p>` : ''}
-      <p class="warn" data-date-error hidden></p>
-      <p class="hint">Les dates s'enregistrent dans Linear dès qu'elles changent ; les tâches qui dépendent de celle-ci sont décalées avec elle.</p>
+      <p class="hint">À l'enregistrement, les tâches qui dépendent de celle-ci sont décalées avec elle.</p>
       ${issuePickerHtml({ label: 'Bloquée par', issues: otherIssues, checkedIds: issue.blockedBy, teams: domain.teams, projects: domain.projects, states: domain.workflowStates ?? [] })}
       <div class="fg"><label>Contributeurs</label>
         <div class="chklist" data-field="contributors">
@@ -232,32 +410,15 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
             <span>${esc(u.name)}</span>
           </label>`).join('')}
         </div></div>
-      <p class="hint">${SOURCE_HINT[issue.contributorsSource]} Cocher/décocher ajoute ou retire une personne ; un commentaire signale les nouveaux venus dans Linear.</p>
+      <p class="hint">${SOURCE_HINT[issue.contributorsSource]} Un commentaire signale les nouveaux venus dans Linear ; leurs parts se règlent une fois la tâche enregistrée.</p>
       <div class="sec">Parts des contributeurs</div>
       ${sharesForm}
       ${dangerZone('Supprimer la tâche…')}`;
     body.querySelector('[data-action="ask-delete"]').addEventListener('click', askDelete);
 
-    body.querySelector('[data-field="title"]').addEventListener('blur', (e) => {
-      const value = e.target.value.trim();
-      if (value && value !== issue.title) {
-        onWrite((api) => api.updateIssue(issue.id, { title: value }), `Titre de ${issue.identifier} modifié`, (api) => api.updateIssue(issue.id, { title: issue.title }));
-      }
-    });
-    body.querySelector('[data-field="description"]').addEventListener('blur', (e) => {
-      const value = e.target.value.trim();
-      const before = parseDescriptionText(issue.rawDescription);
-      if (value !== before) {
-        onWrite((api) => api.updateIssue(issue.id, { description: value }), `Description de ${issue.identifier} modifiée`, (api) => api.updateIssue(issue.id, { description: before }));
-      }
-    });
-    body.querySelector('[data-field="assignee"]').addEventListener('change', (e) => {
-      const value = e.target.value || null;
-      onWrite((api) => api.updateIssue(issue.id, { assigneeId: value }), `Responsable de ${issue.identifier} modifié`, (api) => api.updateIssue(issue.id, { assigneeId: issue.assigneeId }));
-    });
-    // Le déplacement de team est volontairement en deux temps (choisir, puis
-    // « Déplacer ») : une flèche du clavier sur la liste ne doit jamais
-    // déplacer une tâche à chaque option traversée.
+    // Le déplacement de team est une action à part (choisir, puis
+    // « Déplacer »), immédiate et annulable : une flèche du clavier sur la
+    // liste ne doit jamais déplacer une tâche à chaque option traversée.
     const teamSelect = body.querySelector('[data-field="team"]');
     const moveButton = body.querySelector('[data-action="move-team"]');
     const moveHint = body.querySelector('[data-move-hint]');
@@ -276,76 +437,9 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         (api) => api.updateIssue(issue.id, { teamId: issue.teamId, stateId: issue.stateId, projectId: issue.projectId }),
       );
     });
-    body.querySelector('[data-field="project"]').addEventListener('change', (e) => {
-      const projectId = e.target.value || null;
-      onWrite(
-        (api) => api.updateIssue(issue.id, { projectId }),
-        `Projet de ${issue.identifier} modifié`,
-        (api) => api.updateIssue(issue.id, { projectId: issue.projectId }),
-      );
-    });
-    body.querySelector('[data-field="state"]').addEventListener('change', (e) => {
-      const value = e.target.value;
-      onWrite((api) => api.updateIssue(issue.id, { stateId: value }), `Statut de ${issue.identifier} modifié`, (api) => api.updateIssue(issue.id, { stateId: issue.stateId }));
-    });
-    body.querySelector('[data-field="real"]').addEventListener('change', (e) => {
-      const raw = e.target.value.trim();
-      const value = raw === '' ? null : Number(raw);
-      if (value !== null && !(Number.isFinite(value) && value >= 0)) return;
-      if (value === issue.realPoints) return;
-      onWrite(
-        (api) => api.updateIssue(issue.id, { realPoints: value }),
-        `Charge réelle de ${issue.identifier} modifiée`,
-        (api) => api.updateIssue(issue.id, { realPoints: issue.realPoints }),
-      );
-    });
-    body.querySelector('[data-field="estimate"]').addEventListener('change', (e) => {
-      const value = e.target.value ? Number(e.target.value) : null;
-      onWrite((api) => api.updateIssue(issue.id, { estimate: value }), `Estimation de ${issue.identifier} modifiée`, (api) => api.updateIssue(issue.id, { estimate: issue.estimate }));
-    });
-    // Une date qui change s'écrit tout de suite, comme tous les autres champs :
-    // même replanification en cascade que le glisser-déposer de la barre.
-    const dateError = body.querySelector('[data-date-error]');
-    const saveDates = () => {
-      const start = body.querySelector('[data-field="start"]').value;
-      const end = body.querySelector('[data-field="end"]').value;
-      dateError.hidden = true;
-      if (!start || !end) return;
-      if (end < start) {
-        dateError.textContent = 'L\'échéance précède le début : rien n\'est enregistré.';
-        dateError.hidden = false;
-        return;
-      }
-      if (start === issue.start && end === issue.end) return;
-      onWrite(
-        (api) => api.reschedule(issue.id, { start, end }),
-        `${issue.identifier} replanifiée`,
-        (api) => api.reschedule(issue.id, { start: issue.start ?? undefined, end: issue.end ?? undefined }),
-      );
-    };
-    body.querySelector('[data-field="start"]').addEventListener('change', saveDates);
-    body.querySelector('[data-field="end"]').addEventListener('change', saveDates);
-    body.querySelector('[data-field="deps"]').addEventListener('change', (e) => {
-      if (e.target.type !== 'checkbox') return;
-      const blockedBy = [...body.querySelectorAll('[data-field="deps"] input:checked')].map((i) => i.value);
-      onWrite((api) => api.setDependencies(issue.id, blockedBy), `Dépendances de ${issue.identifier} modifiées`, (api) => api.setDependencies(issue.id, issue.blockedBy));
-    });
-    body.querySelector('[data-field="contributors"]').addEventListener('change', (e) => {
-      if (e.target.type !== 'checkbox') return;
-      const contributorIds = [...body.querySelectorAll('[data-field="contributors"] input:checked')].map((i) => i.value);
-      onWrite(
-        (api) => api.setContributors(issue.id, contributorIds),
-        `Contributeurs de ${issue.identifier} modifiés`,
-        (api) => api.setContributors(issue.id, issue.contributorIds),
-      );
-    });
-    // Comme les autres champs : une part modifiée s'enregistre à la sortie du
-    // champ (événement change), sans bouton — la Entrée du formulaire aussi.
-    body.querySelector('form[data-form="shares"]')?.addEventListener('change', (e) => {
-      if (e.target.matches('input[type="number"]')) submitShares(e.currentTarget);
-    });
+    const sharesEl = body.querySelector('form[data-form="shares"]');
     if (lastUid !== null) {
-      const numberInputs = [...body.querySelectorAll('form[data-form="shares"] input[type="number"]')];
+      const numberInputs = [...sharesEl.querySelectorAll('input[type="number"]')];
       const lastInput = numberInputs.at(-1);
       const others = numberInputs.slice(0, -1);
       const recomputeLast = () => {
@@ -354,6 +448,82 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       };
       for (const inp of others) inp.addEventListener('input', recomputeLast);
     }
+
+    const value = (name) => body.querySelector(`[data-field="${name}"]`).value;
+    const checkedIn = (name) => [...body.querySelectorAll(`[data-field="${name}"] input:checked`)].map((i) => i.value);
+    const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+    const initialShares = sharesEl ? [...sharesEl.querySelectorAll('input[type="number"]')].map((i) => i.value) : [];
+
+    armDraft({
+      save: () => {
+        const titleValue = value('title').trim();
+        if (!titleValue) return invalid('Le titre est obligatoire.');
+        const realRaw = value('real').trim();
+        const real = realRaw === '' ? null : Number(realRaw);
+        if (real !== null && !(Number.isFinite(real) && real >= 0)) return invalid('La charge réelle doit être un nombre positif.');
+        const start = value('start');
+        const end = value('end');
+        const datesChanged = start !== (issue.start ?? issue.startDate ?? '') || end !== (issue.end ?? issue.dueDate ?? '');
+        if (datesChanged && Boolean(start) !== Boolean(end)) return invalid('Renseignez le début et l\'échéance, ou aucun des deux.');
+        if (datesChanged && end < start) return invalid('L\'échéance précède le début.');
+        const shares = sharesEl ? [...sharesEl.querySelectorAll('input[type="number"]')].map((i) => ({ linearUserId: i.name, share: Number(i.value) })) : [];
+        const sharesChanged = sharesEl && sharesEl.querySelectorAll('input[type="number"]').length === initialShares.length
+          && [...sharesEl.querySelectorAll('input[type="number"]')].some((i, k) => i.value !== initialShares[k]);
+        if (sharesChanged && !(shares.every((x) => Number.isFinite(x.share) && x.share >= 0) && shares.reduce((a, x) => a + x.share, 0) > 0)) {
+          return invalid('Les parts doivent être positives et leur somme non nulle.');
+        }
+
+        // Champs de la tâche elle-même : une seule écriture, et son retour.
+        const patch = {};
+        const back = {};
+        const field = (key, next, before) => {
+          if (next === before) return;
+          patch[key] = next;
+          back[key] = before;
+        };
+        field('title', titleValue, issue.title);
+        field('description', value('description').trim(), parseDescriptionText(issue.rawDescription));
+        field('stateId', value('state'), issue.stateId);
+        field('assigneeId', value('assignee') || null, issue.assigneeId);
+        field('estimate', value('estimate') ? Number(value('estimate')) : null, issue.estimate);
+        field('realPoints', real, issue.realPoints ?? null);
+        field('projectId', value('project') || null, issue.projectId);
+
+        const calls = [];
+        const restores = [];
+        if (Object.keys(patch).length) {
+          calls.push((api) => api.updateIssue(issue.id, patch));
+          restores.push((api) => api.updateIssue(issue.id, back));
+        }
+        if (datesChanged && start && end) {
+          calls.push((api) => api.reschedule(issue.id, { start, end }));
+          restores.push((api) => api.reschedule(issue.id, { start: issue.start ?? undefined, end: issue.end ?? undefined }));
+        }
+        const blockedBy = checkedIn('deps');
+        if (!sameSet(blockedBy, issue.blockedBy)) {
+          calls.push((api) => api.setDependencies(issue.id, blockedBy));
+          restores.push((api) => api.setDependencies(issue.id, issue.blockedBy));
+        }
+        const contributorIds = checkedIn('contributors');
+        if (!sameSet(contributorIds, issue.contributorIds)) {
+          calls.push((api) => api.setContributors(issue.id, contributorIds));
+          restores.push((api) => api.setContributors(issue.id, issue.contributorIds));
+        }
+
+        return (async () => {
+          if (calls.length && (await onWrite(calls, `${issue.identifier} modifiée`, restores)) === false) return false;
+          if (sharesChanged) return mutateAll([(api) => api.setContributions(issue.id, shares)]);
+          return true;
+        })();
+      },
+    });
+  }
+
+  // Saisie refusée avant tout envoi : la raison s'affiche dans le pied de
+  // panneau, à côté du bouton.
+  function invalid(message) {
+    footError(message);
+    return 'invalid';
   }
 
   // La suppression passe toujours par un écran de confirmation dédié : le
@@ -412,24 +582,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     input.focus();
   }
 
-  // Un seul envoi à la fois : tant que l'écriture n'est pas terminée, le bouton
-  // est inactif et tout autre clic (ou Entrée) est ignoré, sinon chaque clic
-  // créerait une tâche de plus dans Linear. Le formulaire se ferme une fois la
-  // création réussie ; en cas d'échec il reste ouvert, saisie conservée.
-  async function submitCreate(button, call, label) {
-    if (submitting) return;
-    submitting = true;
-    button.disabled = true;
-    const opened = current;
-    try {
-      const ok = await onWrite(call, label, null);
-      if (ok === false) showError(body, lastError() ?? 'L\'écriture a échoué.');
-      else if (current === opened) close();
-    } finally {
-      submitting = false;
-      button.disabled = false;
-    }
-  }
+  const create = (call, label) => onWrite(call, label, null);
 
   function drawNewIssue({ teamId, projectId }) {
     const { domain } = ctx;
@@ -478,19 +631,16 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
             <span>${esc(u.name)}</span>
           </label>`).join('')}
         </div></div>
-      <p class="hint">Sans contributeur coché, le responsable porte toute la charge. Les parts se règlent ensuite dans la tâche créée.</p>
-      ${errorSlot}
-      <div class="actions"><button class="btn pri" type="button" data-action="create-issue">Créer la tâche</button></div>`;
-    const button = body.querySelector('[data-action="create-issue"]');
+      <p class="hint">Sans contributeur coché, le responsable porte toute la charge. Les parts se règlent ensuite dans la tâche créée.</p>`;
     const field = (name) => body.querySelector(`[data-field="${name}"]`);
     const checked = (name) => [...field(name).querySelectorAll('input:checked')].map((c) => c.value);
     const submit = () => {
       const value = field('title').value.trim();
-      if (!value) return showError(body, 'Le titre est obligatoire.');
+      if (!value) return invalid('Le titre est obligatoire.');
       const start = field('start').value;
       const end = field('end').value;
-      if (Boolean(start) !== Boolean(end)) return showError(body, 'Renseignez le début et l\'échéance, ou aucun des deux.');
-      if (start && end < start) return showError(body, 'L\'échéance précède le début.');
+      if (Boolean(start) !== Boolean(end)) return invalid('Renseignez le début et l\'échéance, ou aucun des deux.');
+      if (start && end < start) return invalid('L\'échéance précède le début.');
       const input = { teamId, title: value };
       if (field('description').value.trim()) input.description = field('description').value.trim();
       if (field('project').value) input.projectId = field('project').value;
@@ -502,11 +652,11 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       if (blockedBy.length) input.blockedBy = blockedBy;
       const contributorIds = checked('contributors');
       if (contributorIds.length) input.contributorIds = contributorIds;
-      submitCreate(button, (api) => api.createIssue(input), `Tâche « ${value} » créée`);
+      return create((api) => api.createIssue(input), `Tâche « ${value} » créée`);
     };
-    button.addEventListener('click', submit);
+    armDraft({ save: submit, saveLabel: 'Créer la tâche', action: 'create-issue', create: true });
     field('title').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') submit();
+      if (e.key === 'Enter') runSave();
     });
   }
 
@@ -530,43 +680,37 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       </div>
       <div class="fg"><label for="f-pcolor">Couleur</label>
         <input id="f-pcolor" type="color" data-field="pcolor" value="#2E5F8A"></div>
-      <p class="hint">Sans début et échéance, le projet n'a pas de bande sur la frise. Sans couleur choisie, Linear en attribue une.</p>
-      ${errorSlot}
-      <div class="actions"><button class="btn pri" type="button" data-action="create-project">Créer le projet</button></div>`;
+      <p class="hint">Sans début et échéance, le projet n'a pas de bande sur la frise. Sans couleur choisie, Linear en attribue une.</p>`;
     const field = (name) => body.querySelector(`[data-field="${name}"]`);
     let colorChosen = false;
     field('pcolor').addEventListener('input', () => { colorChosen = true; });
-    const button = body.querySelector('[data-action="create-project"]');
-    button.addEventListener('click', () => {
+    armDraft({ saveLabel: 'Créer le projet', action: 'create-project', create: true, save: () => {
       const value = field('pname').value.trim();
-      if (!value) return showError(body, 'Le nom est obligatoire.');
+      if (!value) return invalid('Le nom est obligatoire.');
       const teamIds = [...field('pteams').querySelectorAll('input:checked')].map((c) => c.value);
-      if (!teamIds.length) return showError(body, 'Choisissez au moins une team.');
+      if (!teamIds.length) return invalid('Choisissez au moins une team.');
       const startDate = field('pstart').value;
       const targetDate = field('ptarget').value;
-      if (startDate && targetDate && targetDate < startDate) return showError(body, 'L\'échéance précède le début.');
+      if (startDate && targetDate && targetDate < startDate) return invalid('L\'échéance précède le début.');
       const input = { teamIds, name: value };
       if (startDate) input.startDate = startDate;
       if (targetDate) input.targetDate = targetDate;
       if (colorChosen) input.color = field('pcolor').value;
-      submitCreate(button, (api) => api.createProject(input), `Projet « ${value} » créé`);
-    });
+      return create((api) => api.createProject(input), `Projet « ${value} » créé`);
+    } });
   }
 
   function drawNewTeam() {
     title.textContent = 'Nouvelle team';
     body.innerHTML = `
       <div class="fg"><label for="f-tkey">Clé (ex. IOT)</label><input id="f-tkey" data-field="tkey" maxlength="5" style="text-transform:uppercase"></div>
-      <div class="fg"><label for="f-tname">Nom</label><input id="f-tname" data-field="tname"></div>
-      ${errorSlot}
-      <div class="actions"><button class="btn pri" type="button" data-action="create-team">Créer la team</button></div>`;
-    const button = body.querySelector('[data-action="create-team"]');
-    button.addEventListener('click', () => {
+      <div class="fg"><label for="f-tname">Nom</label><input id="f-tname" data-field="tname"></div>`;
+    armDraft({ saveLabel: 'Créer la team', action: 'create-team', create: true, save: () => {
       const key = body.querySelector('[data-field="tkey"]').value.trim().toUpperCase();
       const name = body.querySelector('[data-field="tname"]').value.trim();
-      if (!key || !name) return showError(body, 'La clé et le nom sont obligatoires.');
-      submitCreate(button, (api) => api.createTeam({ key, name }), `Team « ${name} » créée`);
-    });
+      if (!key || !name) return invalid('La clé et le nom sont obligatoires.');
+      return create((api) => api.createTeam({ key, name }), `Team « ${name} » créée`);
+    } });
   }
 
   function drawNewMilestone({ projectId } = {}) {
@@ -584,21 +728,17 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       <div class="fg"><label for="f-mname">Nom du jalon</label><input id="f-mname" data-field="mname"></div>
       <div class="fg"><label for="f-mdate">Date</label><div class="dfield">
         <input id="f-mdate" type="date" data-field="mdate" value="${suggested}"></div></div>
-      <p class="hint">Sans date, le jalon existe dans Linear mais n'apparaît pas sur la frise. Une fois créé, on le déplace en le faisant glisser sur la frise.</p>
-      ${errorSlot}
-      <div class="actions"><button class="btn pri" type="button" data-action="create-milestone">Créer le jalon</button></div>`;
-    const button = body.querySelector('[data-action="create-milestone"]');
-    const submit = () => {
+      <p class="hint">Sans date, le jalon existe dans Linear mais n'apparaît pas sur la frise. Une fois créé, on le déplace en le faisant glisser sur la frise.</p>`;
+    armDraft({ saveLabel: 'Créer le jalon', action: 'create-milestone', create: true, save: () => {
       const name = body.querySelector('[data-field="mname"]').value.trim();
-      if (!name) return showError(body, 'Le nom est obligatoire.');
+      if (!name) return invalid('Le nom est obligatoire.');
       const targetDate = body.querySelector('[data-field="mdate"]').value;
       const input = { projectId: project.id, name };
       if (targetDate) input.targetDate = targetDate;
-      submitCreate(button, (api) => api.createMilestone(input), `Jalon « ${name} » créé`);
-    };
-    button.addEventListener('click', submit);
+      return create((api) => api.createMilestone(input), `Jalon « ${name} » créé`);
+    } });
     body.querySelector('[data-field="mname"]').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') submit();
+      if (e.key === 'Enter') runSave();
     });
   }
 
@@ -623,24 +763,31 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         <input id="f-mname" data-field="mname" value="${esc(milestone.name)}"></div>
       <div class="fg"><label for="f-mdate">Date</label><div class="dfield">
         <input id="f-mdate" type="date" data-field="mdate" value="${milestone.date ?? ''}"></div></div>`;
-    body.querySelector('[data-field="mname"]').addEventListener('blur', (e) => {
-      const value = e.target.value.trim();
-      if (!value || value === milestone.name) return;
-      onWrite(
-        (api) => api.updateMilestone(milestoneId, { name: value }),
-        `Jalon « ${milestone.name} » renommé`,
-        (api) => api.updateMilestone(milestoneId, { name: milestone.name }),
+    armDraft({ save: () => {
+      const name = body.querySelector('[data-field="mname"]').value.trim();
+      const date = body.querySelector('[data-field="mdate"]').value;
+      if (!name) return invalid('Le nom est obligatoire.');
+      const change = {};
+      const back = {};
+      if (name !== milestone.name) {
+        change.name = name;
+        back.name = milestone.name;
+      }
+      // Une date vidée n'est pas envoyée : un jalon se retire de la frise
+      // depuis Linear.
+      if (date && date !== milestone.date) {
+        change.targetDate = date;
+        if (milestone.date) back.targetDate = milestone.date;
+      }
+      if (!Object.keys(change).length) return true;
+      return onWrite(
+        (api) => api.updateMilestone(milestoneId, change),
+        `Jalon « ${milestone.name} » modifié`,
+        Object.keys(back).length ? (api) => api.updateMilestone(milestoneId, back) : null,
       );
-    });
-    body.querySelector('[data-field="mdate"]').addEventListener('change', (e) => {
-      const value = e.target.value;
-      if (!value) return;
-      onWrite(
-        (api) => api.updateMilestone(milestoneId, value),
-        `Jalon « ${milestone.name} » déplacé`,
-        // Sans date d'origine, il n'y a rien à remettre : pas d'annulation.
-        milestone.date ? (api) => api.updateMilestone(milestoneId, milestone.date) : null,
-      );
+    } });
+    body.querySelector('[data-field="mname"]').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') runSave();
     });
   }
 
@@ -692,39 +839,29 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     body.querySelector('[data-action="add-milestone"]').addEventListener('click', () => {
       open({ kind: 'milestone', id: null, seed: { projectId: project.id } });
     });
-    body.querySelector('[data-field="pname"]').addEventListener('blur', (e) => {
-      const value = e.target.value.trim();
-      if (value && value !== project.name) {
-        onWrite((api) => api.updateProject(project.id, { name: value }), `Nom du projet ${project.name} modifié`, (api) => api.updateProject(project.id, { name: project.name }));
-      }
-    });
-    body.querySelector('[data-field="pstart"]').addEventListener('change', (e) => {
-      const value = e.target.value;
-      if (!value || value === project.startDate) return;
-      onWrite(
-        (api) => api.updateProject(project.id, { startDate: value }),
-        `Début du projet ${project.name} modifié`,
-        (api) => api.updateProject(project.id, { startDate: project.startDate ?? '' }),
+    armDraft({ save: () => {
+      const field = (name) => body.querySelector(`[data-field="${name}"]`).value;
+      const name = field('pname').trim();
+      if (!name) return invalid('Le nom est obligatoire.');
+      const startDate = field('pstart');
+      const targetDate = field('ptarget');
+      if (startDate && targetDate && targetDate < startDate) return invalid('L\'échéance précède le début.');
+      const patch = {};
+      const back = {};
+      if (name !== project.name) { patch.name = name; back.name = project.name; }
+      // Une date vidée n'est pas envoyée (comme avant) : seules les dates
+      // renseignées remplacent celles de Linear.
+      if (startDate && startDate !== project.startDate) { patch.startDate = startDate; back.startDate = project.startDate ?? ''; }
+      if (targetDate && targetDate !== project.targetDate) { patch.targetDate = targetDate; back.targetDate = project.targetDate ?? ''; }
+      const color = field('pcolor');
+      if (color && color.toLowerCase() !== project.color.toLowerCase()) { patch.color = color; back.color = project.color; }
+      if (!Object.keys(patch).length) return true;
+      return onWrite(
+        (api) => api.updateProject(project.id, patch),
+        `Projet ${project.name} modifié`,
+        (api) => api.updateProject(project.id, back),
       );
-    });
-    body.querySelector('[data-field="ptarget"]').addEventListener('change', (e) => {
-      const value = e.target.value;
-      if (!value || value === project.targetDate) return;
-      onWrite(
-        (api) => api.updateProject(project.id, { targetDate: value }),
-        `Échéance du projet ${project.name} modifiée`,
-        (api) => api.updateProject(project.id, { targetDate: project.targetDate ?? '' }),
-      );
-    });
-    body.querySelector('[data-field="pcolor"]').addEventListener('change', (e) => {
-      const value = e.target.value;
-      if (!value || value === project.color) return;
-      onWrite(
-        (api) => api.updateProject(project.id, { color: value }),
-        `Couleur du projet ${project.name} modifiée`,
-        (api) => api.updateProject(project.id, { color: project.color }),
-      );
-    });
+    } });
   }
 
   function drawPerson(userId) {
@@ -747,12 +884,9 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         <div class="fg"><label for="p-hours">Capacité par défaut (h / semaine)</label>
           <input id="p-hours" name="hours" type="number" min="0" step="0.5" value="${person?.defaultWeeklyHours ?? ''}"
             placeholder="${planning.settings.defaultWeeklyHours} (réglage global)"></div>
-        ${errorSlot}
-        <div class="actions"><button class="btn pri" type="submit">Enregistrer</button></div>
       </form>
       <div class="sec">Capacité semaine par semaine</div>
       <p class="hint">Laissez vide pour reprendre la capacité par défaut (${fr1(fallback)} h). Saisissez 0 pour une absence.</p>
-      <p class="warn" data-capacity-error hidden></p>
       ${weeks.map((w) => {
         const override = planning.weeklyCapacities.find((c) => c.linearUserId === userId && c.weekStart === w.weekStart);
         return `<div class="cbo">
@@ -762,6 +896,29 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
           <span class="cx">${fr1(w.hours)} h prévues${w.realHours > 0.01 ? ` · ${fr1(w.realHours)} h réelles` : ''}</span>
         </div>`;
       }).join('')}`;
+    const initialWeeks = new Map([...body.querySelectorAll('[data-week]')].map((i) => [i.dataset.week, i.value]));
+    armDraft({ save: () => {
+      const raw = body.querySelector('[name="hours"]').value;
+      const hours = raw === '' ? null : Number(raw);
+      if (hours !== null && !input0(hours)) return invalid('La capacité par défaut doit être un nombre positif.');
+      const role = body.querySelector('[name="role"]').value.trim() || null;
+      const calls = [];
+      if (role !== (person?.role ?? null) || hours !== (person?.defaultWeeklyHours ?? null)) {
+        calls.push((api) => api.updatePerson(userId, { role, defaultWeeklyHours: hours }));
+      }
+      for (const input of body.querySelectorAll('[data-week]')) {
+        const week = input.dataset.week;
+        if (input.value === initialWeeks.get(week)) continue;
+        if (input.value === '') {
+          calls.push((api) => api.clearCapacity(userId, week));
+          continue;
+        }
+        const weekHours = Number(input.value);
+        if (!input0(weekHours)) return invalid(`La capacité de la semaine du ${shortDay(week)} doit être un nombre positif.`);
+        calls.push((api) => api.setCapacity(userId, week, weekHours));
+      }
+      return mutateAll(calls);
+    } });
   }
 
   // Manager global et, par team, Product Owner et Scrum Master. `teamId` null :
@@ -799,6 +956,15 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         </div>`).join('')}
       <p class="hint">Une même personne peut tenir plusieurs rôles, dans une ou plusieurs teams.</p>
       ${teamId ? '<div class="actions"><button class="btn" type="button" data-action="org-all">Toute l\'organisation et le manager</button></div>' : ''}`;
+    const selects = [...body.querySelectorAll('[data-team-role], [data-org-manager]')];
+    const initial = selects.map((sel) => sel.value);
+    armDraft({ save: () => mutateAll(selects.flatMap((sel, k) => {
+      if (sel.value === initial[k]) return [];
+      const userId = sel.value || null;
+      return sel.dataset.teamRole
+        ? [(api) => api.setTeamRole(sel.dataset.teamRole, sel.dataset.role, userId)]
+        : [(api) => api.setManager(userId)];
+    })) });
   }
 
   function drawSettings() {
@@ -815,15 +981,13 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         </div>
         <div class="fg"><label for="s-week">Capacité par défaut (h / semaine)</label>
           <input id="s-week" name="defaultWeeklyHours" type="number" min="0" step="0.5" value="${s.defaultWeeklyHours}"></div>
-        ${errorSlot}
-        <div class="actions"><button class="btn pri" type="submit">Enregistrer les réglages</button></div>
       </form>
       <div class="sec">Jours chômés</div>
       ${planning.holidays.map((h) => `<div class="cbo">
         <span class="cn">${longDay(h.day)} — ${esc(h.label)}</span>
         <button type="button" data-action="delete-holiday" data-day="${h.day}" aria-label="Retirer le ${longDay(h.day)}">×</button>
       </div>`).join('')}
-      <form data-form="holiday">
+      <form data-form="holiday" data-nodirty>
         <div class="f2">
           <div class="fg"><label for="h-day">Date</label><div class="dfield">
             <input id="h-day" name="day" type="date"></div></div>
@@ -833,43 +997,24 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         <div class="actions"><button class="btn" type="submit">Ajouter le jour chômé</button></div>
       </form>
       <div class="sec">Affichage</div>
-      <label class="ro"><span>Afficher les issues annulées</span>
+      <label class="ro" data-nodirty><span>Afficher les issues annulées</span>
         <input type="checkbox" data-pref="showCanceled" ${prefs.showCanceled ? 'checked' : ''}></label>
       <div class="sec">Clé Linear</div>
       <p class="hint">La clé est conservée dans ce navigateur uniquement.</p>
       <div class="actions"><button class="btn" type="button" data-action="forget-key">Changer de clé</button></div>`;
-  }
-
-  function submitShares(form) {
-    const shares = [...form.querySelectorAll('input[type="number"]')]
-      .map((input) => ({ linearUserId: input.name, share: Number(input.value) }));
-    const valid = shares.every((s) => input0(s.share)) && shares.reduce((a, s) => a + s.share, 0) > 0;
-    if (!valid) return showError(form, 'Les parts doivent être positives et leur somme non nulle.');
-    return onMutate((api) => api.setContributions(current.id, shares));
-  }
-
-  function submitPerson(form) {
-    const raw = form.querySelector('[name="hours"]').value;
-    const hours = raw === '' ? null : Number(raw);
-    if (hours !== null && !input0(hours)) return showError(form, 'La capacité doit être un nombre positif.');
-    const role = form.querySelector('[name="role"]').value.trim() || null;
-    return onMutate((api) => api.updatePerson(current.id, { role, defaultWeeklyHours: hours }));
-  }
-
-  function submitSettings(form) {
-    const read = (name) => Number(form.querySelector(`[name="${name}"]`).value);
-    const settings = {
-      hoursPerPoint: read('hoursPerPoint'),
-      loadCeilingPct: read('loadCeilingPct'),
-      defaultWeeklyHours: read('defaultWeeklyHours'),
-    };
-    const valid = settings.hoursPerPoint > 0
-      && Number.isInteger(settings.loadCeilingPct) && settings.loadCeilingPct >= 10 && settings.loadCeilingPct <= 200
-      && input0(settings.defaultWeeklyHours);
-    if (!valid) {
-      return showError(form, 'Heures par point > 0, plafond entier entre 10 et 200 %, capacité positive.');
-    }
-    return onMutate((api) => api.updateSettings(settings));
+    armDraft({ save: () => {
+      const read = (name) => Number(body.querySelector(`form[data-form="settings"] [name="${name}"]`).value);
+      const settings = {
+        hoursPerPoint: read('hoursPerPoint'),
+        loadCeilingPct: read('loadCeilingPct'),
+        defaultWeeklyHours: read('defaultWeeklyHours'),
+      };
+      const valid = settings.hoursPerPoint > 0
+        && Number.isInteger(settings.loadCeilingPct) && settings.loadCeilingPct >= 10 && settings.loadCeilingPct <= 200
+        && input0(settings.defaultWeeklyHours);
+      if (!valid) return invalid('Heures par point > 0, plafond entier entre 10 et 200 %, capacité positive.');
+      return mutateAll([(api) => api.updateSettings(settings)]);
+    } });
   }
 
   function submitHoliday(form) {
@@ -880,13 +1025,21 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
   }
 
   const input0 = (n) => Number.isFinite(n) && n >= 0;
+  // Écritures de planification (base locale), enchaînées : vrai si toutes
+  // ont abouti.
+  async function mutateAll(calls) {
+    for (const call of calls) {
+      if ((await onMutate(call)) === false) return false;
+    }
+    return true;
+  }
 
   body.addEventListener('submit', (event) => {
     const form = event.target.closest('form[data-form]');
     if (!form) return;
     event.preventDefault();
-    const handlers = { shares: submitShares, person: submitPerson, settings: submitSettings, holiday: submitHoliday };
-    handlers[form.dataset.form](form);
+    if (form.dataset.form === 'holiday') submitHoliday(form);
+    else runSave();
   });
 
   body.addEventListener('click', (event) => {
@@ -899,40 +1052,14 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     if (action === 'org-all') open({ kind: 'roles', id: null });
   });
 
+  // Seule la préférence d'affichage s'applique tout de suite : c'est un
+  // réglage de ce navigateur, pas une donnée partagée.
   body.addEventListener('change', (event) => {
     const target = event.target;
-    if (target.dataset.week) {
-      const week = target.dataset.week;
-      const errorSlotEl = body.querySelector('[data-capacity-error]');
-      if (target.value === '') {
-        if (errorSlotEl) errorSlotEl.hidden = true;
-        onMutate((api) => api.clearCapacity(current.id, week));
-        return;
-      }
-      const hours = Number(target.value);
-      if (!input0(hours)) {
-        if (errorSlotEl) {
-          errorSlotEl.textContent = 'La capacité doit être un nombre positif.';
-          errorSlotEl.hidden = false;
-        }
-        return;
-      }
-      if (errorSlotEl) errorSlotEl.hidden = true;
-      onMutate((api) => api.setCapacity(current.id, week, hours));
-      return;
-    }
-    if (target.dataset.teamRole) {
-      onMutate((api) => api.setTeamRole(target.dataset.teamRole, target.dataset.role, target.value || null));
-      return;
-    }
-    if ('orgManager' in target.dataset) {
-      onMutate((api) => api.setManager(target.value || null));
-      return;
-    }
     if (target.dataset.pref) onPrefs({ [target.dataset.pref]: target.checked });
   });
 
-  closeButton.addEventListener('click', close);
+  closeButton.addEventListener('click', () => requestClose());
 
   return {
     openIssue: (id, seed) => open({ kind: 'issue', id, seed }),
@@ -943,6 +1070,8 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     openMilestone: (id, seed) => open({ kind: 'milestone', id, seed }),
     openRoles: (teamId) => open({ kind: 'roles', id: teamId }),
     close,
+    requestClose,
+    isDirty,
     update,
     selectedIssueId: () => (current?.kind === 'issue' ? current.id : null),
   };

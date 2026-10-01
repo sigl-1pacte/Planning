@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  planningRange, weeklyHours, defaultWeeklyHours, shareWeights, computeLoad, personStats,
+  planningRange, weeklyHours, defaultWeeklyHours, shareWeights, computeLoad, personStats, unassignedLoad,
 } from '../../src/shared/load.js';
 
 const planning = (over = {}) => ({
@@ -142,6 +142,32 @@ describe('computeLoad', () => {
     expect(all.hours).toBeCloseTo(15);
     expect(team.hours).toBeCloseTo(7.5);
     expect(team.capacity).toBeCloseTo(all.capacity);
+  });
+});
+
+describe('unassignedLoad', () => {
+  const users = [{ id: 'u1', active: true }, { id: 'u2', active: true }, { id: 'u3', active: false }];
+  const teams = [{ id: 't1', memberIds: ['u1', 'u2', 'u3'] }, { id: 't2', memberIds: [] }];
+
+  it('répartit une tâche sans personne entre les membres actifs de sa team, par semaine', () => {
+    // 8 pts × 5 h = 40 h sur 8 jours ouvrés (16 → 25 sept.), deux membres actifs.
+    const d = domain([issue({ contributorIds: [] })], { users, teams });
+    expect(unassignedLoad(d, planning())).toEqual({
+      u1: { '2026-09-14': 7.5, '2026-09-21': 12.5 },
+      u2: { '2026-09-14': 7.5, '2026-09-21': 12.5 },
+    });
+  });
+
+  it('ignore les tâches attribuées, annulées, non planifiées, sans estimation, hors team ou sans membre', () => {
+    const d = domain([
+      issue({ id: 'a' }),
+      issue({ id: 'b', contributorIds: [], status: 'canceled' }),
+      issue({ id: 'c', contributorIds: [], start: null, end: null }),
+      issue({ id: 'e', contributorIds: [], estimate: null }),
+      issue({ id: 'f', contributorIds: [], teamId: 't2' }),
+    ], { users, teams });
+    expect(unassignedLoad(d, planning())).toEqual({});
+    expect(unassignedLoad(domain([issue({ contributorIds: [] })], { users, teams }), planning(), { teamId: 't2' })).toEqual({});
   });
 });
 

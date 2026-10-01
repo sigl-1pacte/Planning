@@ -137,5 +137,6 @@ export function renderLegend(el, { view, planning }) {
     '<span><i style="background:#B23A3A"></i>surcharge</span>',
     '<span><i style="background:#fff;box-shadow:inset 0 -3px 0 #101D28;border:1px solid rgba(16,29,40,.15)"></i>capacité ajustée</span>',
     '<span><i style="background:#DEECE4;box-shadow:inset 0 -3px 0 rgba(16,29,40,.72);border:1px solid rgba(16,29,40,.15)"></i>filet : charge réelle</span>',
+    '<span><i style="background:#9CC9B2;background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.5) 0 3px,transparent 3px 7px);border:1px solid rgba(16,29,40,.15)"></i>dont tâches sans personne, réparties dans la team</span>',
   ].join('');
 }

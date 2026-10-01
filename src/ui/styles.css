@@ -433,6 +433,8 @@ tbody tr.tot:hover{background:none}
 .cell{overflow:hidden}
 .cell .rl{position:absolute;left:0;bottom:0;height:3px;background:rgba(16,29,40,.72);border-radius:0 2px 0 0}
 .rl-txt{color:var(--ink3);font-size:9.5px}
+/* Cellule qui inclut une part de tâches sans personne (répartie dans la team). */
+.cell.ua{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.5) 0 3px,transparent 3px 7px)}
 
 .lmode{margin-left:auto;display:inline-flex;gap:0}
 .lmode button{background:#1E303D;border:1px solid #35495B;color:#C9D7E0;padding:2px 8px;cursor:pointer;font-size:10px;font-weight:500}

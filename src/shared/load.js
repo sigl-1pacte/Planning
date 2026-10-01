@@ -110,6 +110,31 @@ export function computeLoad(domain, planning, { range, teamId = null }) {
   return { issues, weeks, people };
 }
 
+// Tâches planifiées sans personne (ni ligne « Contributors » ni assigné) :
+// computeLoad ne les fait peser sur personne. Pour la seule bande de charge,
+// leurs heures sont réparties à parts égales entre les membres Linear actifs
+// de la team de la tâche, jour ouvré par jour ouvré. Une team sans membre
+// connu ne reçoit rien. Renvoie { userId: { lundi: heures } }.
+export function unassignedLoad(domain, planning, { teamId = null } = {}) {
+  const holidays = new Set(planning.holidays.map((h) => h.day));
+  const active = new Set(domain.users.filter((u) => u.active !== false).map((u) => u.id));
+  const out = {};
+  for (const issue of domain.issues) {
+    if (!issue.start || issue.status === 'canceled' || issue.contributorIds.length) continue;
+    if (teamId !== null && issue.teamId !== teamId) continue;
+    const members = (domain.teams.find((t) => t.id === issue.teamId)?.memberIds ?? []).filter((id) => active.has(id));
+    const days = workingDays(issue.start, issue.end, holidays);
+    const hours = (issue.estimate ?? 0) * planning.settings.hoursPerPoint;
+    if (!members.length || !days.length || hours <= 0) continue;
+    const perDay = hours / members.length / days.length;
+    for (const id of members) {
+      out[id] ??= {};
+      for (const d of days) out[id][mondayOf(d)] = (out[id][mondayOf(d)] ?? 0) + perDay;
+    }
+  }
+  return out;
+}
+
 export function personStats(rows) {
   const active = rows.filter((w) => w.hours > 0.01);
   const finitePct = (w) => (Number.isFinite(w.pct) ? w.pct : 0);

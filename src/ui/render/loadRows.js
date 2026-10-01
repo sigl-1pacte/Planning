@@ -12,11 +12,25 @@ export function tint(pct, ceiling) {
 
 const pctText = (pct) => (Number.isFinite(pct) ? `${Math.round(pct)} %` : '∞');
 
+// Ajoute à une semaine la part des tâches sans personne (unassignedLoad) :
+// heures, taux et indisponibilité recalculés comme dans computeLoad.
+function withUnassigned(week, extra) {
+  if (!(extra > 0.01)) return { ...week, unassignedHours: 0 };
+  const hours = week.hours + extra;
+  return {
+    ...week,
+    hours,
+    unassignedHours: extra,
+    pct: week.capacity > 0 ? (hours / week.capacity) * 100 : Infinity,
+    unavailable: week.capacity === 0,
+  };
+}
+
 const MODES = [['planned', 'Prévue'], ['real', 'Réelle'], ['both', 'Comparer']];
 
 // mode : 'planned' (défaut), 'real' (heures réelles dérivées des points réels
 // des tâches) ou 'both' (prévu et réel côte à côte dans chaque cellule).
-export function renderLoadRows(sink, { people, load, planning, axis, users, teamScoped, mode = 'planned' }) {
+export function renderLoadRows(sink, { people, load, planning, axis, users, teamScoped, mode = 'planned', unassigned = {} }) {
   const [bandLeft, bandRight] = rowPair('r band');
   const label = { planned: 'prévisionnelle', real: 'réelle', both: 'prévue vs réelle' }[mode] ?? 'prévisionnelle';
   bandLeft.innerHTML = `<span>Charge ${label} ${teamScoped ? 'de la team' : 'par personne'}</span>
@@ -26,7 +40,8 @@ export function renderLoadRows(sink, { people, load, planning, axis, users, team
   const ceiling = planning.settings.loadCeilingPct;
 
   for (const user of people) {
-    const weeks = load.people[user.id];
+    const extra = unassigned[user.id] ?? {};
+    const weeks = load.people[user.id].map((w) => withUnassigned(w, extra[w.weekStart]));
     const stats = personStats(weeks);
     const role = planning.people.find((p) => p.linearUserId === user.id)?.role;
     const [left, right] = rowPair('r ld');
@@ -40,11 +55,11 @@ export function renderLoadRows(sink, { people, load, planning, axis, users, team
       // Vue réelle : pas de cellule sans charge réelle (elle compte pour 0).
       if (mode === 'real' ? !hasReal : (week.hours <= 0.01 && !(mode === 'both' && hasReal))) continue;
       const cell = document.createElement('div');
-      cell.className = 'cell';
+      cell.className = week.unassignedHours && mode !== 'real' ? 'cell ua' : 'cell';
       cell.dataset.pw = `${user.id}|${week.weekStart}`;
       cell.style.left = `${dayIndex(axis, week.weekStart) * axis.dayWidth}px`;
       cell.style.width = `${7 * axis.dayWidth - 1.5}px`;
-      cell.title = `Prévu ${fr1(week.hours)} h · réel ${fr1(week.realHours ?? 0)} h`;
+      cell.title = `Prévu ${fr1(week.hours)} h${week.unassignedHours ? ` (dont ${fr1(week.unassignedHours)} h de tâches sans personne, réparties dans la team)` : ''} · réel ${fr1(week.realHours ?? 0)} h`;
       const wide = 7 * axis.dayWidth > 34;
       if (mode === 'real') {
         const pct = week.realPct ?? 0;

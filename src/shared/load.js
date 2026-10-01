@@ -135,6 +135,49 @@ export function unassignedLoad(domain, planning, { teamId = null } = {}) {
   return out;
 }
 
+// Détail d'une cellule de la bande de charge : les tâches qui font la charge
+// de `userId` pendant la semaine qui commence le lundi `weekStart`, avec les
+// mêmes calculs que computeLoad (et unassignedLoad pour les tâches sans
+// personne, `unassigned: true`). La somme des heures redonne la cellule.
+// Plus lourdes d'abord.
+export function weekBreakdown(domain, planning, load, { userId, weekStart, teamId = null }) {
+  const holidays = new Set(planning.holidays.map((h) => h.day));
+  const hoursPerPoint = planning.settings.hoursPerPoint;
+  const weekEnd = addDays(weekStart, 6);
+  const inWeek = (d) => d >= weekStart && d <= weekEnd;
+  const active = new Set(domain.users.filter((u) => u.active !== false).map((u) => u.id));
+  const rows = [];
+  for (const issue of domain.issues) {
+    if (teamId !== null && issue.teamId !== teamId) continue;
+    const info = load.issues[issue.id];
+    if (info && userId in info.shares) {
+      const days = info.days.filter(inWeek);
+      if (!days.length) continue;
+      const share = info.shares[userId];
+      const spread = (total) => (info.days.length ? (total * share * days.length) / info.days.length : 0);
+      rows.push({
+        issue, days, share, unassigned: false,
+        hours: spread(info.hours),
+        realHours: spread((issue.realPoints ?? 0) * hoursPerPoint),
+      });
+      continue;
+    }
+    if (!issue.start || issue.status === 'canceled' || issue.contributorIds.length) continue;
+    const members = (domain.teams.find((t) => t.id === issue.teamId)?.memberIds ?? []).filter((id) => active.has(id));
+    if (!members.includes(userId)) continue;
+    const allDays = workingDays(issue.start, issue.end, holidays);
+    const days = allDays.filter(inWeek);
+    const hours = (issue.estimate ?? 0) * hoursPerPoint;
+    if (!days.length || hours <= 0) continue;
+    rows.push({
+      issue, days, share: 1 / members.length, unassigned: true,
+      hours: (hours / members.length / allDays.length) * days.length,
+      realHours: 0,
+    });
+  }
+  return rows.sort((a, b) => b.hours - a.hours || (a.issue.identifier < b.issue.identifier ? -1 : 1));
+}
+
 export function personStats(rows) {
   const active = rows.filter((w) => w.hours > 0.01);
   const finitePct = (w) => (Number.isFinite(w.pct) ? w.pct : 0);

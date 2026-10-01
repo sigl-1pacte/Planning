@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  planningRange, weeklyHours, defaultWeeklyHours, shareWeights, computeLoad, personStats, unassignedLoad,
+  planningRange, weeklyHours, defaultWeeklyHours, shareWeights, computeLoad, personStats, unassignedLoad, weekBreakdown,
 } from '../../src/shared/load.js';
 
 const planning = (over = {}) => ({
@@ -179,5 +179,37 @@ describe('personStats', () => {
       { hours: 21, pct: 75 },
     ];
     expect(personStats(rows)).toEqual({ total: 35, realTotal: 0, activeWeeks: 2, peakPct: 75, avgPct: 62.5 });
+  });
+});
+
+describe('weekBreakdown', () => {
+  const users = [{ id: 'u1', active: true }, { id: 'u2', active: true }];
+  const teams = [{ id: 't1', memberIds: ['u1', 'u2'] }];
+  const range = { from: '2026-09-14', to: '2026-10-04' };
+
+  it('retrouve, tâche par tâche, les heures d’une cellule de la bande de charge', () => {
+    const d = domain([
+      issue(), // 40 h sur 8 jours (16 → 25 sept.), moitié chacun : 2,5 h/j pour u1
+      issue({ id: 'i2', identifier: 'X-2', start: '2026-09-14', end: '2026-09-18', estimate: 2, contributorIds: ['u1'] }),
+      issue({ id: 'i3', identifier: 'X-3', start: '2026-09-21', end: '2026-09-22', contributorIds: [] }),
+    ], { users, teams });
+    const p = planning();
+    const load = computeLoad(d, p, { range });
+    const week1 = weekBreakdown(d, p, load, { userId: 'u1', weekStart: '2026-09-14' });
+    expect(week1.map((r) => [r.issue.id, r.days.length, r.hours])).toEqual([['i2', 5, 10], ['i1', 3, 7.5]]);
+    expect(week1.reduce((s, r) => s + r.hours, 0)).toBeCloseTo(load.people.u1[0].hours);
+
+    // Semaine suivante : la tâche sans personne (40 h sur 2 jours, deux membres)
+    // y figure aussi, signalée comme telle.
+    const week2 = weekBreakdown(d, p, load, { userId: 'u1', weekStart: '2026-09-21' });
+    expect(week2.map((r) => [r.issue.id, r.unassigned, r.hours])).toEqual([['i3', true, 20], ['i1', false, 12.5]]);
+  });
+
+  it('ne retient que la team demandée, et rien hors de la semaine', () => {
+    const d = domain([issue(), issue({ id: 'i2', teamId: 't2', contributorIds: ['u1'] })], { users, teams });
+    const p = planning();
+    const load = computeLoad(d, p, { range, teamId: 't1' });
+    expect(weekBreakdown(d, p, load, { userId: 'u1', weekStart: '2026-09-14', teamId: 't1' }).map((r) => r.issue.id)).toEqual(['i1']);
+    expect(weekBreakdown(d, p, load, { userId: 'u1', weekStart: '2026-09-28' })).toEqual([]);
   });
 });

@@ -2,7 +2,7 @@ import { esc } from './format.js';
 import { enhanceDateFields } from '../dateField.js';
 
 export function renderUnplannedTab(section, { issues, teams, onPlan }) {
-  const teamKey = (id) => teams.find((t) => t.id === id)?.key ?? '—';
+  const teamKey = (id) => teams.find((t) => t.id === id)?.key ?? '?';
   if (!issues.length) {
     section.innerHTML = '<h2>Tâches non planifiées (0)</h2><p class="note">Aucune tâche non planifiée dans ce périmètre.</p>';
     return;
@@ -15,7 +15,7 @@ export function renderUnplannedTab(section, { issues, teams, onPlan }) {
         <td>${esc(i.identifier)}</td>
         <td>${esc(i.title)}</td>
         <td>${esc(teamKey(i.teamId))}</td>
-        <td class="r">${i.estimate ?? '—'}</td>
+        <td class="r">${i.estimate ?? '?'}</td>
         <td class="why">${esc(i.unplannedReason)}</td>
         <td><div class="dfield"><input type="date" data-start data-issue="${esc(i.id)}" value="${esc(i.startDate ?? '')}"></div></td>
         <td><div class="dfield"><input type="date" data-end data-issue="${esc(i.id)}" value="${esc(i.dueDate ?? '')}"></div></td>

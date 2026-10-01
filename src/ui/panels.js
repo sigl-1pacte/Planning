@@ -346,7 +346,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
             <input type="number" min="0" step="any" name="${esc(uid)}" value="${value}"
               ${isLast ? 'readonly title="Calculée pour que le total fasse 100 %"' : ''}
               aria-label="Part de ${esc(user?.name ?? uid)}">
-            <span class="cx">${person ? `${fr1(person.hours)} h · ${person.ratePct ?? '—'} %` : '—'}</span>
+            <span class="cx">${person ? `${fr1(person.hours)} h · ${person.ratePct ?? '?'} %` : '0 h'}</span>
           </div>`;
         }).join('')}
         <p class="hint">${lastUid !== null ? `La part de ${esc(userOf(lastUid)?.name ?? lastUid)} complète les autres jusqu'à 100 %.` : 'Les parts sont ramenées à 100 %.'} ${rows.length ? 'Répartition ajustée à la main.' : 'Répartition égale par défaut.'}</p>
@@ -375,7 +375,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       <div class="fg"><label for="f-title">Titre</label>
         <input id="f-title" data-field="title" value="${esc(issue.title)}"></div>
       <div class="fg"><label for="f-desc">Description</label>
-        <textarea id="f-desc" data-field="description" rows="3" placeholder="Texte libre — la date de début et les contributeurs restent gérés par leurs champs">${esc(parseDescriptionText(issue.rawDescription))}</textarea></div>
+        <textarea id="f-desc" data-field="description" rows="3" placeholder="Texte libre. La date de début et les contributeurs restent gérés par leurs champs.">${esc(parseDescriptionText(issue.rawDescription))}</textarea></div>
       <div class="fg"><label for="f-state">Statut</label>
         <select id="f-state" data-field="state">
           ${(domain.workflowStates ?? []).filter((s) => s.teamId === issue.teamId)
@@ -383,16 +383,16 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         </select></div>
       <div class="fg"><label for="f-assignee">Responsable</label>
         <select id="f-assignee" data-field="assignee">
-          <option value="">— aucun —</option>
+          <option value="">Aucun</option>
           ${domain.users.map((u) => `<option value="${esc(u.id)}"${u.id === issue.assigneeId ? ' selected' : ''}>${esc(u.name)}</option>`).join('')}
         </select></div>
       <div class="fg"><label for="f-estimate">Estimation (points)</label>
         <select id="f-estimate" data-field="estimate">
-          <option value="">— aucune —</option>
+          <option value="">Aucune</option>
           ${FIB.map((f) => `<option value="${f}"${f === issue.estimate ? ' selected' : ''}>${f}</option>`).join('')}
         </select></div>
       <div class="fg"><label for="f-real">Charge réelle (points consommés)</label>
-        <input id="f-real" data-field="real" type="number" min="0" step="0.5" value="${issue.realPoints ?? ''}" placeholder="non renseignée — compte pour 0 dans la charge réelle"></div>
+        <input id="f-real" data-field="real" type="number" min="0" step="0.5" value="${issue.realPoints ?? ''}" placeholder="Non renseignée : compte pour 0 dans la charge réelle"></div>
       <div class="f2">
         <div class="fg"><label for="f-start">Début</label><div class="dfield">
           <input id="f-start" type="date" data-field="start" value="${issue.start ?? issue.startDate ?? ''}"></div></div>
@@ -592,7 +592,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     const projects = domain.projects.filter((p) => p.teamIds.includes(teamId));
     const states = (domain.workflowStates ?? []).filter((s) => s.teamId === teamId);
     body.innerHTML = `
-      ${ro('Team', team?.name ?? '—')}
+      ${ro('Team', team?.name ?? 'inconnue')}
       <div class="fg"><label for="f-title">Titre</label><input id="f-title" data-field="title"></div>
       <div class="fg"><label for="f-desc">Description</label><textarea id="f-desc" data-field="description" rows="4"></textarea></div>
       <div class="fg"><label for="f-project">Projet</label>
@@ -602,17 +602,17 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
         </select></div>
       <div class="fg"><label for="f-state">Statut</label>
         <select id="f-state" data-field="state">
-          <option value="">— par défaut de la team —</option>
+          <option value="">Statut par défaut de la team</option>
           ${states.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}
         </select></div>
       <div class="fg"><label for="f-assignee">Responsable</label>
         <select id="f-assignee" data-field="assignee">
-          <option value="">— aucun —</option>
+          <option value="">Aucun</option>
           ${domain.users.map((u) => `<option value="${esc(u.id)}">${esc(u.name)}</option>`).join('')}
         </select></div>
       <div class="fg"><label for="f-estimate">Estimation (points)</label>
         <select id="f-estimate" data-field="estimate">
-          <option value="">— aucune —</option>
+          <option value="">Aucune</option>
           ${FIB.map((f) => `<option value="${f}">${f}</option>`).join('')}
         </select></div>
       <div class="f2">
@@ -936,7 +936,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       // en silence à l'enregistrement d'un autre champ.
       const gone = selected && !people.some((u) => u.id === selected)
         ? `<option value="${esc(selected)}" selected>${esc(domain.users.find((u) => u.id === selected)?.name ?? 'personne inconnue')} (inactive)</option>` : '';
-      return `<select ${attrs}><option value="">— à définir —</option>${gone}
+      return `<select ${attrs}><option value="">À définir</option>${gone}
         ${members.length ? `<optgroup label="Membres de la team">${members.map((u) => option(u, selected)).join('')}</optgroup>
           <optgroup label="Autres personnes">${others.map((u) => option(u, selected)).join('')}</optgroup>`
           : others.map((u) => option(u, selected)).join('')}
@@ -944,7 +944,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     };
     const holder = (team, role) => org.teamRoles.find((r) => r.teamId === team.id && r.role === role)?.linearUserId ?? null;
     const teams = teamId ? domain.teams.filter((t) => t.id === teamId) : domain.teams;
-    title.textContent = teamId ? `Rôles — ${teams[0]?.name ?? 'team'}` : 'Organisation';
+    title.textContent = teamId ? `Rôles de la team ${teams[0]?.name ?? ''}`.trim() : 'Organisation';
     body.innerHTML = `
       ${teamId ? '' : `<div class="fg"><label for="o-mgr">Manager</label>${select('id="o-mgr" data-org-manager', org.managerUserId, null)}</div>`}
       ${teams.map((team) => `<div class="sec">${esc(team.name)} · ${esc(team.key)}</div>
@@ -984,7 +984,7 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       </form>
       <div class="sec">Jours chômés</div>
       ${planning.holidays.map((h) => `<div class="cbo">
-        <span class="cn">${longDay(h.day)} — ${esc(h.label)}</span>
+        <span class="cn">${esc(h.label)} · ${longDay(h.day)}</span>
         <button type="button" data-action="delete-holiday" data-day="${h.day}" aria-label="Retirer le ${longDay(h.day)}">×</button>
       </div>`).join('')}
       <form data-form="holiday" data-nodirty>

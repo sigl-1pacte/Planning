@@ -214,7 +214,7 @@ function nonCapacityCandidates(domain, planning, teamId, load, latest, weekStart
         const newEnd = addDays(issue.end, extra);
         out.push({
           kind: 'stretch',
-          summary: `Étaler ${issue.identifier} (${issue.title}) jusqu'au ${newEnd} au lieu du ${issue.end} — même volume, réparti sur plus de jours.`,
+          summary: `Étaler ${issue.identifier} (${issue.title}) jusqu'au ${newEnd} au lieu du ${issue.end} : même volume, réparti sur plus de jours.`,
           simulate: (d, p) => [patchIssue(d, issue.id, { end: newEnd }), p],
           simulateLoad: (l) => simulateIssueLoad(l, issue.id, issue.teamId, teamId, holidays, hoursPerPoint, issue.start, newEnd, issue.estimate, currentFractions),
           apply: (api) => api.updateIssue(issue.id, { end: newEnd }),

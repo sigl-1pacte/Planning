@@ -100,11 +100,11 @@ export function renderProjectsTable(tbody, { view, load }) {
       const hours = issues.reduce((s, i) => s + (load.issues[i.id]?.hours ?? 0), 0);
       const period = project.startDate && project.targetDate
         ? `${shortDay(project.startDate)} → ${shortDay(project.targetDate)}`
-        : '—';
+        : 'Non daté';
       const milestones = project.milestones
         .filter((m) => m.date)
         .map((m) => `${esc(m.name)} · ${shortDay(m.date)}`)
-        .join('<br>') || '—';
+        .join('<br>') || 'Aucun';
       const teamTag = view.teamId ? '' : ` <span style="color:var(--ink3)">${esc(group.team.key)}</span>`;
       rows.push(`<tr>
         <td><span class="sw" style="background:${esc(project.color)};display:inline-block;margin-right:8px"></span>${esc(project.name)}${teamTag}</td>

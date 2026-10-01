@@ -26,7 +26,17 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
-html{scrollbar-width:none;background:var(--mist)}
+/* Le fond est porté par <html> (et non <body>) : c'est lui que le navigateur
+   peint aussi dans la zone d'étirement quand on tire au-delà du haut ou du bas
+   de la page — sinon une bande grise unie y apparaissait. */
+html{scrollbar-width:none;background-color:#D6DCEE;
+  background-image:
+    radial-gradient(1200px 700px at -8% -18%,rgba(43,75,184,.34),transparent 62%),
+    radial-gradient(900px 600px at 108% -10%,rgba(110,86,207,.22),transparent 60%),
+    radial-gradient(1000px 700px at 85% 115%,rgba(233,177,14,.14),transparent 60%),
+    radial-gradient(900px 650px at 0% 110%,rgba(44,154,138,.13),transparent 60%),
+    linear-gradient(180deg,#E3E8F3,var(--mist) 60%,#EDEFF5);
+  background-attachment:fixed}
 html::-webkit-scrollbar{display:none}
 /* Barres de défilement : la page et le tiroir n'en montrent pas ; ailleurs
    (frise, listes, tableaux, popups), une fine pastille arrondie sur fond
@@ -44,14 +54,7 @@ html::-webkit-scrollbar{display:none}
   html,.drw .bd{scrollbar-width:none}
 }
 body{font-family:var(--font);font-size:12px;line-height:1.4;color:var(--ink);
-  -webkit-font-smoothing:antialiased;min-height:100vh;
-  background:
-    radial-gradient(1200px 700px at -8% -18%,rgba(43,75,184,.34),transparent 62%),
-    radial-gradient(900px 600px at 108% -10%,rgba(110,86,207,.22),transparent 60%),
-    radial-gradient(1000px 700px at 85% 115%,rgba(233,177,14,.14),transparent 60%),
-    radial-gradient(900px 650px at 0% 110%,rgba(44,154,138,.13),transparent 60%),
-    linear-gradient(180deg,#E3E8F3,var(--mist) 60%,#EDEFF5);
-  background-attachment:fixed}
+  -webkit-font-smoothing:antialiased;min-height:100vh;background:transparent}
 h1,h2,h3{font-family:var(--font-display);letter-spacing:-.01em}
 button,select,input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 [hidden]{display:none!important}

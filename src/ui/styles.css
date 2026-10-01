@@ -117,7 +117,11 @@ button,select,input,textarea{font-family:inherit;font-size:inherit;color:inherit
 
 /* feuille : verre presque opaque, pour la lisibilité */
 .sheet{margin:14px var(--gutter) 40px;padding:24px 26px 26px;border-radius:var(--r-xl);
-  background:var(--glass-strong);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
+  /* Pas de flou d'arrière-plan : derrière la feuille il n'y a que le fond en
+     dégradé doux, que le flou ne changeait pas — mais qu'il fallait recalculer
+     sur toute la hauteur de la feuille à chaque image du défilement (la
+     moitié de la fluidité perdue). */
+  background:var(--glass-strong);
   box-shadow:var(--glass-edge),var(--sh-lg)}
 .hd{display:flex;gap:26px;align-items:flex-end;padding-bottom:14px;margin-bottom:4px;flex-wrap:wrap;border-bottom:1px solid var(--line2)}
 .hd h2{font-size:24px;font-weight:700;margin:0;letter-spacing:-.025em}
@@ -590,29 +594,29 @@ tbody tr.tot:hover{background:none}
 .cell u{white-space:nowrap}
 
 /* ── Verre liquide, seconde couche ─────────────────────────────────────────
-   Vrai verre dépoli (flou de ce qui est derrière) seulement pour ce qui
-   flotte au-dessus d'autre chose : en-tête et pied du tiroir, étiquettes de
-   jalon sur la frise, boutons, chiffres clés, bandeau de conflits. Pour ce
-   qui se répète par centaines (pastilles de statut, barres, cellules de
-   charge), un simple reflet de lentille, sans flou : le flou coûte cher. */
+   Vrai verre dépoli (flou de ce qui est derrière) seulement là où du contenu
+   passe vraiment dessous : bandeau, tiroir et ses en-tête et pied, étiquettes
+   de jalon, bandeau de conflits, popups. Ailleurs (boutons, chiffres clés,
+   tableaux, feuille), le flou ne brouillerait qu'une surface déjà unie : un
+   reflet de lentille suffit, et le défilement reste fluide — le flou se
+   recalcule à chaque image. */
 :root{
   --sheen:linear-gradient(180deg,rgba(255,255,255,.62),rgba(255,255,255,.14) 52%,rgba(255,255,255,0));
   --lens:inset 0 1px 0 #fff,inset 0 -1px 1.5px rgba(15,27,51,.08),0 0 0 .5px rgba(15,27,51,.08),
     0 2px 6px rgba(15,27,51,.14),0 8px 16px -8px rgba(15,27,51,.2);
 }
-.btn{background-image:var(--sheen);backdrop-filter:blur(14px) saturate(170%);-webkit-backdrop-filter:blur(14px) saturate(170%)}
+.btn{background-image:var(--sheen)}
 .btn.pri{background:linear-gradient(180deg,rgba(255,255,255,.18),rgba(255,255,255,0) 55%),var(--ink)}
 .btn.pri:hover{background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0) 55%),#1E2D4F}
 .btn.accent{background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 55%),linear-gradient(180deg,rgba(76,111,209,.9),rgba(36,64,143,.92))}
-.btn.ghost,.btn.danger-ghost{background-image:none;backdrop-filter:none;-webkit-backdrop-filter:none}
-/* Onglet et zoom choisis : une lentille en relief dans leur piste dépolie. */
+.btn.ghost,.btn.danger-ghost{background-image:none}
+/* Onglet et zoom choisis : une lentille en relief dans leur piste dépolie
+   (petite surface : son flou ne pèse rien sur le défilement). */
 .nav,.zoom{backdrop-filter:blur(10px) saturate(160%);-webkit-backdrop-filter:blur(10px) saturate(160%)}
 .nav a.on,.zoom button.on{background:linear-gradient(180deg,#fff,rgba(255,255,255,.84));box-shadow:var(--lens)}
 .lmode button.on{background:linear-gradient(180deg,#fff,rgba(255,255,255,.86));box-shadow:inset 0 1px 0 #fff,0 1px 4px rgba(0,0,0,.3)}
-.fact{background:rgba(255,255,255,.55);background-image:var(--sheen);
-  backdrop-filter:blur(12px) saturate(170%);-webkit-backdrop-filter:blur(12px) saturate(170%)}
-.blk{background-image:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,0) 120px);
-  backdrop-filter:blur(12px) saturate(150%);-webkit-backdrop-filter:blur(12px) saturate(150%)}
+.fact{background:rgba(255,255,255,.55);background-image:var(--sheen)}
+.blk{background-image:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,0) 120px)}
 .banner.act{background-color:rgba(255,244,226,.7);background-image:var(--sheen)}
 /* Repère du jour : lentille rouge. */
 .today-tag{background:linear-gradient(180deg,#D24A55,#A82832);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 2px 6px rgba(174,44,52,.4)}

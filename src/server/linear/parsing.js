@@ -6,6 +6,9 @@ const CONTRIB_RE = /^\s*Contributors\s*:\s*(.+)$/im;
 const REAL_RE = /^\s*Real points\s*:\s*(\d+(?:[.,]\d+)?)\s*$/im;
 const REAL_LABEL_RE = /^\s*Real points\s*:(.*)$/im;
 const MENTION_RE = /@([\p{L}\p{N}._-]+)/gu;
+// « Contributors: none » : personne, choisi explicitement. Sans cette ligne,
+// une tâche sans contributeurs retomberait sur son assigné (mapper.js).
+const NOBODY = 'none';
 const NO_LINE = 'Aucune ligne « Starting date » dans la description';
 
 export function parseStartingDate(description) {
@@ -41,13 +44,14 @@ export function parseContributors(description, users) {
   const userIds = [];
   const unresolved = [];
   const line = description?.match(CONTRIB_RE);
-  if (!line) return { userIds, unresolved };
+  if (!line) return { userIds, unresolved, nobody: false };
+  if (line[1].trim().toLowerCase() === NOBODY) return { userIds, unresolved, nobody: true };
   for (const [, token] of line[1].matchAll(MENTION_RE)) {
     const user = resolveMention(token, users);
     if (!user) unresolved.push(token);
     else if (!userIds.includes(user.id)) userIds.push(user.id);
   }
-  return { userIds, unresolved };
+  return { userIds, unresolved, nobody: false };
 }
 
 export function setStartingDate(description, isoDate) {
@@ -59,15 +63,15 @@ export function setStartingDate(description, isoDate) {
   return `${line}\n\n${description}`;
 }
 
-// Remplace (ou retire, si users est vide) la ligne « Contributors » de la
-// description, sans toucher au reste — même logique que setStartingDate.
+// Remplace la ligne « Contributors » de la description, sans toucher au
+// reste — même logique que setStartingDate. Une liste vide écrit
+// « Contributors: none » plutôt que de retirer la ligne : sinon l'assigné
+// redeviendrait contributeur à la relecture.
 export function setContributors(description, users) {
   const hasLine = Boolean(description) && CONTRIB_RE.test(description);
-  if (users.length === 0) {
-    if (!hasLine) return description ?? '';
-    return description.replace(CONTRIB_RE, '').replace(/\n{2,}/g, '\n').trim();
-  }
-  const line = `Contributors: ${users.map((u) => `@${u.displayName ?? u.name}`).join(' ')}`;
+  const line = users.length
+    ? `Contributors: ${users.map((u) => `@${u.displayName ?? u.name}`).join(' ')}`
+    : `Contributors: ${NOBODY}`;
   if (!description) return line;
   if (hasLine) return description.replace(CONTRIB_RE, line);
   return `${description}\n\n${line}`;

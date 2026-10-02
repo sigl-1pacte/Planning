@@ -54,12 +54,12 @@ describe('resolveMention', () => {
 describe('parseContributors', () => {
   it('lit la ligne dans la description', () => {
     expect(parseContributors('Point d\'étape\nContributors: @louis @maxou\nSuite', users))
-      .toEqual({ userIds: ['u2', 'u3'], unresolved: [] });
+      .toEqual({ userIds: ['u2', 'u3'], unresolved: [], nobody: false });
   });
 
   it('dédoublonne et signale les mentions non résolues', () => {
     expect(parseContributors('contributors : @sacha @Sacha @fantome', users))
-      .toEqual({ userIds: ['u1'], unresolved: ['fantome'] });
+      .toEqual({ userIds: ['u1'], unresolved: ['fantome'], nobody: false });
   });
 
   it('reconnaît une mention placée dans un lien markdown', () => {
@@ -68,14 +68,14 @@ describe('parseContributors', () => {
   });
 
   it('indique l\'absence de ligne', () => {
-    expect(parseContributors(null, users)).toEqual({ userIds: [], unresolved: [] });
-    expect(parseContributors('rien ici', users)).toEqual({ userIds: [], unresolved: [] });
+    expect(parseContributors(null, users)).toEqual({ userIds: [], unresolved: [], nobody: false });
+    expect(parseContributors('rien ici', users)).toEqual({ userIds: [], unresolved: [], nobody: false });
   });
 
   it('coexiste avec la ligne Starting date dans la même description', () => {
     const description = 'Starting date: 16/09/2026\nContributors: @sacha @louis\nContexte';
     expect(parseStartingDate(description)).toEqual({ ok: true, date: '2026-09-16' });
-    expect(parseContributors(description, users)).toEqual({ userIds: ['u1', 'u2'], unresolved: [] });
+    expect(parseContributors(description, users)).toEqual({ userIds: ['u1', 'u2'], unresolved: [], nobody: false });
   });
 });
 
@@ -121,14 +121,16 @@ describe('setContributors', () => {
     expect(setContributors(null, [users[1]])).toBe('Contributors: @Louis');
   });
 
-  it('retire la ligne (sans laisser de blanc) quand la liste est vide', () => {
-    expect(setContributors('Avant\nContributors: @sacha\nAprès', [])).toBe('Avant\nAprès');
-    expect(setContributors('Contributors: @sacha', [])).toBe('');
+  it('écrit « Contributors: none » quand la liste est vide, sans toucher au reste', () => {
+    expect(setContributors('Avant\nContributors: @sacha\nAprès', [])).toBe('Avant\nContributors: none\nAprès');
+    expect(setContributors('Contributors: @sacha', [])).toBe('Contributors: none');
+    expect(setContributors('Rien ici', [])).toBe('Rien ici\n\nContributors: none');
+    expect(setContributors(null, [])).toBe('Contributors: none');
   });
 
-  it('ne touche rien quand la liste est déjà vide et qu\'il n\'y a pas de ligne', () => {
-    expect(setContributors('Rien ici', [])).toBe('Rien ici');
-    expect(setContributors(null, [])).toBe('');
+  it('relit « Contributors: none » comme personne, choisi explicitement', () => {
+    expect(parseContributors('Contributors: none', users)).toEqual({ userIds: [], unresolved: [], nobody: true });
+    expect(parseContributors('Contributors: @sacha', users).nobody).toBe(false);
   });
 });
 

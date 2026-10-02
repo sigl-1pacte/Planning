@@ -66,6 +66,8 @@ export function mapIssue(i, users, blockedBy) {
   if (contrib.userIds.length) {
     contributorIds = contrib.userIds;
     contributorsSource = 'description';
+  } else if (contrib.nobody) {
+    contributorsSource = 'nobody';
   } else if (i.assignee) {
     contributorIds = [i.assignee.id];
     contributorsSource = 'assignee';

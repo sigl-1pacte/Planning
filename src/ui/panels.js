@@ -16,6 +16,7 @@ const SOURCE_HINT = {
   description: 'Contributeurs lus dans la ligne « Contributors » de la description.',
   assignee: 'Pas de ligne « Contributors » : l\'assigné porte toute la charge.',
   none: 'Ni ligne « Contributors » ni assigné : la tâche ne pèse sur personne.',
+  nobody: 'Ligne « Contributors: none » : la tâche ne pèse sur personne, assigné compris.',
 };
 
 // Zone de texte à la hauteur de son contenu : ni poignée de redimensionnement

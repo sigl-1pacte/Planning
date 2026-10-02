@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { previews, previewOf } from '../../src/ui/optimistic.js';
-import { issueUpdateInput, rescheduleInputs } from '../../src/ui/linearWrites.js';
+import { issueUpdateInput, rescheduleInputs, contributorsInput } from '../../src/ui/linearWrites.js';
 import { mapWorkspace } from '../../src/server/linear/mapper.js';
 import { rawWorkspace } from '../fixtures/workspace.js';
 
@@ -58,6 +58,14 @@ describe('aperçu local des écritures', () => {
     expect(issueOf(contributors, 'i-11')).toMatchObject({ contributorIds: ['u-louis'], contributorsSource: 'description' });
     const deps = previews.setDependencies(domain, 'i-12', ['i-13', 'i-13', 'inconnue']);
     expect(issueOf(deps, 'i-12').blockedBy).toEqual(['i-13']);
+  });
+
+  it('retirer le dernier contributeur : personne, sans retomber sur l\'assigné', () => {
+    for (const id of ['i-11', 'i-12']) {
+      const after = previews.setContributors(domain, id, []);
+      expect(issueOf(after, id)).toMatchObject({ contributorIds: [], contributorsSource: 'nobody' });
+      expect(after).toEqual(linearAfter([[id, contributorsInput(domain, id, []).input]]));
+    }
   });
 
   it('supprimer : seulement avec la bonne confirmation, et la tâche disparaît des bloqueuses', () => {

@@ -10,6 +10,10 @@ const PERSON_PALETTE = ['#2F4858', '#33658A', '#0D7278', '#7A5195', '#B9700A', '
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
+// Croix des boutons de fermeture (popup, tiroir) : dessinée plutôt qu'un
+// « × » de police, centrée au pixel près quelle que soit la police.
+export const CLOSE_ICON = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
+
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ENTITIES[c]);
 
 export function initials(user) {

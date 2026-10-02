@@ -8,7 +8,7 @@ import { loadPrefs, savePrefs } from './prefs.js';
 import { parseRoute } from './router.js';
 import { renderApp, renderLoadError } from './app.js';
 import { scrollLeftForToday } from './render/layout.js';
-import { shortDay, esc } from './render/format.js';
+import { shortDay, esc, CLOSE_ICON } from './render/format.js';
 import { todayISO, addDays } from '../shared/calendar.js';
 import { createUndo } from './undo.js';
 import { dayDeltaFromPixels, shiftedDates, transitiveDependents } from './dragReschedule.js';
@@ -769,10 +769,14 @@ function applyRecommendation(reco) {
 function refreshLoadChart() {
   const chart = document.querySelector('.chart-overlay [data-chart]');
   if (!chart || !lastLoad || !lastAxis) return;
-  chart.innerHTML = '<p class="hint">Calcul des recommandations…</p>';
+  // Déjà rempli (une écriture vient de changer la charge) : on garde le
+  // rendu précédent, estompé, plutôt qu'un saut vers « Calcul… ».
+  if (chart.childElementCount) chart.classList.add('busy');
+  else chart.innerHTML = '<p class="hint">Calcul des recommandations…</p>';
   setTimeout(() => {
     const stillThere = document.querySelector('.chart-overlay [data-chart]');
     if (!stillThere) return;
+    stillThere.classList.remove('busy');
     try {
       renderLoadChart(stillThere, {
         domain: controller.state.snapshot.domain, planning: controller.state.planning,
@@ -798,7 +802,11 @@ function openLoadChart() {
   overlay.className = 'overlay chart-overlay';
   const box = document.createElement('div');
   box.className = 'chartbox';
-  box.innerHTML = '<button class="x" type="button" data-action="close-chart" aria-label="Fermer">×</button><div data-chart></div>';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-labelledby', 'chT');
+  box.innerHTML = `<header class="ch-head"><h2 id="chT">Charge et recommandations</h2>
+      <button class="x" type="button" data-action="close-chart" aria-label="Fermer">${CLOSE_ICON}</button></header>
+    <div class="ch-body" data-chart></div>`;
   overlay.appendChild(box);
   // En dehors de #app (qui est intégralement remplacé à chaque draw()) : la
   // popup doit survivre à un rafraîchissement de fond, donc sa propre

@@ -3,6 +3,19 @@ import { shareWeights } from './load.js';
 
 const FAR_FUTURE = '9999-12-31';
 
+// Dates lisibles dans les recommandations (« 9 oct. », « 30 janv. 2027 ») :
+// l'année n'apparaît que si les deux dates comparées n'ont pas la même.
+const MONTHS_SHORT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+function frDate(iso, withYear) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return `${d} ${MONTHS_SHORT[m - 1]}${withYear ? ` ${y}` : ''}`;
+}
+const frSpan = (a, b) => {
+  const years = a.slice(0, 4) !== b.slice(0, 4);
+  return [frDate(a, years), frDate(b, years)];
+};
+const issueLabel = (issue) => `${issue.identifier} · ${issue.title}`;
+
 // Date de fin au plus tard qu'une issue peut tenir sans repousser l'échéance
 // de son propre projet, ni forcer une de ses dépendantes à démarrer plus
 // tard que ce que celle-ci peut elle-même tenir — un calcul de type chemin
@@ -215,6 +228,8 @@ function nonCapacityCandidates(domain, planning, teamId, load, latest, weekStart
         out.push({
           kind: 'stretch',
           summary: `Étaler ${issue.identifier} (${issue.title}) jusqu'au ${newEnd} au lieu du ${issue.end} : même volume, réparti sur plus de jours.`,
+          target: issueLabel(issue),
+          detail: `Échéance du ${frSpan(issue.end, newEnd).join(' au ')} · même volume, réparti sur plus de jours`,
           simulate: (d, p) => [patchIssue(d, issue.id, { end: newEnd }), p],
           simulateLoad: (l) => simulateIssueLoad(l, issue.id, issue.teamId, teamId, holidays, hoursPerPoint, issue.start, newEnd, issue.estimate, currentFractions),
           apply: (api) => api.updateIssue(issue.id, { end: newEnd }),
@@ -230,6 +245,8 @@ function nonCapacityCandidates(domain, planning, teamId, load, latest, weekStart
         out.push({
           kind: 'move',
           summary: `Décaler ${issue.identifier} (${issue.title}) du ${newStart} au ${newEnd} (+${shift} j) pour sortir entièrement de la semaine surchargée.`,
+          target: issueLabel(issue),
+          detail: `Décalée de ${shift} j, du ${frSpan(newStart, newEnd).join(' au ')} · sort de la semaine surchargée`,
           simulate: (d, p) => [patchIssue(d, issue.id, { start: newStart, end: newEnd }), p],
           simulateLoad: (l) => simulateIssueLoad(l, issue.id, issue.teamId, teamId, holidays, hoursPerPoint, newStart, newEnd, issue.estimate, currentFractions),
           apply: (api) => api.reschedule(issue.id, { start: newStart, end: newEnd }),
@@ -249,6 +266,8 @@ function nonCapacityCandidates(domain, planning, teamId, load, latest, weekStart
             out.push({
               kind: 'rebalance',
               summary: `Transférer ${delta} points de part de ${userName(fromId)} vers ${userName(toId)} sur ${issue.identifier} (${issue.title}).`,
+              target: issueLabel(issue),
+              detail: `${delta} points de part passent de ${userName(fromId)} à ${userName(toId)}`,
               userNote: { fromId, toId, issueId: issue.id, issueIdentifier: issue.identifier, delta },
               simulate: (d, p) => [d, patchShares(p, issue.id, next)],
               simulateLoad: (l) => simulateIssueLoad(l, issue.id, issue.teamId, teamId, holidays, hoursPerPoint, issue.start, issue.end, issue.estimate, nextFractions),
@@ -282,6 +301,8 @@ function capacityCandidates(load, holidays, weekStart, ceiling, userName) {
     out.push({
       kind: 'capacity',
       summary: `Augmenter la capacité de ${userName(userId)} à ${neededWeekly} h pour la semaine du ${weekStart} (n'allège la charge de personne d'autre).`,
+      target: userName(userId),
+      detail: `Disponibilité portée à ${neededWeekly} h la semaine du ${frDate(weekStart, false)} · n'allège personne d'autre`,
       simulate: (d, p) => [d, patchCapacity(p, userId, weekStart, neededWeekly)],
       simulateLoad: (l) => simulateCapacityLoad(l, userId, weekStart, neededWeekly, holidays),
       apply: (api) => api.setCapacity(userId, weekStart, neededWeekly),
@@ -369,6 +390,8 @@ export function buildRecommendations(domain, planning, load0, ceiling, { teamId 
       id: `r${recommendations.length}`,
       kind: best.candidate.kind,
       summary: best.candidate.summary,
+      target: best.candidate.target,
+      detail: best.candidate.detail,
       gainHours: Math.round(best.gain * 10) / 10,
       apply: best.candidate.apply,
     });

@@ -83,10 +83,21 @@ describe('renderOrgChart', () => {
     ]) });
     expect(el.querySelectorAll('.org-team')).toHaveLength(2);
     expect(el.querySelectorAll('.org-edge')).toHaveLength(1);
-    expect(el.querySelector('[data-person="u1"]')).not.toBeNull();
+    // PO et SM ouvrent le choix des rôles de leur team, pas leur fiche ; les
+    // autres membres ouvrent leur fiche.
+    expect(el.querySelector('[data-person="u1"]')).toBeNull();
+    expect(el.querySelectorAll('.org-node:not(.empty)[data-org-roles="t1"]')).toHaveLength(2);
+    expect(el.querySelector('[data-person="u3"]')).not.toBeNull();
     // Manager non choisi : nœud vide qui ouvre le panneau de toute l'organisation.
     expect(el.querySelector('.org-node.empty[data-org-roles=""]')).not.toBeNull();
     expect(el.querySelector('.org-head[data-org-roles="t2"]')).not.toBeNull();
     expect(el.querySelector('[data-person="u4"]')).toBeNull();
+  });
+
+  it('le manager choisi ouvre le panneau de toute l\'organisation', () => {
+    const el = document.createElement('div');
+    renderOrgChart(el, { domain, planning: planning([], 'u5') });
+    expect(el.querySelector('.org-node:not(.empty)[data-org-roles=""]')).not.toBeNull();
+    expect(el.querySelector('[data-person="u5"]')).toBeNull();
   });
 });

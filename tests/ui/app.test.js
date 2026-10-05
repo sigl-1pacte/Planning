@@ -130,6 +130,20 @@ describe('renderApp', () => {
     expect(webRoot.querySelector('[data-action="resolve-conflicts"]')).toBeNull();
   });
 
+  it('signale les tâches sans contributeur en cours ou proches, chacune cliquable', () => {
+    const raw = rawWorkspace();
+    raw.issues[0].description = 'Starting date: 16/09/2026\nContributors: none';
+    raw.issues[0].assignee = { id: raw.users[0].id };
+    const root = document.createElement('div');
+    const state = { snapshot: { version: 1, fetchedAt: '2026-09-14T10:00:00.000Z', stale: false, lastError: null, domain: mapWorkspace(raw) }, planning, error: null };
+    const prefs = { zoom: 'all', dayWidth: null, collapsed: new Set(), showCanceled: false };
+    renderApp(root, { state, route: { view: 'global', teamKey: null }, prefs, selectedIssueId: null, today: '2026-09-17', viewportWidth: 560 });
+    const link = root.querySelector(`.banner [data-open="${raw.issues[0].id}"]`);
+    expect(link).not.toBeNull();
+    expect(link.closest('.banner').textContent).toContain('Devraient être en cours');
+    expect(link.closest('.banner').textContent).toContain('sans contributeur');
+  });
+
   it('n\'affiche pas le bouton de résolution quand un cycle existe', () => {
     const raw = rawWorkspace();
     raw.issues[1].description = 'Starting date: 20/09/2026';

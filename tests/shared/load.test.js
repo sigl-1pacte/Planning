@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  planningRange, weeklyHours, defaultWeeklyHours, shareWeights, computeLoad, personStats, unassignedLoad, weekBreakdown,
+  planningRange, weeklyHours, defaultWeeklyHours, shareWeights, computeLoad, personStats, unassignedLoad, weekBreakdown, unstaffedIssues,
 } from '../../src/shared/load.js';
 
 const planning = (over = {}) => ({
@@ -211,5 +211,26 @@ describe('weekBreakdown', () => {
     const load = computeLoad(d, p, { range, teamId: 't1' });
     expect(weekBreakdown(d, p, load, { userId: 'u1', weekStart: '2026-09-14', teamId: 't1' }).map((r) => r.issue.id)).toEqual(['i1']);
     expect(weekBreakdown(d, p, load, { userId: 'u1', weekStart: '2026-09-28' })).toEqual([]);
+  });
+});
+
+describe('unstaffedIssues', () => {
+  const today = '2026-10-05';
+  it('garde les tâches sans contributeur commencées ou qui commencent dans les 7 jours', () => {
+    const d = domain([
+      issue({ id: 'late', identifier: 'A-1', start: '2026-09-20', end: '2026-10-01', contributorIds: [] }),
+      issue({ id: 'now', identifier: 'A-2', start: '2026-10-01', end: '2026-10-10', contributorIds: [], assigneeId: 'u1' }),
+      issue({ id: 'soon', identifier: 'A-3', start: '2026-10-12', end: '2026-10-20', contributorIds: [] }),
+      issue({ id: 'later', identifier: 'A-4', start: '2026-10-13', end: '2026-10-20', contributorIds: [] }),
+      issue({ id: 'staffed', identifier: 'A-5', start: '2026-10-01', end: '2026-10-10' }),
+      issue({ id: 'done', identifier: 'A-6', start: '2026-10-01', end: '2026-10-10', contributorIds: [], status: 'done' }),
+      issue({ id: 'canceled', identifier: 'A-7', start: '2026-10-01', end: '2026-10-10', contributorIds: [], status: 'canceled' }),
+      issue({ id: 'unplanned', identifier: 'A-8', start: null, end: null, contributorIds: [] }),
+      issue({ id: 'other', identifier: 'B-1', teamId: 't2', start: '2026-10-01', end: '2026-10-10', contributorIds: [] }),
+    ]);
+    expect(unstaffedIssues(d, { today, teamId: 't1' }).map((u) => [u.issue.id, u.started])).toEqual([
+      ['late', true], ['now', true], ['soon', false],
+    ]);
+    expect(unstaffedIssues(d, { today }).map((u) => u.issue.id)).toEqual(['late', 'now', 'other', 'soon']);
   });
 });

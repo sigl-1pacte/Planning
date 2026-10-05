@@ -110,6 +110,21 @@ export function computeLoad(domain, planning, { range, teamId = null }) {
   return { issues, weeks, people };
 }
 
+// Tâches sans aucun contributeur qui auraient déjà dû commencer (début passé,
+// ni terminées ni annulées) ou qui commencent dans les `horizonDays` jours :
+// personne n'est prévu pour les faire. L'assigné ne compte pas s'il n'est pas
+// contributeur (« Contributors: none ») : être responsable n'est pas
+// contribuer. Les plus anciennes d'abord ; `started` sépare les deux cas.
+export function unstaffedIssues(domain, { today, teamId = null, horizonDays = 7 }) {
+  const horizon = addDays(today, horizonDays);
+  return domain.issues
+    .filter((i) => i.start && i.start <= horizon && !i.contributorIds.length
+      && i.status !== 'done' && i.status !== 'canceled'
+      && (teamId === null || i.teamId === teamId))
+    .sort((a, b) => a.start.localeCompare(b.start) || a.identifier.localeCompare(b.identifier))
+    .map((issue) => ({ issue, started: issue.start <= today }));
+}
+
 // Tâches planifiées sans personne (ni ligne « Contributors » ni assigné) :
 // computeLoad ne les fait peser sur personne. Pour la seule bande de charge,
 // leurs heures sont réparties à parts égales entre les membres Linear actifs

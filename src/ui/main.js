@@ -181,7 +181,13 @@ const easterEgg = createEasterEgg({
   },
 });
 
+// Mise en page téléphone (styles.css) et écran tactile : sur ordinateur,
+// rien ne change.
+const PHONE = window.matchMedia?.('screen and (max-width:760px) and (pointer:coarse)');
+const TOUCH_SCREEN = window.matchMedia?.('(hover:none) and (pointer:coarse)');
+
 function estimatedPaneWidth() {
+  if (!PHONE?.matches) return Math.max(300, window.innerWidth - 686);
   const sheet = root.querySelector('.sheet');
   const column = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--PL')) || 600;
   if (!sheet?.clientWidth) return Math.max(300, window.innerWidth - column - 86);
@@ -248,7 +254,7 @@ function draw() {
   // ramené en vue.
   const nav = rail?.querySelector('.nav');
   const tab = nav?.querySelector('a.on');
-  if (tab && nav.scrollWidth > nav.clientWidth) {
+  if (PHONE?.matches && tab && nav.scrollWidth > nav.clientWidth) {
     nav.scrollLeft = tab.offsetLeft - nav.offsetLeft - (nav.clientWidth - tab.offsetWidth) / 2;
   }
   refreshLoadChart();
@@ -354,9 +360,9 @@ async function resolveConflictsInScope() {
 // déplacement, aucun appel n'est fait et le clic normal (ouverture du
 // panneau) reprend la main.
 root.addEventListener('pointerdown', (event) => {
-  // Au doigt, glisser fait défiler la frise : pas de replanification par
-  // accident ; les dates se changent dans le panneau.
-  if (event.button !== 0 || event.pointerType === 'touch') return;
+  // Au doigt sur téléphone ou tablette, glisser fait défiler la frise : pas
+  // de replanification par accident ; les dates se changent dans le panneau.
+  if (event.button !== 0 || (event.pointerType === 'touch' && TOUCH_SCREEN?.matches)) return;
   const diamond = event.target.closest('.jd');
   if (diamond && lastAxis) {
     const domain = controller.state.snapshot?.domain;

@@ -162,6 +162,7 @@ button,select,input,textarea{font-family:inherit;font-size:inherit;color:inherit
 .banner.err{background:rgb(var(--err-rgb) / .9);color:var(--err-ink);box-shadow:inset 3px 0 0 var(--block),0 1px 2px rgb(var(--shade-rgb) / .06)}
 .banner.act{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .banner.act .btn{flex:0 0 auto}
+.banner .lk{color:inherit;font-weight:600;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 /* Ancré juste sous le bandeau supérieur (qui flotte à 10 px du haut),
    visible pendant tout le défilement. */
 .banner.act{position:sticky;top:calc(var(--rail-h,64px) + 18px);z-index:55;transition:top .42s cubic-bezier(.2,.85,.25,1);

@@ -1,6 +1,6 @@
 // src/ui/app.js
 import { buildView, rangeFor } from './view.js';
-import { computeLoad, unassignedLoad } from '../shared/load.js';
+import { computeLoad, unassignedLoad, unstaffedIssues } from '../shared/load.js';
 import { daysBetween } from '../shared/calendar.js';
 import { createAxis, dayWidthFor } from './render/layout.js';
 import {
@@ -11,10 +11,25 @@ import { buildChartSvg } from './render/loadChart.js';
 import { summarize, renderFacts, renderPeopleTable, renderProjectsTable, renderLegend } from './render/tables.js';
 import { renderUnplannedTab } from './render/unplannedTab.js';
 import { renderOrgChart } from './render/orgChart.js';
-import { esc, longDay } from './render/format.js';
+import { esc, longDay, shortDay } from './render/format.js';
 import { scopedConflicts } from './conflictResolution.js';
 
 const zoomButton = (prefs, zoom, label) => `<button type="button" data-zoom="${zoom}" class="${prefs.zoom === zoom ? 'on' : ''}">${label}</button>`;
+
+// Tâches sans contributeur qui ont commencé ou vont commencer : chaque
+// identifiant ouvre la tâche pour y ajouter quelqu'un.
+const UNSTAFFED_SHOWN = 12;
+function unstaffedBanner(list, team) {
+  const link = ({ issue }) => `<a class="lk" data-open="${esc(issue.id)}" title="${esc(issue.title)}, début le ${shortDay(issue.start)}">${esc(issue.identifier)}</a>`;
+  const group = (label, items) => {
+    if (!items.length) return '';
+    const shown = items.slice(0, UNSTAFFED_SHOWN);
+    const more = items.length - shown.length;
+    return ` ${label} : ${shown.map(link).join(', ')}${more > 0 ? ` et ${more} autre${more > 1 ? 's' : ''}` : ''}.`;
+  };
+  const n = list.length;
+  return `<div class="banner"><b>${n} tâche${n > 1 ? 's' : ''} sans contributeur${team ? ` pour ${esc(team.name)}` : ''}.</b>${group('Devraient être en cours', list.filter((u) => u.started))}${group('Commencent d\'ici 7 jours', list.filter((u) => !u.started))}</div>`;
+}
 
 export function renderLoadError(root, message) {
   root.innerHTML = `<section class="sheet"><div class="banner err">${esc(message)}</div><p class="note">Nouvelle tentative automatique toutes les 30 secondes.</p></section>`;
@@ -47,6 +62,8 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
         <button class="btn" type="button" data-action="resolve-conflicts">Résoudre automatiquement</button></div>`);
     }
   }
+  const unstaffed = unstaffedIssues(domain, { today, teamId: view.teamId });
+  if (unstaffed.length) banners.push(unstaffedBanner(unstaffed, team));
 
   const railHtml = `
     <div class="rail"><div class="in">

@@ -181,6 +181,15 @@ const easterEgg = createEasterEgg({
   },
 });
 
+function estimatedPaneWidth() {
+  const sheet = root.querySelector('.sheet');
+  const column = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--PL')) || 600;
+  if (!sheet?.clientWidth) return Math.max(300, window.innerWidth - column - 86);
+  const style = getComputedStyle(sheet);
+  const inner = sheet.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+  return Math.max(120, inner - column - 1);
+}
+
 function draw() {
   const { state } = controller;
   if (!state.snapshot || !state.planning) {
@@ -190,8 +199,9 @@ function draw() {
   const previousScroll = root.querySelector('.pr')?.scrollLeft ?? 0;
   const today = todayISO();
   // Avant le premier rendu (squelette), la frise n'existe pas encore : largeur
-  // estimée d'après la fenêtre (marges, feuille et colonne des tâches).
-  const viewportWidth = root.querySelector('.pr')?.clientWidth || Math.max(300, window.innerWidth - 686);
+  // déduite de la feuille du squelette (mêmes marges) moins la colonne des
+  // tâches, dont la largeur change sur téléphone.
+  const viewportWidth = root.querySelector('.pr')?.clientWidth || estimatedPaneWidth();
   const effective = printLayout ? { ...prefs, zoom: 'custom', dayWidth: printLayout.dayWidth, collapsed: [] } : prefs;
   const result = renderApp(root, {
     state,
@@ -234,6 +244,13 @@ function draw() {
   // les éléments ancrés juste dessous s'y calent.
   const rail = root.querySelector('.rail');
   if (rail) document.documentElement.style.setProperty('--rail-h', `${rail.offsetHeight}px`);
+  // Sur téléphone, les onglets défilent sur une ligne : l'onglet actif y est
+  // ramené en vue.
+  const nav = rail?.querySelector('.nav');
+  const tab = nav?.querySelector('a.on');
+  if (tab && nav.scrollWidth > nav.clientWidth) {
+    nav.scrollLeft = tab.offsetLeft - nav.offsetLeft - (nav.clientWidth - tab.offsetWidth) / 2;
+  }
   refreshLoadChart();
   if (printLayout) {
     buildPrintPages(root.querySelector('.sheet'), {
@@ -337,7 +354,9 @@ async function resolveConflictsInScope() {
 // déplacement, aucun appel n'est fait et le clic normal (ouverture du
 // panneau) reprend la main.
 root.addEventListener('pointerdown', (event) => {
-  if (event.button !== 0) return;
+  // Au doigt, glisser fait défiler la frise : pas de replanification par
+  // accident ; les dates se changent dans le panneau.
+  if (event.button !== 0 || event.pointerType === 'touch') return;
   const diamond = event.target.closest('.jd');
   if (diamond && lastAxis) {
     const domain = controller.state.snapshot?.domain;

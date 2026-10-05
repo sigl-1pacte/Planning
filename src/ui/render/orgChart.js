@@ -116,8 +116,13 @@ function personNode({ user, roles, cx, cy }, { users, teamKeysOf, teamKey, radiu
     </g>`;
   }
   const others = teamKey ? (teamKeysOf.get(user.id) ?? []).filter((k) => k !== teamKey) : [];
-  return `<g class="org-node" data-person="${esc(user.id)}">
-    <title>${esc(user.name)}${roleText ? ` (${roleText})` : ''}</title>
+  // Titulaire d'un rôle (PO, SM, manager) : un clic sert à changer qui tient
+  // ce rôle, comme sur un nœud vide. Les autres membres ouvrent leur fiche.
+  const holdsRole = Boolean(roleText || label);
+  const target = holdsRole ? `data-org-roles="${esc(rolesTarget)}"` : `data-person="${esc(user.id)}"`;
+  const hint = label ? 'cliquer pour changer le manager' : roleText ? 'cliquer pour changer les rôles de la team' : '';
+  return `<g class="org-node" ${target}>
+    <title>${esc(user.name)}${roleText ? ` (${roleText})` : ''}${hint ? `, ${hint}` : ''}</title>
     <circle cx="${cx}" cy="${cy}" r="${radius}" fill="${personColor(user.id, users)}"/>
     <text class="ini" x="${cx}" y="${cy + 4}" text-anchor="middle">${esc(initials(user))}</text>
     <text class="nm" x="${cx}" y="${cy + radius + 15}" text-anchor="middle">${esc(fit(user.name, NODE_W - 10, 11))}</text>
@@ -155,7 +160,7 @@ export function renderOrgChart(el, { domain, planning }) {
   }
 
   el.innerHTML = `<div class="org-wrap">
-    <p class="note">Membres de chaque team d'après Linear. Cliquez une personne pour sa fiche, l'en-tête d'une team pour choisir son Product Owner et son Scrum Master, et le manager pour le changer.</p>
+    <p class="note">Membres de chaque team d'après Linear. Cliquez un membre pour sa fiche, un PO, un Scrum Master ou l'en-tête d'une team pour changer ses rôles, et le manager pour le changer.</p>
     <svg class="org-svg" viewBox="0 0 ${layout.width} ${layout.height}" style="max-width:${layout.width}px">${parts.join('')}</svg>
     ${model.teams.length ? '' : '<p class="note">Aucune team dans le workspace Linear.</p>'}
   </div>`;

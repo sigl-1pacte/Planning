@@ -845,8 +845,10 @@ tbody tr.tot:hover{background:none}
 /* Téléphone : la colonne des tâches passe de 600 à 180 px (titre et pastille
    de statut seulement ; le détail est dans le panneau, ouvert d'un toucher),
    pour laisser la frise visible. Le bandeau tient en deux lignes : boutons
-   réduits à leur icône, onglets qui défilent sur place. */
-@media screen and (max-width:760px){
+   réduits à leur icône, onglets qui défilent sur place. Écran tactile
+   seulement : une fenêtre d'ordinateur étroite garde la mise en page
+   habituelle (même requête que PHONE dans main.js). */
+@media screen and (max-width:760px) and (pointer:coarse){
   :root{--gutter:8px; --PL:180px}
   .rail{top:8px;margin-top:8px}
   .rail .in{gap:8px;padding:6px 8px;border-radius:20px;flex-wrap:wrap}

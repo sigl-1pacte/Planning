@@ -94,6 +94,15 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
         <button class="btn" type="button" data-action="settings">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.6v1.7M8 12.7v1.7M14.4 8h-1.7M3.3 8H1.6M12.4 3.6l-1.2 1.2M4.8 11.2l-1.2 1.2M12.4 12.4l-1.2-1.2M4.8 4.8 3.6 3.6"/></svg>
           Réglages</button>
+        <details class="mdx">
+          <summary class="btn" title="Exporter la vue en Markdown">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 1.8H4.2a1 1 0 0 0-1 1v10.4a1 1 0 0 0 1 1h7.6a1 1 0 0 0 1-1V5.1z"/><path d="M9.5 1.8v3.3h3.3M5.6 8.5h4.8M5.6 11h3.2"/></svg>
+            Markdown</summary>
+          <div class="mdx-menu">
+            <button class="btn ghost" type="button" data-action="md-download">Télécharger le fichier .md</button>
+            <button class="btn ghost" type="button" data-action="md-copy">Copier dans le presse-papiers</button>
+          </div>
+        </details>
         <button class="btn pri" type="button" data-action="print">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6V2h7v4M4.5 12.5h7V9h-7z"/><rect x="2" y="6" width="12" height="5.5" rx="1"/></svg>
           Imprimer / PDF</button>

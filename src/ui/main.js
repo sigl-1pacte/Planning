@@ -20,6 +20,7 @@ import { weekBreakdown } from '../shared/load.js';
 import { applyTheme, createEasterEgg } from './theme.js';
 import { weekCardHtml } from './render/weekCard.js';
 import { planPrintColumns, printTimelineWidth, buildPrintPages, clearPrintPages } from './print.js';
+import { buildMarkdown, markdownFileName } from './exportMarkdown.js';
 
 const api = createApi({ getDomain: () => controller.writeDomain() });
 const root = document.getElementById('app');
@@ -265,6 +266,55 @@ function draw() {
   }
 }
 
+// Petit mot en haut de l'écran qui s'efface tout seul (même bulle que le
+// mode rose).
+function flash(html) {
+  document.querySelector('.egg-toast')?.remove();
+  const toast = document.createElement('div');
+  toast.className = 'egg-toast';
+  toast.setAttribute('role', 'status');
+  toast.innerHTML = html;
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; }, 2600);
+  setTimeout(() => toast.remove(), 3100);
+}
+
+// Export Markdown de la vue affichée (exportMarkdown.js) : en fichier
+// téléchargé ou dans le presse-papiers.
+async function exportMarkdown(mode) {
+  const { snapshot } = controller.state;
+  root.querySelector('details.mdx')?.removeAttribute('open');
+  if (!snapshot) return;
+  const route = parseRoute(location.hash);
+  const today = todayISO();
+  const text = buildMarkdown(snapshot.domain, {
+    route, showCanceled: prefs.showCanceled, today, fetchedAt: snapshot.fetchedAt,
+  });
+  if (mode === 'copy') {
+    try {
+      await navigator.clipboard.writeText(text);
+      flash('Markdown copié<span>· prêt à coller</span>');
+    } catch {
+      flash('Copie refusée par le navigateur<span>· téléchargez le fichier à la place</span>');
+    }
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = markdownFileName(snapshot.domain, route, today);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Le menu Markdown se referme quand on clique ailleurs.
+document.addEventListener('click', (event) => {
+  const menu = root.querySelector('details.mdx[open]');
+  if (menu && !menu.contains(event.target)) menu.removeAttribute('open');
+});
+
 root.addEventListener('click', (event) => {
   if (suppressNextClick) { suppressNextClick = false; return; }
   const el = (selector) => event.target.closest(selector);
@@ -302,6 +352,8 @@ root.addEventListener('click', (event) => {
   } else if (el('[data-action="add-team"]')) {
     panels.openTeam();
     draw();
+  } else if (el('[data-action="md-download"]') || el('[data-action="md-copy"]')) {
+    exportMarkdown(el('[data-action="md-copy"]') ? 'copy' : 'download');
   } else if (el('[data-action="print"]')) {
     preparePrint();
     window.print();

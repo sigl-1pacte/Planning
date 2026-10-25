@@ -169,16 +169,9 @@ const easterEgg = createEasterEgg({
       bloom.addEventListener('animationend', () => bloom.remove());
       setTimeout(() => bloom.remove(), 1500);
     }
-    document.querySelector('.egg-toast')?.remove();
-    const toast = document.createElement('div');
-    toast.className = 'egg-toast';
-    toast.setAttribute('role', 'status');
-    toast.innerHTML = pink
+    flash(pink
       ? 'Mode rose activé<span>· cinq clics sur le logo pour revenir</span>'
-      : 'Mode rose désactivé<span>· il reste dans les réglages</span>';
-    document.body.appendChild(toast);
-    setTimeout(() => { toast.style.opacity = '0'; }, 2600);
-    setTimeout(() => toast.remove(), 3100);
+      : 'Mode rose désactivé<span>· il reste dans les réglages</span>', 'egg-toast');
   },
 });
 
@@ -266,12 +259,12 @@ function draw() {
   }
 }
 
-// Petit mot en haut de l'écran qui s'efface tout seul (même bulle que le
-// mode rose).
-function flash(html) {
-  document.querySelector('.egg-toast')?.remove();
+// Petit mot en haut de l'écran qui s'efface tout seul : neutre par défaut,
+// rose ('egg-toast') pour le seul mode rose.
+function flash(html, className = 'flash-toast') {
+  document.querySelector('.egg-toast, .flash-toast')?.remove();
   const toast = document.createElement('div');
-  toast.className = 'egg-toast';
+  toast.className = className;
   toast.setAttribute('role', 'status');
   toast.innerHTML = html;
   document.body.appendChild(toast);

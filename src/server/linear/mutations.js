@@ -29,7 +29,7 @@ const ISSUE_RELATION_DELETE = `mutation IssueRelationDelete($id: String!) {
   issueRelationDelete(id: $id) { success }
 }`;
 
-const PROJECT_FIELDS = 'id name color startDate targetDate teams { nodes { id } } projectMilestones { nodes { id name targetDate } }';
+const PROJECT_FIELDS = 'id name color startDate targetDate status { id } teams { nodes { id } } projectMilestones { nodes { id name targetDate } }';
 
 const PROJECT_UPDATE = `mutation ProjectUpdate($id: String!, $input: ProjectUpdateInput!) {
   projectUpdate(id: $id, input: $input) { success project { ${PROJECT_FIELDS} } }

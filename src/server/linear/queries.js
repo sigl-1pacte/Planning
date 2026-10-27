@@ -15,9 +15,19 @@ const PROJECTS = `query Projects($after: String) {
   projects(first: ${PAGE_SIZE}, after: $after) {
     nodes {
       id name color startDate targetDate
+      status { id }
       teams { nodes { id } }
       projectMilestones { nodes { id name targetDate } }
     }
+    ${PAGE_INFO}
+  }
+}`;
+
+// Statuts de projet (Backlog, Planned, In Progress…) : propres à
+// l'organisation, distincts des états de workflow des tâches.
+const PROJECT_STATUSES = `query ProjectStatuses($after: String) {
+  projectStatuses(first: 50, after: $after) {
+    nodes { id name type color position }
     ${PAGE_INFO}
   }
 }`;
@@ -61,7 +71,7 @@ const DIAGNOSTIC_ISSUES = `query DiagnosticIssues($first: Int!) {
   }
 }`;
 
-export const QUERIES = [TEAMS, USERS, PROJECTS, WORKFLOW_STATES, ISSUES, VIEWER, DIAGNOSTIC_ISSUES];
+export const QUERIES = [TEAMS, USERS, PROJECTS, PROJECT_STATUSES, WORKFLOW_STATES, ISSUES, VIEWER, DIAGNOSTIC_ISSUES];
 
 export async function paginate(key, query, field, variables, opts) {
   const nodes = [];
@@ -83,9 +93,10 @@ export async function fetchWorkspace(key, opts) {
   const teams = await paginate(key, TEAMS, 'teams', {}, opts);
   const users = await paginate(key, USERS, 'users', {}, opts);
   const projects = await paginate(key, PROJECTS, 'projects', {}, opts);
+  const projectStatuses = await paginate(key, PROJECT_STATUSES, 'projectStatuses', {}, opts);
   const workflowStates = await paginate(key, WORKFLOW_STATES, 'workflowStates', {}, opts);
   const issues = await paginate(key, ISSUES, 'issues', { filter: null }, opts);
-  return { teams, users, projects, workflowStates, issues };
+  return { teams, users, projects, projectStatuses, workflowStates, issues };
 }
 
 export function fetchIssuesSince(key, sinceIso, opts) {

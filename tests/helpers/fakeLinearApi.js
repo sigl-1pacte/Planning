@@ -17,6 +17,7 @@ export function fakeLinearApi() {
       case 'Teams': return { teams: page(raw.teams) };
       case 'Users': return { users: page(raw.users) };
       case 'Projects': return { projects: page(raw.projects) };
+      case 'ProjectStatuses': return { projectStatuses: page(raw.projectStatuses) };
       case 'WorkflowStates': return { workflowStates: page(raw.workflowStates) };
       case 'Issues': return { issues: page(raw.issues) };
       case 'Viewer': return { viewer: { id: 'u-sacha', name: 'Sacha', email: 'sacha@ex.fr' } };

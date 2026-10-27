@@ -429,6 +429,17 @@ describe('création', () => {
     expect(t.api.updateProject).toHaveBeenCalledTimes(1);
   });
 
+  it('change le statut Linear d’un projet, dans l’ordre des statuts', async () => {
+    const t = setup();
+    t.panels.openProject('p-poc1');
+    const select = t.body.querySelector('[data-field="pstatus"]');
+    expect([...select.options].map((o) => o.textContent)).toEqual(['Backlog', 'In Progress', 'Completed']);
+    expect(select.value).toBe('ps-started');
+    change(select, 'ps-completed');
+    await save(t);
+    expect(t.api.updateProject).toHaveBeenCalledWith('p-poc1', { statusId: 'ps-completed' });
+  });
+
   it('ouvre un panneau de projet vide, préchoisit la team demandée et le crée', async () => {
     const t = setup();
     t.panels.openProject(null, { teamId: 't-web' });

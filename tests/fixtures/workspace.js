@@ -22,10 +22,15 @@ export function rawWorkspace() {
     projects: [
       {
         id: 'p-poc1', name: 'Réalisation POC v1', color: '#0D7278',
-        startDate: '2026-09-16', targetDate: '2026-11-05',
+        startDate: '2026-09-16', targetDate: '2026-11-05', status: { id: 'ps-started' },
         teams: conn([{ id: 't-iot' }]),
         projectMilestones: conn([{ id: 'm-1', name: 'Objet construit', targetDate: '2026-11-05' }]),
       },
+    ],
+    projectStatuses: [
+      { id: 'ps-started', name: 'In Progress', type: 'started', color: '#f2c94c', position: 2 },
+      { id: 'ps-backlog', name: 'Backlog', type: 'backlog', color: '#bec2c8', position: 0 },
+      { id: 'ps-completed', name: 'Completed', type: 'completed', color: '#5e6ad2', position: 3 },
     ],
     workflowStates: [
       { id: 'st-iot-unstarted', name: 'Todo', type: 'unstarted', position: 1, team: { id: 't-iot' } },

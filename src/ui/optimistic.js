@@ -78,7 +78,7 @@ export const previews = {
   updateProject: (d, id, patch) => mapProjects(d, (p) => {
     if (p.id !== id) return p;
     const next = { ...p };
-    for (const field of ['name', 'color', 'startDate', 'targetDate']) {
+    for (const field of ['name', 'color', 'startDate', 'targetDate', 'statusId']) {
       if (field in patch) next[field] = patch[field] === '' ? null : patch[field];
     }
     return next;

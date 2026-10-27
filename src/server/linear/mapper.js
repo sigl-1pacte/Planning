@@ -24,11 +24,15 @@ export function mapWorkspace(raw) {
     color: p.color ?? '#6A6F76',
     startDate: isoDay(p.startDate),
     targetDate: isoDay(p.targetDate),
+    statusId: p.status?.id ?? null,
     teamIds: p.teams.nodes.map((t) => t.id).sort(),
     milestones: p.projectMilestones.nodes
       .map((m) => ({ id: m.id, name: m.name, date: isoDay(m.targetDate) }))
       .sort(byId),
   })).sort(byId);
+  const projectStatuses = (raw.projectStatuses ?? [])
+    .map((s) => ({ id: s.id, name: s.name, type: s.type, color: s.color, position: s.position }))
+    .sort((a, b) => a.position - b.position);
 
   const known = new Set(raw.issues.map((i) => i.id));
   const blockers = new Map();
@@ -46,7 +50,7 @@ export function mapWorkspace(raw) {
     .map((i) => mapIssue(i, users, [...(blockers.get(i.id) ?? [])].sort()))
     .sort(byId);
 
-  return { teams, users, projects, workflowStates, issues };
+  return { teams, users, projects, projectStatuses, workflowStates, issues };
 }
 
 // Exportée pour l'aperçu local des écritures (src/ui/optimistic.js) : une

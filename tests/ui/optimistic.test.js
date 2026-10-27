@@ -79,6 +79,7 @@ describe('aperçu local des écritures', () => {
   it('projets et jalons', () => {
     const project = previews.updateProject(domain, 'p-poc1', { name: 'Renommé', startDate: '' }).projects[0];
     expect(project).toMatchObject({ name: 'Renommé', startDate: null, targetDate: '2026-11-05' });
+    expect(previews.updateProject(domain, 'p-poc1', { statusId: 'ps-completed' }).projects[0].statusId).toBe('ps-completed');
     const moved = previews.updateMilestone(domain, 'm-1', '2026-11-12').projects[0].milestones[0];
     expect(moved).toEqual({ id: 'm-1', name: 'Objet construit', date: '2026-11-12' });
     const renamed = previews.updateMilestone(domain, 'm-1', { name: 'Nouveau' }).projects[0].milestones[0];

@@ -15,7 +15,7 @@ describe('mapWorkspace', () => {
       url: 'https://linear.app/1pacte/profiles/louis',
     });
     expect(d.projects[0]).toEqual({
-      id: 'p-poc1', name: 'Réalisation POC v1', color: '#0D7278', startDate: '2026-09-16', targetDate: '2026-11-05',
+      id: 'p-poc1', name: 'Réalisation POC v1', color: '#0D7278', startDate: '2026-09-16', targetDate: '2026-11-05', statusId: 'ps-started',
       teamIds: ['t-iot'], milestones: [{ id: 'm-1', name: 'Objet construit', date: '2026-11-05' }],
     });
   });
@@ -36,6 +36,13 @@ describe('mapWorkspace', () => {
       { id: 'st-web-unstarted', name: 'Todo', type: 'unstarted', position: 1, teamId: 't-web' },
       { id: 'st-web-completed', name: 'Done', type: 'completed', position: 2, teamId: 't-web' },
     ]);
+  });
+
+  it('traduit les statuts de projet, triés par position', () => {
+    const d = mapWorkspace(rawWorkspace());
+    expect(d.projectStatuses.map((s) => s.id)).toEqual(['ps-backlog', 'ps-started', 'ps-completed']);
+    expect(d.projectStatuses[1]).toEqual({ id: 'ps-started', name: 'In Progress', type: 'started', color: '#f2c94c', position: 2 });
+    expect(mapWorkspace({ ...rawWorkspace(), projectStatuses: undefined }).projectStatuses).toEqual([]);
   });
 
   it('traduit le lien vers une issue parente', () => {

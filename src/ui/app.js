@@ -178,7 +178,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
   const sink = createRowSink(left, right);
   const { rowY, colorOf } = renderGroups(sink, {
     view, axis, holidays, load, users: domain.users, collapsed: prefs.collapsed, selectedIssueId,
-    states: domain.workflowStates,
+    states: domain.workflowStates, projectStatuses: domain.projectStatuses,
   });
   // Bande de charge seulement : les tâches sans personne y sont réparties
   // entre les membres de leur team, qui y ont donc une ligne même sans autre

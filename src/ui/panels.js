@@ -820,10 +820,16 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
     }
     title.textContent = project.name;
     const teamNames = project.teamIds.map((id) => domain.teams.find((t) => t.id === id)?.name ?? id);
+    const statuses = domain.projectStatuses ?? [];
     body.innerHTML = `
       <div class="fg"><label for="f-pname">Nom du projet</label>
         <input id="f-pname" data-field="pname" value="${esc(project.name)}"></div>
       ${ro('Teams', teamNames.join(', ') || 'aucune')}
+      <div class="fg"><label for="f-pstatus">Statut</label>
+        <select id="f-pstatus" data-field="pstatus">
+          ${project.statusId && !statuses.some((s) => s.id === project.statusId) ? '<option value="" selected>Inconnu</option>' : ''}
+          ${statuses.map((s) => `<option value="${esc(s.id)}"${s.id === project.statusId ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}
+        </select></div>
       <div class="f2">
         <div class="fg"><label for="f-pstart">Début</label><div class="dfield">
           <input id="f-pstart" type="date" data-field="pstart" value="${project.startDate ?? ''}"></div></div>
@@ -856,6 +862,8 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       if (targetDate && targetDate !== project.targetDate) { patch.targetDate = targetDate; back.targetDate = project.targetDate ?? ''; }
       const color = field('pcolor');
       if (color && color.toLowerCase() !== project.color.toLowerCase()) { patch.color = color; back.color = project.color; }
+      const statusId = field('pstatus');
+      if (statusId && statusId !== project.statusId) { patch.statusId = statusId; back.statusId = project.statusId; }
       if (!Object.keys(patch).length) return true;
       return onWrite(
         (api) => api.updateProject(project.id, patch),

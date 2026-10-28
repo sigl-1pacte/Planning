@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   MUTATIONS, updateIssue, createIssue, createMilestone, deleteIssue, deleteProject, issueBlockers, addBlocker, removeBlocker,
-  updateProject, createProject, createTeam, addComment, subscribeToIssue, updateMilestone,
+  updateProject, createProject, createTeam, addComment, subscribeToIssue, updateMilestone, deleteMilestone,
 } from '../../../src/server/linear/mutations.js';
 import { fakeFetch, jsonResponse } from '../../helpers/fakeFetch.js';
 
@@ -45,6 +45,14 @@ describe('mutations', () => {
     expect(ok.calls[0].body.variables.input).toEqual({ projectId: 'p1', name: 'Livraison', targetDate: '2026-12-01' });
     const ko = fakeFetch([jsonResponse({ data: { projectMilestoneCreate: { success: false } } })]);
     await expect(createMilestone('k', { projectId: 'p1', name: 'X' }, { fetchImpl: ko })).rejects.toThrow('Linear a refusé la création du jalon');
+  });
+
+  it('supprime un jalon et signale un refus', async () => {
+    const ok = fakeFetch([jsonResponse({ data: { projectMilestoneDelete: { success: true } } })]);
+    await deleteMilestone('k', 'm1', { fetchImpl: ok });
+    expect(ok.calls[0].body.variables).toEqual({ id: 'm1' });
+    const ko = fakeFetch([jsonResponse({ data: { projectMilestoneDelete: { success: false } } })]);
+    await expect(deleteMilestone('k', 'm1', { fetchImpl: ko })).rejects.toThrow('Linear a refusé la suppression du jalon');
   });
 
   it('signale un refus de suppression', async () => {

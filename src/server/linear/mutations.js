@@ -11,8 +11,8 @@ const ISSUE_CREATE = `mutation IssueCreate($input: IssueCreateInput!) {
 }`;
 
 // Suppression douce : Linear met l'issue à la corbeille (30 jours de délai de
-// grâce). On ne passe jamais permanentlyDelete — l'irréversible n'est pas
-// exposé par cette application.
+// grâce). On ne passe jamais permanentlyDelete : l'irréversible n'est exposé
+// par cette application que là où Linear n'offre rien d'autre (les jalons).
 const ISSUE_DELETE = `mutation IssueDelete($id: String!) {
   issueDelete(id: $id) { success }
 }`;
@@ -65,9 +65,16 @@ const MILESTONE_CREATE = `mutation ProjectMilestoneCreate($input: ProjectMilesto
   projectMilestoneCreate(input: $input) { success projectMilestone { id name targetDate } }
 }`;
 
+// Définitive : Linear n'a pas de corbeille pour les jalons (ni archive ni
+// restauration). Ses tâches restent dans le projet, sans jalon.
+const MILESTONE_DELETE = `mutation ProjectMilestoneDelete($id: String!) {
+  projectMilestoneDelete(id: $id) { success }
+}`;
+
 export const MUTATIONS = [
   ISSUE_UPDATE, ISSUE_CREATE, ISSUE_DELETE, ISSUE_RELATION_CREATE, ISSUE_RELATION_DELETE,
   PROJECT_UPDATE, PROJECT_CREATE, PROJECT_DELETE, TEAM_CREATE, COMMENT_CREATE, ISSUE_SUBSCRIBE, MILESTONE_UPDATE, MILESTONE_CREATE,
+  MILESTONE_DELETE,
 ];
 
 export async function updateIssue(key, issueId, input, opts) {
@@ -152,4 +159,9 @@ export async function createMilestone(key, input, opts) {
   const data = await gql(key, MILESTONE_CREATE, { input }, opts);
   if (!data.projectMilestoneCreate.success) throw new Error('Linear a refusé la création du jalon');
   return data.projectMilestoneCreate.projectMilestone;
+}
+
+export async function deleteMilestone(key, milestoneId, opts) {
+  const data = await gql(key, MILESTONE_DELETE, { id: milestoneId }, opts);
+  if (!data.projectMilestoneDelete.success) throw new Error('Linear a refusé la suppression du jalon');
 }

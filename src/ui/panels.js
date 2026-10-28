@@ -757,13 +757,28 @@ export function createPanels({ drawer, title, body, closeButton, onMutate, onPre
       body.innerHTML = '<p class="warn">Ce jalon ne figure plus dans l\'instantané Linear.</p>';
       return;
     }
+    if (current.confirmDelete) {
+      return drawDeleteConfirm({
+        heading: `Supprimer le jalon ${milestone.name} ?`,
+        subject: null,
+        expected: milestone.name,
+        details: [
+          'Le jalon est supprimé définitivement : Linear n\'a pas de corbeille pour les jalons.',
+          `Les tâches rattachées restent dans le projet ${project.name}, sans jalon.`,
+        ],
+        run: (api) => api.deleteMilestone(milestone.id, milestone.name),
+        label: `Jalon « ${milestone.name} » supprimé`,
+      });
+    }
     title.textContent = milestone.name;
     body.innerHTML = `
       ${ro('Projet', project.name)}
       <div class="fg"><label for="f-mname">Nom du jalon</label>
         <input id="f-mname" data-field="mname" value="${esc(milestone.name)}"></div>
       <div class="fg"><label for="f-mdate">Date</label><div class="dfield">
-        <input id="f-mdate" type="date" data-field="mdate" value="${milestone.date ?? ''}"></div></div>`;
+        <input id="f-mdate" type="date" data-field="mdate" value="${milestone.date ?? ''}"></div></div>
+      ${dangerZone('Supprimer le jalon…')}`;
+    body.querySelector('[data-action="ask-delete"]').addEventListener('click', askDelete);
     armDraft({ save: () => {
       const name = body.querySelector('[data-field="mname"]').value.trim();
       const date = body.querySelector('[data-field="mdate"]').value;

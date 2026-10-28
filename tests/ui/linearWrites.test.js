@@ -32,6 +32,7 @@ beforeEach(() => {
     deleteProject: vi.fn(async () => {}),
     updateMilestone: vi.fn(async () => ({})),
     createMilestone: vi.fn(async () => ({ id: 'm-new' })),
+    deleteMilestone: vi.fn(async () => {}),
     addComment: vi.fn(async () => {}),
     subscribeToIssue: vi.fn(async () => {}),
   };
@@ -354,6 +355,15 @@ describe('jalons', () => {
   it('renomme un jalon sans toucher à sa date', async () => {
     await writes.updateMilestone('m-1', { name: 'Nouveau' });
     expect(linear.updateMilestone).toHaveBeenCalledWith('good', 'm-1', { name: 'Nouveau' });
+  });
+
+  it('supprime un jalon seulement avec son nom exact, et demande une relecture complète', async () => {
+    await expect(writes.deleteMilestone('m-1', 'objet construit')).rejects.toMatchObject({ status: 400 });
+    await expect(writes.deleteMilestone('m-inconnu', 'Objet construit')).rejects.toMatchObject({ status: 404 });
+    expect(linear.deleteMilestone).not.toHaveBeenCalled();
+    const out = await writes.deleteMilestone('m-1', 'Objet construit');
+    expect(linear.deleteMilestone).toHaveBeenCalledWith('good', 'm-1');
+    expect(out.sync.full).toBe(true);
   });
 });
 

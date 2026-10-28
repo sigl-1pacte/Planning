@@ -35,6 +35,12 @@ export function fakeLinearApi() {
         project.projectMilestones = conn([...project.projectMilestones.nodes, m]);
         return { projectMilestoneCreate: { success: true, projectMilestone: m } };
       }
+      case 'ProjectMilestoneDelete': {
+        const project = raw.projects.find((p) => p.projectMilestones.nodes.some((x) => x.id === variables.id));
+        if (!project) return { error: 'Entity not found: ProjectMilestone' };
+        project.projectMilestones = conn(project.projectMilestones.nodes.filter((x) => x.id !== variables.id));
+        return { projectMilestoneDelete: { success: true } };
+      }
       default: return { error: `opération inconnue : ${op}` };
     }
   }

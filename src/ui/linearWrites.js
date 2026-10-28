@@ -186,5 +186,13 @@ export function createLinearWrites({ getKey, getDomain, AuthError, ApiError, opt
       await m.updateMilestone(key, id, input);
       return { sync: { full: true } };
     }),
+
+    deleteMilestone: guard(async (key, id, confirm) => {
+      const milestone = milestoneIn(needDomain(), id);
+      if (!milestone) throw fail('Jalon introuvable', 404);
+      if (confirm !== milestone.name) throw fail('Confirmation incorrecte : saisissez le nom du jalon', 400);
+      await m.deleteMilestone(key, milestone.id);
+      return { sync: { full: true } };
+    }),
   };
 }

@@ -104,6 +104,11 @@ export const previews = {
       })),
     } : p));
   },
+
+  deleteMilestone: (d, id, confirm) => mapProjects(d, (p) => (p.milestones.some((m) => m.id === id && m.name === confirm) ? {
+    ...p,
+    milestones: p.milestones.filter((m) => m.id !== id),
+  } : p)),
 };
 
 // Aperçu d'une écriture donnée sous forme de fonction `(api) => api.x(...)`,

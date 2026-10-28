@@ -84,6 +84,8 @@ describe('aperçu local des écritures', () => {
     expect(moved).toEqual({ id: 'm-1', name: 'Objet construit', date: '2026-11-12' });
     const renamed = previews.updateMilestone(domain, 'm-1', { name: 'Nouveau' }).projects[0].milestones[0];
     expect(renamed).toEqual({ id: 'm-1', name: 'Nouveau', date: '2026-11-05' });
+    expect(previews.deleteMilestone(domain, 'm-1', 'autre').projects[0].milestones.map((m) => m.id)).toContain('m-1');
+    expect(previews.deleteMilestone(domain, 'm-1', 'Objet construit').projects[0].milestones.map((m) => m.id)).not.toContain('m-1');
   });
 });
 

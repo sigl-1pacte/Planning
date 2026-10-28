@@ -75,6 +75,12 @@ describe('jalons — tout le trajet, écritures depuis le client, avec un Linear
     expect(res.domain.projects[0].milestones.find((m) => m.name === 'À dater').date).toBeNull();
   });
 
+  it('supprimer un jalon : il disparaît de Linear ET de la relecture', async () => {
+    const { sync } = await client.deleteMilestone('m-1', 'Objet construit');
+    expect(linearApi.raw.projects[0].projectMilestones.nodes.map((m) => m.id)).not.toContain('m-1');
+    expect((await client.resync(sync)).domain.projects[0].milestones.map((m) => m.id)).not.toContain('m-1');
+  });
+
   it('un refus de Linear rend son message, pas « Erreur interne »', async () => {
     await expect(client.updateMilestone('inconnu', '2026-11-12')).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/Entity not found/) });
   });

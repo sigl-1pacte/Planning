@@ -51,6 +51,7 @@ function setup(ctx = context(), { lastError } = {}) {
     deleteIssue: vi.fn(async () => ({})),
     deleteProject: vi.fn(async () => ({})),
     updateMilestone: vi.fn(async () => ({})),
+    deleteMilestone: vi.fn(async () => ({})),
     setTeamRole: vi.fn(async () => ({})),
     setManager: vi.fn(async () => ({})),
   };
@@ -900,6 +901,23 @@ describe('suppression', () => {
     confirm.click();
     await flush();
     expect(t.api.deleteProject).toHaveBeenCalledWith('p-poc1', name);
+  });
+
+  it('supprime un jalon en exigeant son nom exact, et annonce que c\'est définitif', async () => {
+    const t = setup();
+    t.panels.openMilestone('m-1');
+    t.body.querySelector('[data-action="ask-delete"]').click();
+    expect(t.title.textContent).toBe('Supprimer le jalon Objet construit ?');
+    expect(t.body.textContent).toMatch(/définitivement/);
+    const input = t.body.querySelector('[data-field="confirm"]');
+    const confirm = t.body.querySelector('[data-action="confirm-delete"]');
+    type(input, 'objet construit');
+    expect(confirm.disabled).toBe(true);
+    type(input, 'Objet construit');
+    expect(confirm.disabled).toBe(false);
+    confirm.click();
+    await flush();
+    expect(t.api.deleteMilestone).toHaveBeenCalledWith('m-1', 'Objet construit');
   });
 });
 

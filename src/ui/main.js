@@ -15,6 +15,7 @@ import { dayDeltaFromPixels, shiftedDates, transitiveDependents } from './dragRe
 import { resolveConflicts } from './conflictResolution.js';
 import { renderLoadChart } from './render/loadChart.js';
 import { renderIssueBar } from './render/board.js';
+import { dropState } from './render/kanban.js';
 import { previewOf, previews } from './optimistic.js';
 import { weekBreakdown } from '../shared/load.js';
 import { applyTheme, createEasterEgg } from './theme.js';
@@ -44,6 +45,9 @@ let lastPeople = null;
 let drag = null;
 let milestoneDrag = null;
 let resizeDrag = null;
+let cardDrag = null;
+// Colonnes fermées du kanban dépliées en entier (le temps de la session).
+const kanbanExpanded = new Set();
 let suppressNextClick = false;
 const dragTip = document.getElementById('tip');
 
@@ -211,6 +215,7 @@ function draw() {
     today,
     viewportWidth,
     keepRail,
+    kanbanExpanded,
     onPlan: (issueId, dates) => {
       write((api) => api.reschedule(issueId, dates));
     },
@@ -317,6 +322,9 @@ root.addEventListener('click', (event) => {
     if (collapsed.has(key)) collapsed.delete(key);
     else collapsed.add(key);
     setPrefs({ collapsed: [...collapsed] });
+  } else if (el('[data-kb-more]')) {
+    kanbanExpanded.add(el('[data-kb-more]').dataset.kbMore);
+    draw();
   } else if (el('[data-open]')) {
     panels.openIssue(el('[data-open]').dataset.open);
     draw();
@@ -408,6 +416,15 @@ root.addEventListener('pointerdown', (event) => {
   // Au doigt sur téléphone ou tablette, glisser fait défiler la frise : pas
   // de replanification par accident ; les dates se changent dans le panneau.
   if (event.button !== 0 || (event.pointerType === 'touch' && TOUCH_SCREEN?.matches)) return;
+  const card = event.target.closest('.kc');
+  if (card) {
+    const issue = controller.state.snapshot?.domain.issues.find((i) => i.id === card.dataset.kc);
+    if (!issue) return;
+    cardDrag = { pointerId: event.pointerId, card, issue, startX: event.clientX, startY: event.clientY, ghost: null, over: null };
+    card.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    return;
+  }
   const diamond = event.target.closest('.jd');
   if (diamond && lastAxis) {
     const domain = controller.state.snapshot?.domain;
@@ -483,6 +500,10 @@ root.addEventListener('pointerdown', (event) => {
 });
 
 root.addEventListener('pointermove', (event) => {
+  if (cardDrag && event.pointerId === cardDrag.pointerId) {
+    moveCardDrag(event);
+    return;
+  }
   if (milestoneDrag && event.pointerId === milestoneDrag.pointerId) {
     const dayDelta = dayDeltaFromPixels(event.clientX - milestoneDrag.startX, milestoneDrag.dayWidth);
     const newDate = addDays(milestoneDrag.origDate, dayDelta);
@@ -637,8 +658,73 @@ function endResizeDrag(commit) {
   if (edge === 'end') resolveConflictsInScope();
 }
 
-root.addEventListener('pointerup', () => { endDrag(true); endMilestoneDrag(true); endResizeDrag(true); });
-root.addEventListener('pointercancel', () => { endDrag(false); endMilestoneDrag(false); endResizeDrag(false); });
+// Glisser une carte du kanban dans une autre colonne change son statut
+// Linear (dropState, kanban.js) ; sous quelques pixels, c'est un clic. Les
+// colonnes sont relues à chaque mouvement : une actualisation de fond peut
+// avoir redessiné le tableau entre-temps.
+const CARD_DRAG_SLOP = 5;
+const CARD_EDGE_SCROLL = 48;
+
+function moveCardDrag(event) {
+  const d = cardDrag;
+  const dx = event.clientX - d.startX;
+  const dy = event.clientY - d.startY;
+  if (!d.ghost) {
+    if (Math.hypot(dx, dy) < CARD_DRAG_SLOP) return;
+    const rect = d.card.getBoundingClientRect();
+    d.ghost = d.card.cloneNode(true);
+    d.ghost.classList.add('kc-ghost');
+    Object.assign(d.ghost.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px` });
+    document.body.appendChild(d.ghost);
+    d.card.classList.add('kc-src');
+    root.classList.add('dragging');
+  }
+  d.ghost.style.transform = `translate(${dx}px, ${dy}px) rotate(1.5deg)`;
+  const strip = root.querySelector('.kb-cols');
+  const bounds = strip?.getBoundingClientRect();
+  if (bounds?.width) {
+    if (event.clientX < bounds.left + CARD_EDGE_SCROLL) strip.scrollLeft -= 14;
+    else if (event.clientX > bounds.right - CARD_EDGE_SCROLL) strip.scrollLeft += 14;
+  }
+  const domain = controller.state.snapshot.domain;
+  d.over = null;
+  for (const el of root.querySelectorAll('.kcol')) {
+    const state = dropState(domain, d.issue, el.dataset.col);
+    const r = el.getBoundingClientRect();
+    const under = event.clientX >= r.left && event.clientX <= r.right;
+    if (under && state) d.over = { el, state };
+    const home = el.dataset.col === d.issue.stateId || el.dataset.col === d.issue.status;
+    el.classList.toggle('no-drop', !state && !home);
+    el.classList.toggle('over', under && Boolean(state));
+  }
+  showDragTip(`<b>${esc(d.issue.identifier)}</b><br>${d.over ? `→ ${esc(d.over.state.name)}` : '<s>Déposez dans une autre colonne</s>'}`);
+}
+
+function endCardDrag(commit) {
+  const d = cardDrag;
+  if (!d) return;
+  cardDrag = null;
+  if (!d.ghost) return;
+  d.ghost.remove();
+  d.card.classList.remove('kc-src');
+  root.classList.remove('dragging');
+  hideDragTip();
+  for (const el of root.querySelectorAll('.kcol')) el.classList.remove('no-drop', 'over');
+  suppressNextClick = true;
+  setTimeout(() => { suppressNextClick = false; }, 0);
+  if (!commit || !d.over) return;
+  const { issue } = d;
+  const from = issue.stateId;
+  const to = d.over.state;
+  write(
+    (api) => api.updateIssue(issue.id, { stateId: to.id }),
+    `${issue.identifier} : ${to.name}`,
+    (api) => api.updateIssue(issue.id, { stateId: from }),
+  );
+}
+
+root.addEventListener('pointerup', () => { endDrag(true); endMilestoneDrag(true); endResizeDrag(true); endCardDrag(true); });
+root.addEventListener('pointercancel', () => { endDrag(false); endMilestoneDrag(false); endResizeDrag(false); endCardDrag(false); });
 
 // Curseur de zoom : la frise suit en direct pendant le glissement (une mise à
 // jour par image au plus, bandeau conservé), puis le réglage est enregistré

@@ -72,6 +72,54 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fakeFetch);
 });
 
+describe('kanban — glisser une carte change son statut', () => {
+  async function bootKanban() {
+    await boot();
+    location.hash = '#/kanban';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    await flush();
+    const rect = (left) => () => ({ left, right: left + 200, top: 0, bottom: 600, width: 200, height: 600 });
+    document.querySelector('.kcol[data-col="todo"]').getBoundingClientRect = rect(0);
+    document.querySelector('.kcol[data-col="doing"]').getBoundingClientRect = rect(220);
+    document.querySelector('.kcol[data-col="done"]').getBoundingClientRect = rect(440);
+  }
+
+  it('déposer IOT-12 dans « En cours » lui donne le statut started de sa team, avec annulation', async () => {
+    await bootKanban();
+    const card = document.querySelector('.kc[data-kc="i-12"]');
+    pointer('pointerdown', card, { x: 50 });
+    pointer('pointermove', card, { x: 300 });
+    expect(document.querySelector('.kc-ghost')).not.toBeNull();
+    expect(document.querySelector('.kcol[data-col="doing"]').classList.contains('over')).toBe(true);
+    pointer('pointerup', card, { x: 300 });
+    await flush();
+    expect(document.querySelector('.kc-ghost')).toBeNull();
+    const updates = () => calls.filter((c) => c.op === 'IssueUpdate' && c.variables.id === 'i-12');
+    expect(updates().map((c) => c.variables.input)).toEqual([{ stateId: 'st-iot-started' }]);
+    document.querySelector('[data-action="undo"]').click();
+    await flush();
+    expect(updates().map((c) => c.variables.input)).toEqual([{ stateId: 'st-iot-started' }, { stateId: 'st-iot-unstarted' }]);
+  });
+
+  it('une colonne sans statut équivalent dans la team est refusée, et un simple clic ouvre la tâche', async () => {
+    await bootKanban();
+    const web = document.querySelector('.kc[data-kc="i-20"]');
+    pointer('pointerdown', web, { x: 500 });
+    pointer('pointermove', web, { x: 300 });
+    // WEB n'a pas de statut « en cours ».
+    expect(document.querySelector('.kcol[data-col="doing"]').classList.contains('no-drop')).toBe(true);
+    pointer('pointerup', web, { x: 300 });
+    await flush();
+    expect(calls.some((c) => c.op === 'IssueUpdate')).toBe(false);
+
+    const card = document.querySelector('.kc[data-kc="i-12"]');
+    pointer('pointerdown', card, { x: 50 });
+    pointer('pointerup', card, { x: 51 });
+    card.click();
+    expect(document.getElementById('dwT').textContent).toBe('IOT-12');
+  });
+});
+
 describe('jalons — glisser-déposer dans l\'application montée', () => {
   it('affiche les jalons de la frise', async () => {
     await boot();

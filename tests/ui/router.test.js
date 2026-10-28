@@ -29,6 +29,14 @@ describe('router', () => {
     expect(parseRoute('#/')).toEqual({ view: 'global', teamKey: null, tab: null });
   });
 
+  it('reconnaît le kanban, global et par team, et le reconstruit', () => {
+    expect(parseRoute('#/kanban')).toEqual({ view: 'global', teamKey: null, tab: 'kanban' });
+    expect(parseRoute('#/team/IOT/kanban')).toEqual({ view: 'team', teamKey: 'IOT', tab: 'kanban' });
+    expect(parseRoute('#/team/IOT/autre')).toEqual({ view: 'global', teamKey: null, tab: null });
+    expect(routeHash({ view: 'global', teamKey: null, tab: 'kanban' })).toBe('#/kanban');
+    expect(routeHash({ view: 'team', teamKey: 'IOT', tab: 'kanban' })).toBe('#/team/IOT/kanban');
+  });
+
   it('reconstruit le fragment avec l’onglet', () => {
     expect(routeHash({ view: 'global', teamKey: null, tab: 'unplanned' })).toBe('#/unplanned');
     expect(routeHash({ view: 'team', teamKey: 'IOT', tab: 'unplanned' })).toBe('#/team/IOT/unplanned');

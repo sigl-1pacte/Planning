@@ -94,6 +94,28 @@ describe('renderApp', () => {
     expect(root.querySelector('.unp h2').textContent).toBe('Tâches non planifiées (1)');
   });
 
+  it('propose frise ou kanban, et le kanban garde les onglets des teams sur le kanban', () => {
+    const frise = draw().root;
+    expect([...frise.querySelectorAll('.vsw a')].map((a) => [a.textContent, a.getAttribute('href'), a.classList.contains('on')]))
+      .toEqual([['Frise', '#/', true], ['Kanban', '#/kanban', false]]);
+    expect(frise.querySelector('.kb').hidden).toBe(true);
+
+    const { root } = draw({ route: { view: 'team', teamKey: 'IOT', tab: 'kanban' } });
+    expect(root.querySelector('.vsw a.on').textContent).toBe('Kanban');
+    expect(root.querySelector('.nav a.on').textContent).toBe('IOT');
+    expect([...root.querySelectorAll('.nav a')].slice(0, 3).map((a) => a.getAttribute('href'))).toEqual(['#/kanban', '#/team/IOT/kanban', '#/team/WEB/kanban']);
+    expect(root.querySelector('.zoom').hidden).toBe(true);
+    expect(root.querySelector('.board').hidden).toBe(true);
+    expect(root.querySelector('.kb').hidden).toBe(false);
+    expect(root.querySelectorAll('.kb .kcol')).toHaveLength(3);
+    expect(root.querySelector('.hd h2').textContent).toBe('Kanban des tâches');
+  });
+
+  it('pas de choix frise / kanban sur les onglets Non planifiées et Organisation', () => {
+    expect(draw({ route: { view: 'global', teamKey: null, tab: 'unplanned' } }).root.querySelector('.vsw').hidden).toBe(true);
+    expect(draw({ route: { view: 'global', teamKey: null, tab: 'org' } }).root.querySelector('.vsw').hidden).toBe(true);
+  });
+
   it('restreint la page à une team', () => {
     const { root } = draw({ route: { view: 'team', teamKey: 'IOT' } });
     expect(root.querySelector('.nav a.on').textContent).toBe('IOT');

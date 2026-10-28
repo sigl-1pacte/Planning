@@ -11,8 +11,10 @@ import { buildChartSvg } from './render/loadChart.js';
 import { summarize, renderFacts, renderPeopleTable, renderProjectsTable, renderLegend } from './render/tables.js';
 import { renderUnplannedTab } from './render/unplannedTab.js';
 import { renderOrgChart } from './render/orgChart.js';
+import { renderKanban } from './render/kanban.js';
 import { esc, longDay, shortDay } from './render/format.js';
 import { scopedConflicts } from './conflictResolution.js';
+import { routeHash } from './router.js';
 
 const zoomButton = (prefs, zoom, label) => `<button type="button" data-zoom="${zoom}" class="${prefs.zoom === zoom ? 'on' : ''}">${label}</button>`;
 
@@ -35,7 +37,7 @@ export function renderLoadError(root, message) {
   root.innerHTML = `<section class="sheet"><div class="banner err">${esc(message)}</div><p class="note">Nouvelle tentative automatique toutes les 30 secondes.</p></section>`;
 }
 
-export function renderApp(root, { state, route, prefs, selectedIssueId, today, viewportWidth, onPlan, keepRail = false }) {
+export function renderApp(root, { state, route, prefs, selectedIssueId, today, viewportWidth, onPlan, keepRail = false, kanbanExpanded }) {
   const { snapshot, planning } = state;
   const domain = snapshot.domain;
   const view = buildView(domain, { route, showCanceled: prefs.showCanceled });
@@ -45,6 +47,11 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
   const load = computeLoad(domain, planning, { range, teamId: view.teamId });
   const holidays = new Set(planning.holidays.map((h) => h.day));
   const team = view.teamId ? domain.teams.find((t) => t.id === view.teamId) : null;
+  // Frise ou kanban : le même périmètre (globale ou une team) sous deux
+  // formes. Depuis le kanban, les onglets des teams y restent.
+  const kanban = route.tab === 'kanban';
+  const scopeHash = (teamKey, tab = kanban ? 'kanban' : null) => routeHash({ view: teamKey ? 'team' : 'global', teamKey, tab });
+  const hasSwitch = !route.tab || kanban;
 
   const banners = [];
   if (snapshot.stale) {
@@ -71,13 +78,16 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
       <div><h1>1PACTE Planning Dashboard · ${esc(team ? team.name : 'toutes les teams')}</h1>
         <div class="sb">${longDay(axis.from)} → ${longDay(axis.to)}</div></div>
       <nav class="nav">
-        <a href="#/" class="${route.view === 'global' && !route.tab ? 'on' : ''}">Vue globale</a>
-        ${domain.teams.map((t) => `<a href="#/team/${encodeURIComponent(t.key)}" class="${team?.id === t.id ? 'on' : ''}">${esc(t.key)}</a>`).join('')}
+        <a href="${scopeHash(null)}" class="${route.view === 'global' && hasSwitch ? 'on' : ''}">Vue globale</a>
+        ${domain.teams.map((t) => `<a href="${esc(scopeHash(t.key))}" class="${team?.id === t.id && hasSwitch ? 'on' : ''}">${esc(t.key)}</a>`).join('')}
         <a href="#/unplanned" class="${route.tab === 'unplanned' ? 'on' : ''}">Non planifiées (${domain.issues.filter((i) => !i.start).length})</a>
         <a href="#/org" class="${route.tab === 'org' ? 'on' : ''}">Organisation</a>
       </nav>
+      <nav class="vsw" aria-label="Affichage"${hasSwitch ? '' : ' hidden'}>
+        <a href="${esc(scopeHash(route.teamKey, null))}" class="${kanban ? '' : 'on'}">Frise</a><a href="${esc(scopeHash(route.teamKey, 'kanban'))}" class="${kanban ? 'on' : ''}">Kanban</a>
+      </nav>
       <div class="tools">
-        <div class="zoom"${route.tab === 'org' ? ' hidden' : ''}>
+        <div class="zoom"${route.tab === 'org' || kanban ? ' hidden' : ''}>
           ${zoomButton(prefs, 'all', 'Tout')}${zoomButton(prefs, 'quarter', 'Trimestre')}${zoomButton(prefs, 'month', 'Mois')}
           <input type="range" data-zoom-range min="2" max="60" step="1" value="${Math.round(axis.dayWidth)}" aria-label="Largeur d'un jour">
         </div>
@@ -112,7 +122,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
   const sheetHtml = `
     <section class="sheet">
       <div class="hd">
-        <div><h2>${route.tab === 'org' ? 'Organisation des teams' : 'Planning, dépendances et charge prévisionnelle'}</h2>
+        <div><h2>${route.tab === 'org' ? 'Organisation des teams' : kanban ? 'Kanban des tâches' : 'Planning, dépendances et charge prévisionnelle'}</h2>
           <div class="s cd">Données Linear du ${esc(new Date(snapshot.fetchedAt).toLocaleString('fr-FR'))}</div></div>
         <div class="facts"></div>
       </div>
@@ -130,6 +140,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
       <div class="lg"></div>
       <section class="unp"></section>
       <section class="org" hidden></section>
+      <section class="kb" hidden></section>
       <div class="cols page-slide">
         <div class="blk"><h3>Répartition par personne</h3><div class="tbl"><table>
           <thead><tr><th>Personne</th><th class="r">Points</th><th class="r">Heures</th><th class="r">Sem. actives</th><th class="r">Heures / sem.</th><th class="r">Taux moyen</th><th class="r">Pic</th></tr></thead>
@@ -160,6 +171,15 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
     for (const sel of ['.board', '.cols', '.lg', '.unp', '.slide-chart']) root.querySelector(sel).hidden = true;
     root.querySelector('.org').hidden = false;
     renderOrgChart(root.querySelector('.org'), { domain, planning });
+    return { view, axis, load };
+  }
+
+  if (kanban) {
+    for (const sel of ['.board', '.cols', '.lg', '.slide-chart']) root.querySelector(sel).hidden = true;
+    root.querySelector('.kb').hidden = false;
+    renderKanban(root.querySelector('.kb'), {
+      domain, teamId: view.teamId, showCanceled: prefs.showCanceled, conflicts: view.conflicts, selectedIssueId, today, expanded: kanbanExpanded,
+    });
     return { view, axis, load };
   }
 

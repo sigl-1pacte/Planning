@@ -21,12 +21,14 @@ export function markdownFileName(domain, route, today) {
   return `planning-${scope.replace(/[^\w-]+/g, '-')}-${today}.md`;
 }
 
-export function buildMarkdown(domain, { route, showCanceled, today, fetchedAt }) {
-  const view = buildView(domain, { route, showCanceled });
+// `filter` : prédicat de src/shared/filters.js (null sans filtre), décrit
+// par `filterLabel` en tête du document.
+export function buildMarkdown(domain, { route, showCanceled, today, fetchedAt, filter = null, filterLabel = null }) {
+  const view = buildView(domain, { route, showCanceled, filter });
   const teams = view.groups.map((g) => g.team);
   const teamIds = new Set(teams.map((t) => t.id));
   const visible = (i) => showCanceled || i.status !== 'canceled';
-  const scoped = domain.issues.filter((i) => teamIds.has(i.teamId) && visible(i));
+  const scoped = domain.issues.filter((i) => teamIds.has(i.teamId) && visible(i) && (!filter || filter(i)));
   const byId = new Map(domain.issues.map((i) => [i.id, i]));
   const userName = (id) => domain.users.find((u) => u.id === id)?.name ?? '?';
   const stateName = (id) => domain.workflowStates.find((s) => s.id === id)?.name;
@@ -91,6 +93,7 @@ export function buildMarkdown(domain, { route, showCanceled, today, fetchedAt })
   out.push(`# 1PACTE Planning · ${inline(title)}`, '');
   out.push(`Export du ${longDay(today)} · données Linear du ${new Date(fetchedAt).toLocaleString('fr-FR')}.`);
   out.push(`Tâches annulées ${showCanceled ? 'incluses' : 'masquées'}. Dates au format jj/mm/aaaa.`, '');
+  if (filter) out.push(`Vue filtrée (${inline(filterLabel ?? 'filtre')}) : seules les tâches retenues figurent ci-dessous.`, '');
   if (view.notFound) {
     out.push(`Team « ${inline(route.teamKey)} » introuvable dans le workspace.`, '');
     return out.join('\n');

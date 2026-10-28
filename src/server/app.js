@@ -3,6 +3,7 @@ import fastifyStatic from '@fastify/static';
 import { LinearAuthError, LinearRateLimitError, LinearUnavailableError } from './linear/client.js';
 import { dayOfWeek, isValidDate } from '../shared/calendar.js';
 import * as repo from './db/repo.js';
+import * as views from './db/views.js';
 
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -199,6 +200,28 @@ export function buildApp({ db, store, validateKey, staticDir = null, logger = fa
   app.put('/api/org/manager', { schema: { body: userRefBody } }, withDatabase(async (req) => {
     await repo.setManager(db, req.body.linearUserId);
     return repo.getPlanning(db);
+  }));
+
+  // Vues enregistrées : celles de la personne connectée (req.viewer), jamais
+  // celles des autres. Chaque réponse rend sa liste à jour et son id Linear
+  // (le « moi » des filtres).
+  const viewsOf = async (req) => ({ me: req.viewer.id, views: await views.listViews(db, req.viewer.id) });
+
+  app.get('/api/views', withDatabase(viewsOf));
+
+  app.post('/api/views', { schema: { body: views.viewBody } }, withDatabase(async (req) => {
+    const id = await views.createView(db, req.viewer.id, req.body);
+    return { ...(await viewsOf(req)), id };
+  }));
+
+  app.put('/api/views/:id', { schema: { body: views.viewPatchBody } }, withDatabase(async (req) => {
+    await views.updateView(db, req.viewer.id, req.params.id, req.body);
+    return viewsOf(req);
+  }));
+
+  app.delete('/api/views/:id', withDatabase(async (req) => {
+    await views.deleteView(db, req.viewer.id, req.params.id);
+    return viewsOf(req);
   }));
 
   // Aucune route n'écrit vers Linear : les écritures partent du navigateur, avec

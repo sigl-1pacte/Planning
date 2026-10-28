@@ -4,6 +4,9 @@ const DEFAULTS = {
   // Thème : 'auto' (celui du système), 'light' ou 'dark' ; mode rose, et s'il
   // a déjà été découvert (son interrupteur apparaît alors dans les réglages).
   theme: 'auto', pink: false, pinkFound: false,
+  // Filtre de la frise et du kanban (src/shared/filters.js) et vue choisie
+  // (par défaut, ou enregistrée : voir filterBar.js).
+  filter: { people: [], projects: [], due: null, q: '' }, viewId: null,
 };
 
 export function loadPrefs(storage = globalThis.localStorage) {

@@ -79,9 +79,9 @@ function cardHtml(issue, { domain, blocked, selected, showTeam, showState, today
 }
 
 // `expanded` : clés des colonnes fermées dépliées en entier (voir main.js).
-export function renderKanban(section, { domain, teamId, showCanceled, conflicts, selectedIssueId, today, expanded = new Set() }) {
+export function renderKanban(section, { domain, teamId, showCanceled, conflicts, selectedIssueId, today, expanded = new Set(), filter = null }) {
   const columns = kanbanColumns(domain, { teamId, showCanceled });
-  const issues = domain.issues.filter((i) => (!teamId || i.teamId === teamId) && (showCanceled || i.status !== 'canceled'));
+  const issues = domain.issues.filter((i) => (!teamId || i.teamId === teamId) && (showCanceled || i.status !== 'canceled') && (!filter || filter(i)));
   const blocked = new Set(conflicts.map((c) => c.issueId));
   const ctx = { domain, blocked, showTeam: !teamId, showState: !teamId, today };
 

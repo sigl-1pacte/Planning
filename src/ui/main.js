@@ -16,6 +16,8 @@ import { resolveConflicts } from './conflictResolution.js';
 import { renderLoadChart } from './render/loadChart.js';
 import { renderIssueBar } from './render/board.js';
 import { dropState } from './render/kanban.js';
+import { EMPTY_FILTER, PRESETS, describeFilter, issueFilter, normalizeFilter } from '../shared/filters.js';
+import { AuthError } from './api.js';
 import { previewOf, previews } from './optimistic.js';
 import { weekBreakdown } from '../shared/load.js';
 import { applyTheme, createEasterEgg } from './theme.js';
@@ -48,6 +50,10 @@ let resizeDrag = null;
 let cardDrag = null;
 // Colonnes fermées du kanban dépliées en entier (le temps de la session).
 const kanbanExpanded = new Set();
+// Vues enregistrées de la personne connectée (serveur), lues au premier rendu
+// une fois la clé acceptée. Sans elles (route absente, base injoignable), les
+// vues par défaut restent ; « Mes tâches » attend `me`.
+const viewsState = { requested: false, me: null, views: null, error: null, naming: false, pendingDelete: null };
 let suppressNextClick = false;
 const dragTip = document.getElementById('tip');
 
@@ -207,6 +213,14 @@ function draw() {
   // tâches, dont la largeur change sur téléphone.
   const viewportWidth = root.querySelector('.pr')?.clientWidth || estimatedPaneWidth();
   const effective = printLayout ? { ...prefs, zoom: 'custom', dayWidth: printLayout.dayWidth, collapsed: [] } : prefs;
+  if (!viewsState.requested) loadViews();
+  // La barre de filtres est redessinée avec la feuille : la saisie en cours
+  // et le menu ouvert y sont remis tels quels.
+  const typing = document.activeElement?.matches?.('[data-fb-q], [data-fb-name]')
+    ? { sel: document.activeElement.matches('[data-fb-q]') ? '[data-fb-q]' : '[data-fb-name]', value: document.activeElement.value,
+      start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd }
+    : null;
+  const openMenu = root.querySelector('details[data-fb-dd][open]')?.dataset.fbDd;
   const result = renderApp(root, {
     state,
     route: parseRoute(location.hash),
@@ -216,11 +230,22 @@ function draw() {
     viewportWidth,
     keepRail,
     kanbanExpanded,
+    filters: {
+      filter: prefs.filter, viewId: prefs.viewId, views: viewsState.views, viewsError: viewsState.error, me: viewsState.me,
+      naming: viewsState.naming, pendingDelete: viewsState.pendingDelete,
+    },
     onPlan: (issueId, dates) => {
       write((api) => api.reschedule(issueId, dates));
     },
   });
   root.removeAttribute('aria-busy');
+  if (openMenu) root.querySelector(`details[data-fb-dd="${openMenu}"]`)?.setAttribute('open', '');
+  const input = typing && root.querySelector(typing.sel);
+  if (input) {
+    input.value = typing.value;
+    input.focus();
+    input.setSelectionRange(typing.start, typing.end);
+  }
   lastAxis = result.axis;
   lastTeamId = result.view.teamId;
   lastLoad = result.load;
@@ -285,8 +310,11 @@ async function exportMarkdown(mode) {
   if (!snapshot) return;
   const route = parseRoute(location.hash);
   const today = todayISO();
+  // Le filtre de la frise et du kanban s'applique aussi à l'export, qui le dit.
+  const filtered = (!route.tab || route.tab === 'kanban') && issueFilter(prefs.filter, { me: viewsState.me, today });
   const text = buildMarkdown(snapshot.domain, {
     route, showCanceled: prefs.showCanceled, today, fetchedAt: snapshot.fetchedAt,
+    filter: filtered || null, filterLabel: filtered ? describeFilter(prefs.filter, snapshot.domain) : null,
   });
   if (mode === 'copy') {
     try {
@@ -307,6 +335,133 @@ async function exportMarkdown(mode) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// Filtres et vues (filterBar.js). Le filtre vit dans les préférences du
+// navigateur ; les vues enregistrées, sur le serveur, au nom de la personne
+// connectée : chaque appel rend sa liste à jour.
+async function loadViews() {
+  viewsState.requested = true;
+  try {
+    const { me, views } = await api.views();
+    Object.assign(viewsState, { me, views, error: null });
+  } catch (err) {
+    if (err instanceof AuthError) return;
+    viewsState.error = err.message;
+  }
+  draw();
+}
+
+async function changeViews(call) {
+  try {
+    const result = await call(api);
+    Object.assign(viewsState, { me: result.me, views: result.views, error: null });
+    return result;
+  } catch (err) {
+    flash(`${esc(err.message)}`);
+    draw();
+    return null;
+  }
+}
+
+const setFilter = (patch) => setPrefs({ filter: normalizeFilter({ ...prefs.filter, ...patch }) });
+
+async function saveNamedView() {
+  const name = root.querySelector('[data-fb-name]')?.value.trim();
+  if (!name) return;
+  const result = await changeViews((a) => a.createView(name, normalizeFilter(prefs.filter)));
+  if (!result) return;
+  viewsState.naming = false;
+  setPrefs({ viewId: result.id });
+  flash(`Vue « ${esc(name)} » enregistrée`);
+}
+
+// Rend true si le clic concernait la barre de filtres.
+function filterBarClick(el) {
+  if (el('[data-view]')) {
+    const id = el('[data-view]').dataset.view;
+    const view = [...PRESETS, ...(viewsState.views ?? [])].find((v) => v.id === id);
+    setPrefs(view ? { filter: normalizeFilter(view.filter), viewId: view.id } : { filter: { ...EMPTY_FILTER }, viewId: null });
+  } else if (el('[data-view-del]')) {
+    viewsState.pendingDelete = el('[data-view-del]').dataset.viewDel;
+    draw();
+  } else if (el('[data-view-del-no]')) {
+    viewsState.pendingDelete = null;
+    draw();
+  } else if (el('[data-view-del-ok]')) {
+    const id = el('[data-view-del-ok]').dataset.viewDelOk;
+    const name = viewsState.views?.find((v) => v.id === id)?.name ?? '';
+    viewsState.pendingDelete = null;
+    changeViews((a) => a.deleteView(id)).then((result) => {
+      if (!result) return;
+      if (prefs.viewId === id) setPrefs({ viewId: null });
+      else draw();
+      flash(`Vue « ${esc(name)} » supprimée`);
+    });
+  } else if (el('[data-fb-clear]')) {
+    setPrefs({ filter: { ...EMPTY_FILTER }, viewId: null });
+  } else if (el('[data-fb-save]')) {
+    viewsState.naming = true;
+    draw();
+    root.querySelector('[data-fb-name]')?.focus();
+  } else if (el('[data-fb-save-no]')) {
+    viewsState.naming = false;
+    draw();
+  } else if (el('[data-fb-save-ok]')) {
+    saveNamedView();
+  } else if (el('[data-fb-update]')) {
+    const id = prefs.viewId;
+    const name = viewsState.views?.find((v) => v.id === id)?.name ?? '';
+    changeViews((a) => a.updateView(id, { filter: normalizeFilter(prefs.filter) })).then((result) => {
+      if (!result) return;
+      draw();
+      flash(`Vue « ${esc(name)} » mise à jour`);
+    });
+  } else {
+    return false;
+  }
+  return true;
+}
+
+let searchTimer = 0;
+root.addEventListener('input', (event) => {
+  if (!event.target.matches('[data-fb-q]')) return;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => setFilter({ q: event.target.value }), 180);
+});
+
+root.addEventListener('change', (event) => {
+  const t = event.target;
+  if (t.matches('[data-fb-people], [data-fb-projects]')) {
+    const key = t.matches('[data-fb-people]') ? 'people' : 'projects';
+    setFilter({ [key]: [...root.querySelectorAll(`[data-fb-${key}]:checked`)].map((c) => c.value) });
+  } else if (t.matches('[data-fb-due]')) {
+    setFilter({ due: t.value || null });
+  }
+});
+
+root.addEventListener('keydown', (event) => {
+  const t = event.target;
+  if (t.matches('[data-fb-name]')) {
+    if (event.key === 'Enter') saveNamedView();
+    if (event.key === 'Escape') {
+      event.stopPropagation();
+      viewsState.naming = false;
+      draw();
+    }
+  } else if (t.matches('[data-fb-q]') && event.key === 'Escape' && t.value) {
+    event.stopPropagation();
+    clearTimeout(searchTimer);
+    t.value = '';
+    setFilter({ q: '' });
+  }
+});
+
+// Un menu de filtre ouvert se referme quand on clique ailleurs.
+document.addEventListener('click', (event) => {
+  for (const menu of root.querySelectorAll('details[data-fb-dd][open]')) {
+    if (!menu.contains(event.target)) menu.removeAttribute('open');
+  }
+});
+
 // Le menu Markdown se referme quand on clique ailleurs.
 document.addEventListener('click', (event) => {
   const menu = root.querySelector('details.mdx[open]');
@@ -316,6 +471,7 @@ document.addEventListener('click', (event) => {
 root.addEventListener('click', (event) => {
   if (suppressNextClick) { suppressNextClick = false; return; }
   const el = (selector) => event.target.closest(selector);
+  if (filterBarClick(el)) return;
   if (el('[data-tog]')) {
     const key = el('[data-tog]').dataset.tog;
     const collapsed = new Set(prefs.collapsed);

@@ -11,6 +11,7 @@ describe('prefs', () => {
     expect(loadPrefs(storage())).toEqual({
       zoom: 'all', dayWidth: null, collapsed: [], showCanceled: false, lastRoute: '#/', loadMode: 'planned',
       theme: 'auto', pink: false, pinkFound: false,
+      filter: { people: [], projects: [], due: null, q: '' }, viewId: null,
     });
   });
 

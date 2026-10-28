@@ -72,5 +72,11 @@ export function createApi({ fetchImpl = (...args) => fetch(...args), storage = g
     // linearUserId null retire le rôle.
     setTeamRole: (teamId, role, linearUserId) => request('PUT', `/api/teams/${encodeURIComponent(teamId)}/roles/${role}`, { linearUserId }),
     setManager: (linearUserId) => request('PUT', '/api/org/manager', { linearUserId }),
+    // Vues enregistrées de la personne connectée : chaque appel rend
+    // { me, views } (me : son id Linear), la création aussi l'id créé.
+    views: () => request('GET', '/api/views'),
+    createView: (name, filter) => request('POST', '/api/views', { name, filter }),
+    updateView: (id, patch) => request('PUT', `/api/views/${encodeURIComponent(id)}`, patch),
+    deleteView: (id) => request('DELETE', `/api/views/${encodeURIComponent(id)}`),
   };
 }

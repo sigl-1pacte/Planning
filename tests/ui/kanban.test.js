@@ -100,6 +100,13 @@ describe('rendu', () => {
     expect(done().querySelector('[data-kb-more]')).toBeNull();
   });
 
+  it('n\'affiche que les tâches retenues par le filtre, comptes compris', () => {
+    const { ids, column } = render({ filter: (i) => i.projectId === 'p-poc1' });
+    expect(ids('todo')).toEqual(['i-12', 'i-13']);
+    expect(ids('done')).toEqual([]);
+    expect(column('done').querySelector('.kcol-n').textContent).toBe('0');
+  });
+
   it('une colonne vide le dit', () => {
     const { column } = render({ teamId: 't-web' });
     expect(column('st-web-unstarted').querySelector('.kcol-empty').textContent).toBe('Aucune tâche');

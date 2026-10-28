@@ -24,6 +24,14 @@ describe('buildMarkdown', () => {
     expect(md).not.toContain('—');
   });
 
+  it('suit le filtre de la vue, et le dit', () => {
+    const md = buildMarkdown(domain(), { ...options(global), filter: (i) => i.identifier === 'IOT-11', filterLabel: 'personne : Sacha' });
+    expect(md).toContain('Vue filtrée (personne : Sacha) : seules les tâches retenues figurent ci-dessous.');
+    expect(md).toContain('#### IOT-11 · Conception');
+    expect(md).not.toContain('#### IOT-12');
+    expect(md).not.toContain('#### WEB-1');
+  });
+
   it('garde la description libre, sans les lignes structurées', () => {
     const md = buildMarkdown(domain(), options(global));
     const task = md.slice(md.indexOf('#### IOT-13'));

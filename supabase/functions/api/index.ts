@@ -17,6 +17,7 @@ import Ajv from 'npm:ajv@8';
 import { LinearAuthError, LinearRateLimitError, LinearUnavailableError } from '../../../src/server/linear/client.js';
 import { dayOfWeek, isValidDate } from '../../../src/shared/calendar.js';
 import * as repo from '../../../src/server/db/repo.js';
+import * as views from '../../../src/server/db/views.js';
 import { createKeyValidator } from '../../../src/server/auth.js';
 import {
   fetchWorkspace, fetchIssuesSince, fetchViewer, fetchDiagnosticSample,
@@ -262,6 +263,35 @@ app.put('/api/org/manager', async (c) => {
     return repo.getPlanning(db);
   }));
 });
+
+// Vues enregistrées de la personne connectée (voir src/server/app.js).
+const ownerOf = (c: any): string => (c.get('viewer') as any).id;
+const viewsOf = async (owner: string) => ({ me: owner, views: await views.listViews(db, owner) });
+
+app.get('/api/views', async (c) => c.json(await withDatabase(() => viewsOf(ownerOf(c)))));
+
+app.post('/api/views', async (c) => {
+  const body: any = await c.req.json();
+  assertValid(views.viewBody, body);
+  return c.json(await withDatabase(async () => {
+    const id = await views.createView(db, ownerOf(c), body);
+    return { ...(await viewsOf(ownerOf(c))), id };
+  }));
+});
+
+app.put('/api/views/:id', async (c) => {
+  const body: any = await c.req.json();
+  assertValid(views.viewPatchBody, body);
+  return c.json(await withDatabase(async () => {
+    await views.updateView(db, ownerOf(c), c.req.param('id'), body);
+    return viewsOf(ownerOf(c));
+  }));
+});
+
+app.delete('/api/views/:id', async (c) => c.json(await withDatabase(async () => {
+  await views.deleteView(db, ownerOf(c), c.req.param('id'));
+  return viewsOf(ownerOf(c));
+})));
 
 // Aucune route n'écrit vers Linear : les écritures partent du navigateur, avec la
 // clé personnelle de l'utilisateur (src/ui/linearWrites.js). Cette fonction ne lit

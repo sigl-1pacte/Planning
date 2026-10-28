@@ -12,6 +12,8 @@ import { summarize, renderFacts, renderPeopleTable, renderProjectsTable, renderL
 import { renderUnplannedTab } from './render/unplannedTab.js';
 import { renderOrgChart } from './render/orgChart.js';
 import { renderKanban } from './render/kanban.js';
+import { renderFilterBar } from './render/filterBar.js';
+import { issueFilter } from '../shared/filters.js';
 import { esc, longDay, shortDay } from './render/format.js';
 import { scopedConflicts } from './conflictResolution.js';
 import { routeHash } from './router.js';
@@ -37,11 +39,17 @@ export function renderLoadError(root, message) {
   root.innerHTML = `<section class="sheet"><div class="banner err">${esc(message)}</div><p class="note">Nouvelle tentative automatique toutes les 30 secondes.</p></section>`;
 }
 
-export function renderApp(root, { state, route, prefs, selectedIssueId, today, viewportWidth, onPlan, keepRail = false, kanbanExpanded }) {
+// `filters` : filtre et vues de la barre de filtres (voir filterBar.js), sur
+// la frise et le kanban seulement.
+export function renderApp(root, { state, route, prefs, selectedIssueId, today, viewportWidth, onPlan, keepRail = false, kanbanExpanded, filters = null }) {
   const { snapshot, planning } = state;
   const domain = snapshot.domain;
-  const view = buildView(domain, { route, showCanceled: prefs.showCanceled });
-  const range = rangeFor(domain, view, today);
+  const kanban = route.tab === 'kanban';
+  const hasSwitch = !route.tab || kanban;
+  const filter = hasSwitch && filters ? issueFilter(filters.filter, { me: filters.me, today }) : null;
+  const view = buildView(domain, { route, showCanceled: prefs.showCanceled, filter });
+  // Période de toute la vue, filtre ou pas : filtrer ne déplace pas la frise.
+  const range = rangeFor(domain, filter ? buildView(domain, { route, showCanceled: prefs.showCanceled }) : view, today);
   const days = daysBetween(range.from, range.to) + 1;
   const axis = createAxis(range, dayWidthFor(prefs.zoom, { viewportWidth, days, customWidth: prefs.dayWidth }));
   const load = computeLoad(domain, planning, { range, teamId: view.teamId });
@@ -49,9 +57,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
   const team = view.teamId ? domain.teams.find((t) => t.id === view.teamId) : null;
   // Frise ou kanban : le même périmètre (globale ou une team) sous deux
   // formes. Depuis le kanban, les onglets des teams y restent.
-  const kanban = route.tab === 'kanban';
   const scopeHash = (teamKey, tab = kanban ? 'kanban' : null) => routeHash({ view: teamKey ? 'team' : 'global', teamKey, tab });
-  const hasSwitch = !route.tab || kanban;
 
   const banners = [];
   if (snapshot.stale) {
@@ -127,6 +133,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
         <div class="facts"></div>
       </div>
       ${banners.join('')}
+      <div class="fb" data-fb hidden></div>
       <div class="board">
         <div class="pl">
           <div class="ax"><span>Statut · tâche · équipe</span><span style="margin-left:auto">pts · début · fin</span></div>
@@ -167,6 +174,15 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
     root.innerHTML = railHtml + sheetHtml;
   }
 
+  if (hasSwitch && filters && !view.notFound) {
+    const bar = root.querySelector('[data-fb]');
+    bar.hidden = false;
+    const matches = filter
+      ? domain.issues.filter((i) => (!view.teamId || i.teamId === view.teamId) && (prefs.showCanceled || i.status !== 'canceled') && filter(i)).length
+      : null;
+    renderFilterBar(bar, { domain, teamId: view.teamId, ...filters, matches });
+  }
+
   if (route.tab === 'org') {
     for (const sel of ['.board', '.cols', '.lg', '.unp', '.slide-chart']) root.querySelector(sel).hidden = true;
     root.querySelector('.org').hidden = false;
@@ -178,7 +194,7 @@ export function renderApp(root, { state, route, prefs, selectedIssueId, today, v
     for (const sel of ['.board', '.cols', '.lg', '.slide-chart']) root.querySelector(sel).hidden = true;
     root.querySelector('.kb').hidden = false;
     renderKanban(root.querySelector('.kb'), {
-      domain, teamId: view.teamId, showCanceled: prefs.showCanceled, conflicts: view.conflicts, selectedIssueId, today, expanded: kanbanExpanded,
+      domain, teamId: view.teamId, showCanceled: prefs.showCanceled, conflicts: view.conflicts, selectedIssueId, today, expanded: kanbanExpanded, filter,
     });
     return { view, axis, load };
   }

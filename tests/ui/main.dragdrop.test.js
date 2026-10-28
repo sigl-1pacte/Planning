@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { mapWorkspace } from '../../src/server/linear/mapper.js';
@@ -117,6 +117,66 @@ describe('kanban — glisser une carte change son statut', () => {
     pointer('pointerup', card, { x: 51 });
     card.click();
     expect(document.getElementById('dwT').textContent).toBe('IOT-12');
+  });
+});
+
+describe('filtres et vues — application montée', () => {
+  const cards = () => [...document.querySelectorAll('.kc')].map((c) => c.dataset.kc).sort();
+  let saved;
+
+  async function bootFiltered() {
+    localStorage.removeItem('planning.prefs');
+    saved = [];
+    handlers['GET /api/views'] = () => ({ me: 'u-sacha', views: saved });
+    handlers['POST /api/views'] = (body) => {
+      saved = [...saved, { id: String(saved.length + 1), name: body.name, filter: body.filter }];
+      return { me: 'u-sacha', views: saved, id: saved.at(-1).id };
+    };
+    await boot();
+    location.hash = '#/kanban';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    await flush();
+  }
+
+  // L'application montée reste en vie après le test et réenregistre ses
+  // préférences au prochain changement d'adresse : on y remet un filtre vide.
+  afterEach(() => {
+    document.querySelector('[data-view=""]')?.click();
+    localStorage.removeItem('planning.prefs');
+  });
+
+  it('« Mes tâches » ne garde que les tâches de la personne connectée, et s\'en souvient', async () => {
+    await bootFiltered();
+    expect(cards()).toEqual(['i-11', 'i-12', 'i-13', 'i-20']);
+    document.querySelector('[data-view="preset:mine"]').click();
+    expect(cards()).toEqual(['i-11']);
+    expect(document.querySelector('.fb-chip.on').textContent).toBe('Mes tâches');
+    expect(JSON.parse(localStorage.getItem('planning.prefs')).viewId).toBe('preset:mine');
+    document.querySelector('[data-view=""]').click();
+    expect(cards()).toEqual(['i-11', 'i-12', 'i-13', 'i-20']);
+  });
+
+  it('la recherche filtre en gardant la saisie, puis s\'enregistre comme vue', async () => {
+    await bootFiltered();
+    const search = document.querySelector('[data-fb-q]');
+    search.focus();
+    search.value = 'soft';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 250));
+    expect(cards()).toEqual(['i-12']);
+    expect(document.activeElement.matches('[data-fb-q]')).toBe(true);
+    expect(document.activeElement.value).toBe('soft');
+
+    document.querySelector('[data-fb-save]').click();
+    const name = document.querySelector('[data-fb-name]');
+    expect(document.activeElement).toBe(name);
+    name.value = 'Logiciel';
+    document.querySelector('[data-fb-save-ok]').click();
+    await flush();
+    const post = calls.find((c) => c.method === 'POST' && c.url === '/api/views');
+    expect(post.body).toEqual({ name: 'Logiciel', filter: { people: [], projects: [], due: null, q: 'soft' } });
+    expect(document.querySelector('.fb-chip.on').textContent).toBe('Logiciel');
+    expect(document.querySelector('[data-fb-save]')).toBeNull();
   });
 });
 

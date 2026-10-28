@@ -111,6 +111,24 @@ describe('renderApp', () => {
     expect(root.querySelector('.hd h2').textContent).toBe('Kanban des tâches');
   });
 
+  it('filtrée, la frise garde sa période et la barre compte les tâches retenues', () => {
+    const plain = draw();
+    const root = document.createElement('div');
+    const state = {
+      snapshot: { version: 1, fetchedAt: '2026-09-14T10:00:00.000Z', stale: false, lastError: null, domain: mapWorkspace(rawWorkspace()) },
+      planning, error: null,
+    };
+    const filters = { filter: { people: [], projects: [], due: null, q: 'software' }, viewId: null, views: [], viewsError: null, me: 'u-sacha', naming: false, pendingDelete: null };
+    const out = renderApp(root, {
+      state, route: { view: 'global', teamKey: null, tab: null }, prefs: { zoom: 'all', dayWidth: null, collapsed: new Set(), showCanceled: false },
+      selectedIssueId: null, today: '2026-09-17', viewportWidth: 560, filters,
+    });
+    expect([out.axis.from, out.axis.to]).toEqual([plain.out.axis.from, plain.out.axis.to]);
+    expect([...root.querySelectorAll('[data-left] .r.tk')].map((r) => r.dataset.t)).toEqual(['i-12']);
+    expect(root.querySelector('.fb').hidden).toBe(false);
+    expect(root.querySelector('.fb-count').textContent).toBe('1 tâche');
+  });
+
   it('pas de choix frise / kanban sur les onglets Non planifiées et Organisation', () => {
     expect(draw({ route: { view: 'global', teamKey: null, tab: 'unplanned' } }).root.querySelector('.vsw').hidden).toBe(true);
     expect(draw({ route: { view: 'global', teamKey: null, tab: 'org' } }).root.querySelector('.vsw').hidden).toBe(true);

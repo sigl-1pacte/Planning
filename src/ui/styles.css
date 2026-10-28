@@ -1066,3 +1066,60 @@ tbody tr.tot:hover{background:none}
   .kc.block{border-left:3px solid var(--block)}
   .kc.sel{box-shadow:none}
 }
+
+/* ── Filtres et vues ───────────────────────────────────────────────────────
+   Au-dessus de la frise et du kanban : vues en pastilles (par défaut, puis
+   celles de chacun), filtres dessous. Menus opaques, sans flou. */
+.fb{display:flex;flex-direction:column;gap:8px;margin:14px 0 4px}
+.fb[hidden]{display:none}
+.fb-views,.fb-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.fb-chip{border:0;border-radius:999px;padding:5px 12px;font:inherit;font-weight:500;color:var(--ink2);cursor:pointer;
+  background:rgb(var(--ink-rgb) / .06);transition:background .15s,color .15s}
+.fb-chip:hover{color:var(--ink);background:rgb(var(--ink-rgb) / .1)}
+.fb-chip.on{background:var(--pri-bg);color:var(--pri-ink);font-weight:600;box-shadow:0 1px 4px rgb(var(--shade-rgb) / .2)}
+.fb-chip.mod::after{content:"";display:inline-block;width:6px;height:6px;margin-left:6px;vertical-align:1px;border-radius:50%;background:var(--gold)}
+.fb-chip:disabled{opacity:.45;cursor:default}
+.fb-chip:focus-visible,.fb-x:focus-visible,.fb-pick:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.fb-sep{width:1px;height:18px;margin:0 4px;background:var(--line)}
+.fb-own{display:inline-flex;align-items:center}
+.fb-x{width:20px;height:20px;margin-left:1px;border:0;border-radius:50%;background:none;color:var(--ink3);cursor:pointer;font-size:14px;line-height:1}
+.fb-x:hover{color:var(--bad-ink);background:rgb(var(--ink-rgb) / .06)}
+.fb-own.confirm{gap:6px;padding:2px 3px 2px 12px;border-radius:999px;background:rgb(var(--danger-rgb) / .9);color:var(--danger-ink);font-weight:500}
+.fb-own.confirm .btn{padding:4px 10px}
+.fb-pick{display:inline-flex;gap:6px;align-items:center;padding:5px 12px;border:0;border-radius:999px;font:inherit;color:var(--ink2);cursor:pointer;
+  background-color:var(--surface);box-shadow:inset 0 0 0 1px var(--line);list-style:none}
+.fb-pick::-webkit-details-marker{display:none}
+.fb-pick:hover{color:var(--ink)}
+.fb-pick.set{color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--accent2)}
+.fb-pick b{font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+select.fb-pick{appearance:none;-webkit-appearance:none;padding-right:28px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%237D899E' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center}
+.fb-dd{position:relative}
+.fb-dd[open] .fb-pick{color:var(--ink)}
+.fb-menu{position:absolute;left:0;top:calc(100% + 6px);z-index:60;min-width:220px;max-height:320px;overflow:auto;padding:5px;border-radius:14px;
+  background:var(--surface);box-shadow:var(--glass-edge),0 10px 30px rgb(var(--shade2-rgb) / .22)}
+.fb-opt{display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.fb-opt:hover{background:var(--row-hover)}
+.fb-opt input{margin:0;accent-color:var(--accent)}
+.fb-q,.fb-name{min-width:200px;padding:5px 12px;border:0;border-radius:999px;font:inherit;color:var(--ink);
+  background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
+.fb-name{min-width:170px}
+.fb-q:focus,.fb-name:focus{outline:2px solid rgb(var(--accent2-rgb) / .5);outline-offset:1px}
+.fb .btn{padding:5px 12px}
+.fb-save{display:inline-flex;gap:6px;align-items:center;margin-left:auto}
+.fb-note{margin-left:auto;color:var(--ink3);font-size:10.5px}
+.fb-count{padding:0 4px;color:var(--ink2);font-weight:600;font-variant-numeric:tabular-nums}
+.fb-count.none{color:var(--bad-ink)}
+.fb-print{display:none}
+@media screen and (max-width:760px) and (pointer:coarse){
+  .fb-views{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .fb-views::-webkit-scrollbar{display:none}
+  .fb-chip{white-space:nowrap}
+  .fb-q{flex:1 1 100%;min-width:0}
+  .fb-save{margin-left:0}
+}
+@media print{
+  .fb>*:not(.fb-print){display:none!important}
+  .fb-print{display:block;margin:0;color:var(--ink2);font-size:12px}
+}

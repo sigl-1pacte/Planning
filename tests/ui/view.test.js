@@ -19,6 +19,16 @@ describe('buildView', () => {
     expect(v.unplanned.map((i) => i.identifier)).toEqual(['IOT-13']);
   });
 
+  it("filtré : seules les tâches retenues, sans les projets vides ; la charge garde tout le monde", () => {
+    const all = buildView(domain(), { route: global, showCanceled: false });
+    const v = buildView(domain(), { route: global, showCanceled: false, filter: (i) => i.identifier === 'WEB-1' });
+    expect(v.groups[0].projects).toEqual([]);
+    expect(v.groups[0].noProject).toEqual([]);
+    expect(v.groups[1].noProject.map((i) => i.identifier)).toEqual(['WEB-1']);
+    expect(v.unplanned).toEqual([]);
+    expect(v.people).toEqual(all.people);
+  });
+
   it("restreint à une team", () => {
     const v = buildView(domain(), { route: { view: 'team', teamKey: 'WEB' }, showCanceled: false });
     expect(v.teamId).toBe('t-web');
